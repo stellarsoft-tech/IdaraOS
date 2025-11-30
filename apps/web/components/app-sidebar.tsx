@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import type * as React from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
@@ -15,10 +16,12 @@ import {
   ShoppingCart,
   Users,
   Workflow,
+  type LucideIcon,
 } from "lucide-react"
 
 import { NavUser } from "@/components/nav-user"
 import { useUser } from "@/lib/rbac"
+import { useOrganization } from "@/lib/api/organization"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Sidebar,
@@ -36,24 +39,41 @@ import {
 } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 
-const navigationData = [
+// Navigation item with permission module mapping
+interface NavSubItem {
+  title: string
+  url: string
+  module?: string // RBAC module slug for permission check
+}
+
+interface NavItem {
+  title: string
+  url: string
+  icon: LucideIcon
+  badge?: number
+  module?: string // Parent module for simple items
+  items?: NavSubItem[]
+}
+
+const navigationData: NavItem[] = [
   {
     title: "Dashboard",
     url: "/",
     icon: LayoutDashboard,
+    // Dashboard is always visible
   },
   {
     title: "People & HR",
     url: "/people",
     icon: Users,
     items: [
-      { title: "Overview", url: "/people" },
-      { title: "Directory", url: "/people/directory" },
-      { title: "Roles & Teams", url: "/people/roles" },
-      { title: "Onboarding", url: "/people/onboarding" },
-      { title: "Offboarding", url: "/people/offboarding" },
-      { title: "Time Off", url: "/people/time-off" },
-      { title: "Documents", url: "/people/documents" },
+      { title: "Overview", url: "/people", module: "people.overview" },
+      { title: "Directory", url: "/people/directory", module: "people.directory" },
+      { title: "Roles & Teams", url: "/people/roles", module: "people.roles" },
+      { title: "Onboarding", url: "/people/onboarding", module: "people.onboarding" },
+      { title: "Offboarding", url: "/people/offboarding", module: "people.offboarding" },
+      { title: "Time Off", url: "/people/time-off", module: "people.timeoff" },
+      { title: "Documents", url: "/people/documents", module: "people.documents" },
     ],
   },
   {
@@ -61,11 +81,11 @@ const navigationData = [
     url: "/assets",
     icon: HardDrive,
     items: [
-      { title: "Overview", url: "/assets" },
-      { title: "Inventory", url: "/assets/inventory" },
-      { title: "Assignments", url: "/assets/assignments" },
-      { title: "Maintenance", url: "/assets/maintenance" },
-      { title: "Disposal", url: "/assets/disposal" },
+      { title: "Overview", url: "/assets", module: "assets.overview" },
+      { title: "Inventory", url: "/assets/inventory", module: "assets.inventory" },
+      { title: "Assignments", url: "/assets/assignments", module: "assets.assignments" },
+      { title: "Maintenance", url: "/assets/maintenance", module: "assets.maintenance" },
+      { title: "Disposal", url: "/assets/disposal", module: "assets.disposal" },
     ],
   },
   {
@@ -74,14 +94,14 @@ const navigationData = [
     icon: Shield,
     badge: 3,
     items: [
-      { title: "Overview", url: "/security" },
-      { title: "Frameworks (IMS)", url: "/security/frameworks" },
-      { title: "Risk Register", url: "/security/risks" },
-      { title: "Controls Library", url: "/security/controls" },
-      { title: "Audits", url: "/security/audits" },
-      { title: "Evidence Store", url: "/security/evidence" },
-      { title: "SoA", url: "/security/soa" },
-      { title: "Objectives & Plan", url: "/security/objectives" },
+      { title: "Overview", url: "/security", module: "security.overview" },
+      { title: "Frameworks (IMS)", url: "/security/frameworks", module: "security.frameworks" },
+      { title: "Risk Register", url: "/security/risks", module: "security.risks" },
+      { title: "Controls Library", url: "/security/controls", module: "security.controls" },
+      { title: "Audits", url: "/security/audits", module: "security.audits" },
+      { title: "Evidence Store", url: "/security/evidence", module: "security.evidence" },
+      { title: "SoA", url: "/security/soa", module: "security.soa" },
+      { title: "Objectives & Plan", url: "/security/objectives", module: "security.objectives" },
     ],
   },
   {
@@ -89,10 +109,10 @@ const navigationData = [
     url: "/finance",
     icon: Building2,
     items: [
-      { title: "Overview", url: "/finance" },
-      { title: "Expenses", url: "/finance/expenses" },
-      { title: "Invoices", url: "/finance/invoices" },
-      { title: "Chart of Accounts", url: "/finance/accounts" },
+      { title: "Overview", url: "/finance", module: "finance.overview" },
+      { title: "Expenses", url: "/finance/expenses", module: "finance.expenses" },
+      { title: "Invoices", url: "/finance/invoices", module: "finance.invoices" },
+      { title: "Chart of Accounts", url: "/finance/accounts", module: "finance.accounts" },
     ],
   },
   {
@@ -101,11 +121,11 @@ const navigationData = [
     icon: FileText,
     badge: 2,
     items: [
-      { title: "Overview", url: "/docs" },
-      { title: "Policy Library", url: "/docs/policies" },
-      { title: "Procedures / SOPs", url: "/docs/procedures" },
-      { title: "Attestations", url: "/docs/attestations" },
-      { title: "Approvals", url: "/docs/approvals" },
+      { title: "Overview", url: "/docs", module: "docs.overview" },
+      { title: "Policy Library", url: "/docs/policies", module: "docs.policies" },
+      { title: "Procedures / SOPs", url: "/docs/procedures", module: "docs.procedures" },
+      { title: "Attestations", url: "/docs/attestations", module: "docs.attestations" },
+      { title: "Approvals", url: "/docs/approvals", module: "docs.approvals" },
     ],
   },
   {
@@ -113,10 +133,10 @@ const navigationData = [
     url: "/vendors",
     icon: ShoppingCart,
     items: [
-      { title: "Overview", url: "/vendors" },
-      { title: "Directory", url: "/vendors/directory" },
-      { title: "Contracts", url: "/vendors/contracts" },
-      { title: "Assessments", url: "/vendors/assessments" },
+      { title: "Overview", url: "/vendors", module: "vendors.overview" },
+      { title: "Directory", url: "/vendors/directory", module: "vendors.directory" },
+      { title: "Contracts", url: "/vendors/contracts", module: "vendors.contracts" },
+      { title: "Assessments", url: "/vendors/assessments", module: "vendors.assessments" },
     ],
   },
   {
@@ -124,9 +144,9 @@ const navigationData = [
     url: "/workflows",
     icon: Workflow,
     items: [
-      { title: "Overview", url: "/workflows" },
-      { title: "Tasks & Automations", url: "/workflows/tasks" },
-      { title: "Checklists", url: "/workflows/checklists" },
+      { title: "Overview", url: "/workflows", module: "workflows.overview" },
+      { title: "Tasks & Automations", url: "/workflows/tasks", module: "workflows.tasks" },
+      { title: "Checklists", url: "/workflows/checklists", module: "workflows.checklists" },
     ],
   },
   {
@@ -134,19 +154,23 @@ const navigationData = [
     url: "/settings",
     icon: Settings,
     items: [
-      { title: "Organization", url: "/settings" },
-      { title: "Users & Access", url: "/settings/users" },
-      { title: "Roles & Permissions", url: "/settings/roles" },
-      { title: "Integrations", url: "/settings/integrations" },
-      { title: "Audit Log", url: "/settings/audit-log" },
-      { title: "Branding", url: "/settings/branding" },
+      { title: "Organization", url: "/settings", module: "settings.organization" },
+      { title: "Users & Access", url: "/settings/users", module: "settings.users" },
+      { title: "Roles & Permissions", url: "/settings/roles", module: "settings.roles" },
+      { title: "Integrations", url: "/settings/integrations", module: "settings.integrations" },
+      { title: "Audit Log", url: "/settings/audit-log", module: "settings.auditlog" },
+      { title: "Branding", url: "/settings/branding", module: "settings.branding" },
     ],
   },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
-  const { user, isLoading } = useUser()
+  const { user, isLoading, canAccess } = useUser()
+  const { data: org } = useOrganization()
+  
+  // App name from organization settings, fallback to default
+  const appName = org?.appName || "IdaraOS"
 
   const isActive = (url: string) => {
     if (url === "/") return pathname === "/"
@@ -154,6 +178,41 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   const isItemActive = (url: string) => pathname === url
+
+  // Filter navigation based on permissions
+  const filteredNavigation = useMemo(() => {
+    return navigationData
+      .map((item) => {
+        // If item has no sub-items and no module, it's always visible (e.g., Dashboard)
+        if (!item.items && !item.module) {
+          return item
+        }
+
+        // If item has a single module (no sub-items), check that module
+        if (item.module && !item.items) {
+          return canAccess(item.module) ? item : null
+        }
+
+        // If item has sub-items, filter them by permission
+        if (item.items) {
+          const visibleItems = item.items.filter((subItem) => {
+            // If no module specified, item is visible
+            if (!subItem.module) return true
+            // Otherwise check permission
+            return canAccess(subItem.module)
+          })
+
+          // If no sub-items are visible, hide the entire section
+          if (visibleItems.length === 0) return null
+
+          // Return item with filtered sub-items
+          return { ...item, items: visibleItems }
+        }
+
+        return item
+      })
+      .filter((item): item is NavItem => item !== null)
+  }, [canAccess])
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
@@ -166,7 +225,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <Building2 className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">IdaraOS</span>
+                  <span className="truncate font-semibold">{appName}</span>
                   <span className="truncate text-xs text-muted-foreground">Company OS</span>
                 </div>
               </Link>
@@ -177,7 +236,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {navigationData.map((item) =>
+            {filteredNavigation.map((item) =>
               item.items ? (
                 <Collapsible key={item.title} asChild defaultOpen={isActive(item.url)} className="group/collapsible">
                   <SidebarMenuItem>

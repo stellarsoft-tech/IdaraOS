@@ -13,6 +13,13 @@ export const organizations = pgTable("core_organizations", {
   slug: text("slug").notNull().unique(),
   domain: text("domain"),
   logo: text("logo"),
+  // Application branding name - shown in header, login, etc.
+  // Defaults to "IdaraOS", minimum 3 characters
+  appName: text("app_name").notNull().default("IdaraOS"),
+  // Social & professional links
+  linkedIn: text("linked_in"),
+  twitter: text("twitter"),
+  youtube: text("youtube"),
   timezone: text("timezone").notNull().default("UTC"),
   dateFormat: text("date_format").notNull().default("YYYY-MM-DD"),
   currency: text("currency").notNull().default("USD"),

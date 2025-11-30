@@ -18,6 +18,11 @@ const UpdateOrganizationSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   domain: z.string().max(255).optional().nullable(),
   logo: z.string().url().optional().nullable(),
+  appName: z.string().min(3, "Application name must be at least 3 characters").max(50).optional(),
+  // Social & professional links
+  linkedIn: z.string().url().max(255).optional().nullable(),
+  twitter: z.string().url().max(255).optional().nullable(),
+  youtube: z.string().url().max(255).optional().nullable(),
   timezone: z.string().optional(),
   dateFormat: z.string().optional(),
   currency: z.string().length(3).optional(),

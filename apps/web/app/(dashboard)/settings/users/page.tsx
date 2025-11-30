@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { Plus, Shield, UserCog, MoreHorizontal, Trash2, Mail, Loader2, ChevronRight } from "lucide-react"
-import Link from "next/link"
+import { Plus, Shield, UserCog, Trash2, Loader2 } from "lucide-react"
 
 import { PageShell } from "@/components/primitives/page-shell"
 import { DataTableAdvanced } from "@/components/primitives/data-table-advanced"
@@ -15,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select,
   SelectContent,
@@ -30,13 +30,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,11 +52,20 @@ import {
   useRoles,
   useUserRoles,
   useUpdateUserRoles,
-  type Role,
 } from "@/lib/api/rbac"
 import { userStatusValues } from "@/lib/db/schema"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
+
+// Store handlers in a ref-like pattern to avoid re-render issues
+const userActionsStore = {
+  handlers: null as {
+    onEdit: (user: ApiUser) => void
+    onDelete: (userId: string) => void
+    canEdit: boolean
+    canDelete: boolean
+  } | null
+}
 
 // Color utility for role badges
 function getRoleColorClass(color: string | null): string {
@@ -81,11 +83,11 @@ function getRoleColorClass(color: string | null): string {
 }
 
 // Status badge color mapping
-const statusColors: Record<string, "default" | "purple" | "info" | "success" | "warning" | "destructive"> = {
+const statusColors: Record<string, "default" | "purple" | "info" | "success" | "warning" | "danger"> = {
   active: "success",
   invited: "info",
   suspended: "warning",
-  deactivated: "destructive",
+  deactivated: "danger",
 }
 
 export default function UsersPage() {
@@ -100,8 +102,9 @@ export default function UsersPage() {
   const deleteUser = useDeleteUser()
   const updateUserRoles = useUpdateUserRoles()
 
-  const [createOpen, setCreateOpen] = useState(false)
-  const [editUser, setEditUser] = useState<ApiUser | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [sheetMode, setSheetMode] = useState<"create" | "edit">("create")
+  const [editUserId, setEditUserId] = useState<string | null>(null)
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
 
   // Form state
@@ -112,38 +115,39 @@ export default function UsersPage() {
     roleIds: [] as string[],
   })
 
-  // Get user roles for editing
-  const { data: editUserRoles = [] } = useUserRoles(editUser?.id || "")
+  // Get user roles for editing (only fetch when we have an ID)
+  const { data: editUserRoles = [] } = useUserRoles(editUserId || "")
 
-  // Update form when editing user changes
+  // Update roleIds when they load (separate from other form data)
   useEffect(() => {
-    if (editUser) {
-      setFormData({
-        name: editUser.name,
-        email: editUser.email,
-        status: editUser.status,
+    if (editUserId && editUserRoles.length > 0) {
+      setFormData(prev => ({
+        ...prev,
         roleIds: editUserRoles.map((r) => r.roleId),
-      })
+      }))
     }
-  }, [editUser, editUserRoles])
+  }, [editUserId, editUserRoles])
 
   // Stable handlers for table actions
   const handleEditUser = useCallback((user: ApiUser) => {
-    setEditUser(user)
+    // Set form data immediately (synchronously) before opening sheet
+    setFormData({
+      name: user.name,
+      email: user.email,
+      status: user.status,
+      roleIds: [], // Will be populated by useEffect when roles load
+    })
+    setEditUserId(user.id)
+    setSheetMode("edit")
+    setSheetOpen(true)
   }, [])
 
   const handleDeleteUserClick = useCallback((userId: string) => {
     setDeleteUserId(userId)
   }, [])
-
-  // Role stats - count users by their assigned roles
-  const roleStats = useMemo(() => {
-    const stats: Record<string, number> = {}
-    for (const role of roles) {
-      stats[role.id] = role.userCount || 0
-    }
-    return stats
-  }, [roles])
+  
+  // Update store for cell access (outside React lifecycle)
+  userActionsStore.handlers = { onEdit: handleEditUser, onDelete: handleDeleteUserClick, canEdit, canDelete }
 
   // Table columns
   const columns: ColumnDef<ApiUser>[] = useMemo(
@@ -173,15 +177,21 @@ export default function UsersPage() {
         },
       },
       {
-        accessorKey: "role",
+        accessorKey: "roles",
         header: "Roles",
         cell: ({ row }) => {
-          // For now, show the legacy role field - we'll update this later
-          const legacyRole = row.original.role
+          const assignedRoles = row.original.roles || []
+          if (assignedRoles.length === 0) {
+            return <span className="text-muted-foreground text-sm">No roles</span>
+          }
           return (
-            <Badge className={getRoleColorClass(legacyRole === "Owner" || legacyRole === "Admin" ? "purple" : "gray")}>
-              {legacyRole}
-            </Badge>
+            <div className="flex flex-wrap gap-1">
+              {assignedRoles.map((role) => (
+                <Badge key={role.roleId} className={getRoleColorClass(role.roleColor)}>
+                  {role.roleName}
+                </Badge>
+              ))}
+            </div>
           )
         },
       },
@@ -211,56 +221,45 @@ export default function UsersPage() {
         header: "Actions",
         cell: ({ row }) => {
           const user = row.original
+          const handlers = userActionsStore.handlers
+          if (!handlers) return null
+          
           return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <div className="flex items-center gap-1">
+              {handlers.canEdit && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handlers.onEdit(user)
+                  }}
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <UserCog className="h-4 w-4" />
+                  <span className="sr-only">Edit</span>
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEdit && (
-                  <DropdownMenuItem 
-                    onClick={(e) => { 
-                      e.stopPropagation()
-                      handleEditUser(user)
-                    }}
-                  >
-                    <UserCog className="mr-2 h-4 w-4" />
-                    Edit User
-                  </DropdownMenuItem>
-                )}
-                {user.status === "invited" && (
-                  <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Resend Invite
-                  </DropdownMenuItem>
-                )}
-                {(canEdit || canDelete) && <DropdownMenuSeparator />}
-                {canDelete && (
-                  <DropdownMenuItem
-                    className="text-destructive"
-                    onClick={(e) => { 
-                      e.stopPropagation()
-                      handleDeleteUserClick(user.id)
-                    }}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete User
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              )}
+              {handlers.canDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handlers.onDelete(user.id)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Delete</span>
+                </Button>
+              )}
+            </div>
           )
         },
       },
     ],
-    [handleEditUser, handleDeleteUserClick, canEdit, canDelete]
+    []
   )
 
   const handleOpenCreate = () => {
@@ -270,7 +269,9 @@ export default function UsersPage() {
       status: "invited",
       roleIds: [],
     })
-    setCreateOpen(true)
+    setEditUserId(null)
+    setSheetMode("create")
+    setSheetOpen(true)
   }
 
   const handleRoleToggle = (roleId: string) => {
@@ -300,7 +301,7 @@ export default function UsersPage() {
       }
       
       toast.success("User invited successfully")
-      setCreateOpen(false)
+      setSheetOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to invite user")
     }
@@ -308,10 +309,10 @@ export default function UsersPage() {
 
   // Update user handler
   const handleUpdateUser = async () => {
-    if (!editUser) return
+    if (!editUserId) return
     try {
       await updateUser.mutateAsync({
-        id: editUser.id,
+        id: editUserId,
         data: {
           name: formData.name,
           email: formData.email,
@@ -321,12 +322,13 @@ export default function UsersPage() {
       
       // Update roles
       await updateUserRoles.mutateAsync({
-        userId: editUser.id,
+        userId: editUserId,
         roleIds: formData.roleIds,
       })
       
       toast.success("User updated successfully")
-      setEditUser(null)
+      setSheetOpen(false)
+      setEditUserId(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update user")
     }
@@ -346,7 +348,7 @@ export default function UsersPage() {
 
   if (!canAccess) {
     return (
-      <PageShell title="Users & Access" icon={Shield}>
+      <PageShell title="Users & Access">
         <AccessDenied 
           title="Access Denied" 
           description="You don't have permission to manage users." 
@@ -371,66 +373,45 @@ export default function UsersPage() {
       <div className="space-y-6">
         {/* Role Stats Cards */}
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-          {roles.slice(0, 5).map((role) => (
-            <Card key={role.id} className="relative overflow-hidden">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  {role.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{role.userCount || 0}</div>
-                <p className="text-xs text-muted-foreground">users</p>
-              </CardContent>
-              <div
-                className="absolute top-0 right-0 w-16 h-16 opacity-5"
-                style={{
-                  background: `radial-gradient(circle at top right, currentColor 0%, transparent 70%)`,
-                }}
-              />
-            </Card>
-          ))}
-        </div>
-
-        {/* Link to Roles Management */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Role Permissions</CardTitle>
-                <CardDescription>Configure what each role can access</CardDescription>
-              </div>
-              <Protected module="settings.roles" action="view">
-                <Button variant="outline" asChild>
-                  <Link href="/settings/roles">
-                    Manage Roles
-                    <ChevronRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </Protected>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {roles.map((role) => (
-                <div key={role.id} className="p-3 rounded-lg border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge className={getRoleColorClass(role.color)}>
-                      {role.name}
-                    </Badge>
-                    {role.isSystem && (
-                      <Badge variant="outline" className="text-xs">System</Badge>
-                    )}
+          {rolesLoading ? (
+            // Show 5 skeleton cards while loading
+            Array.from({ length: 5 }).map((_, index) => (
+              <Card key={`skeleton-${index}`} className="relative overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-4 rounded" />
+                    <Skeleton className="h-4 w-20" />
                   </div>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {role.description || "No description"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-12 mb-1" />
+                  <Skeleton className="h-3 w-16" />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            roles.slice(0, 5).map((role) => (
+              <Card key={role.id} className="relative overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    {role.name}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{role.userCount || 0}</div>
+                  <p className="text-xs text-muted-foreground">users</p>
+                </CardContent>
+                <div
+                  className="absolute top-0 right-0 w-16 h-16 opacity-5"
+                  style={{
+                    background: `radial-gradient(circle at top right, currentColor 0%, transparent 70%)`,
+                  }}
+                />
+              </Card>
+            ))
+          )}
+        </div>
 
         {/* Users Table */}
         <Card>
@@ -439,22 +420,21 @@ export default function UsersPage() {
             <CardDescription>Manage user accounts and their role assignments</CardDescription>
           </CardHeader>
           <CardContent>
-            <DataTableAdvanced
-              columns={columns}
-              data={users}
-              isLoading={usersLoading}
-              searchColumn="name"
-              searchPlaceholder="Search users..."
-              facetedFilters={[
-                {
-                  column: "status",
-                  title: "Status",
-                  options: userStatusValues.map((status) => ({
-                    value: status,
-                    label: status.charAt(0).toUpperCase() + status.slice(1),
-                  })),
-                },
-              ]}
+              <DataTableAdvanced
+                columns={columns}
+                data={users}
+                loading={usersLoading}
+                searchKey="name"
+                searchPlaceholder="Search users..."
+                facetedFilters={{
+                  status: {
+                    type: "enum",
+                    options: userStatusValues.map((status) => ({
+                      value: status,
+                      label: status.charAt(0).toUpperCase() + status.slice(1),
+                    })),
+                  },
+                }}
               emptyState={
                 <div className="text-center py-12">
                   <p className="text-muted-foreground mb-4">No users found</p>
@@ -466,24 +446,24 @@ export default function UsersPage() {
                   </Protected>
                 </div>
               }
-            />
+              />
           </CardContent>
         </Card>
 
         {/* Create/Edit User Sheet */}
-        <Sheet open={createOpen || !!editUser} onOpenChange={(open) => {
+        <Sheet open={sheetOpen} onOpenChange={(open) => {
           if (!open) {
-            setCreateOpen(false)
-            setEditUser(null)
+            setSheetOpen(false)
+            setEditUserId(null)
           }
         }}>
           <SheetContent className="overflow-y-auto flex flex-col">
             <SheetHeader>
               <SheetTitle>
-                {editUser ? "Edit User" : "Invite User"}
+                {sheetMode === "edit" ? "Edit User" : "Invite User"}
               </SheetTitle>
               <SheetDescription>
-                {editUser 
+                {sheetMode === "edit"
                   ? "Update user details and role assignments."
                   : "Send an invitation to a new team member."}
               </SheetDescription>
@@ -513,7 +493,7 @@ export default function UsersPage() {
                   />
                 </div>
 
-                {editUser && (
+                {sheetMode === "edit" && (
                   <div className="space-y-2">
                     <Label htmlFor="status">Status</Label>
                     <Select
@@ -588,14 +568,14 @@ export default function UsersPage() {
               <Button 
                 variant="outline" 
                 onClick={() => {
-                  setCreateOpen(false)
-                  setEditUser(null)
+                  setSheetOpen(false)
+                  setEditUserId(null)
                 }}
               >
                 Cancel
               </Button>
               <Button 
-                onClick={editUser ? handleUpdateUser : handleCreateUser}
+                onClick={sheetMode === "edit" ? handleUpdateUser : handleCreateUser}
                 disabled={
                   createUser.isPending || 
                   updateUser.isPending || 
@@ -607,7 +587,7 @@ export default function UsersPage() {
                 {(createUser.isPending || updateUser.isPending || updateUserRoles.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {editUser ? "Update User" : "Send Invitation"}
+                {sheetMode === "edit" ? "Update User" : "Send Invitation"}
               </Button>
             </SheetFooter>
           </SheetContent>

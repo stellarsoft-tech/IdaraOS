@@ -24,21 +24,39 @@ const db = drizzle(pool, { schema })
 // ============ Default Data ============
 
 const DEFAULT_MODULES = [
-  // People & HR
-  { slug: "people.directory", name: "People Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "100" },
-  { slug: "people.onboarding", name: "Onboarding", description: "Manage employee onboarding workflows", category: "People & HR", icon: "UserPlus", sortOrder: "101" },
-  { slug: "people.offboarding", name: "Offboarding", description: "Manage employee offboarding workflows", category: "People & HR", icon: "UserMinus", sortOrder: "102" },
+  // People & HR - Overview & Directory
+  { slug: "people.overview", name: "People Overview", description: "View People & HR dashboard", category: "People & HR", icon: "LayoutDashboard", sortOrder: "100" },
+  { slug: "people.directory", name: "People Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "101" },
+  { slug: "people.roles", name: "Roles & Teams", description: "Manage organizational roles and teams", category: "People & HR", icon: "UsersRound", sortOrder: "102" },
+  
+  // People & HR - Lifecycle
+  { slug: "people.onboarding", name: "Onboarding", description: "Manage employee onboarding workflows", category: "People & HR", icon: "UserPlus", sortOrder: "103" },
+  { slug: "people.offboarding", name: "Offboarding", description: "Manage employee offboarding workflows", category: "People & HR", icon: "UserMinus", sortOrder: "104" },
+  
+  // People & HR - Operations
+  { slug: "people.timeoff", name: "Time Off", description: "Manage time off requests and leave", category: "People & HR", icon: "Calendar", sortOrder: "105" },
+  { slug: "people.documents", name: "Documents", description: "Manage employee documents", category: "People & HR", icon: "FileText", sortOrder: "106" },
   
   // Assets & Equipment
-  { slug: "assets.inventory", name: "Asset Inventory", description: "Manage company assets and equipment", category: "Assets", icon: "Package", sortOrder: "200" },
-  { slug: "assets.assignments", name: "Asset Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "201" },
+  { slug: "assets.overview", name: "Assets Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200" },
+  { slug: "assets.inventory", name: "Asset Inventory", description: "Manage company assets and equipment", category: "Assets", icon: "Package", sortOrder: "201" },
+  { slug: "assets.assignments", name: "Asset Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "202" },
+  { slug: "assets.maintenance", name: "Asset Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "203" },
+  { slug: "assets.disposal", name: "Asset Disposal", description: "Manage asset disposal and retirement", category: "Assets", icon: "Trash2", sortOrder: "204" },
+  
+  // Security
+  { slug: "security.overview", name: "Security Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300" },
+  { slug: "security.risks", name: "Risk Register", description: "Manage security risks", category: "Security", icon: "AlertTriangle", sortOrder: "301" },
+  { slug: "security.controls", name: "Controls Library", description: "Manage security controls", category: "Security", icon: "CheckSquare", sortOrder: "302" },
   
   // Settings
   { slug: "settings.organization", name: "Organization Settings", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900" },
   { slug: "settings.users", name: "Users & Access", description: "Manage system users and invitations", category: "Settings", icon: "Users", sortOrder: "901" },
   { slug: "settings.roles", name: "Roles & Permissions", description: "Configure custom roles and permissions", category: "Settings", icon: "Shield", sortOrder: "902" },
   { slug: "settings.integrations", name: "Integrations", description: "Configure third-party integrations", category: "Settings", icon: "Plug", sortOrder: "903" },
-  { slug: "settings.audit", name: "Audit Log", description: "View system activity and audit trail", category: "Settings", icon: "FileText", sortOrder: "904" },
+  { slug: "settings.auditlog", name: "Audit Log", description: "View system activity and audit trail", category: "Settings", icon: "FileText", sortOrder: "904" },
+  { slug: "settings.branding", name: "Branding", description: "Customize application appearance", category: "Settings", icon: "Palette", sortOrder: "905" },
+  { slug: "settings.apikeys", name: "API Keys", description: "Manage API access tokens", category: "Settings", icon: "Key", sortOrder: "906" },
 ]
 
 const DEFAULT_ACTIONS = [
@@ -70,16 +88,32 @@ const SYSTEM_ROLES: Record<string, {
     description: "Full access to most features except some owner-only settings.",
     color: "orange",
     permissions: {
+      // People & HR - Full access
+      "people.overview": { view: true, create: true, edit: true, delete: true },
       "people.directory": { view: true, create: true, edit: true, delete: true },
+      "people.roles": { view: true, create: true, edit: true, delete: true },
       "people.onboarding": { view: true, create: true, edit: true, delete: true },
       "people.offboarding": { view: true, create: true, edit: true, delete: true },
+      "people.timeoff": { view: true, create: true, edit: true, delete: true },
+      "people.documents": { view: true, create: true, edit: true, delete: true },
+      // Assets - Full access
+      "assets.overview": { view: true, create: true, edit: true, delete: true },
       "assets.inventory": { view: true, create: true, edit: true, delete: true },
       "assets.assignments": { view: true, create: true, edit: true, delete: true },
+      "assets.maintenance": { view: true, create: true, edit: true, delete: true },
+      "assets.disposal": { view: true, create: true, edit: true, delete: true },
+      // Security - Full access
+      "security.overview": { view: true, create: true, edit: true, delete: true },
+      "security.risks": { view: true, create: true, edit: true, delete: true },
+      "security.controls": { view: true, create: true, edit: true, delete: true },
+      // Settings - Limited
       "settings.organization": { view: true, create: true, edit: true, delete: false },
       "settings.users": { view: true, create: true, edit: true, delete: true },
       "settings.roles": { view: true, create: true, edit: true, delete: true },
       "settings.integrations": { view: true, create: true, edit: true, delete: true },
-      "settings.audit": { view: true, create: false, edit: false, delete: false },
+      "settings.auditlog": { view: true, create: false, edit: false, delete: false },
+      "settings.branding": { view: true, create: true, edit: true, delete: false },
+      "settings.apikeys": { view: true, create: true, edit: true, delete: true },
     },
   },
   manager: {
@@ -87,15 +121,26 @@ const SYSTEM_ROLES: Record<string, {
     description: "Can view and edit most records, limited create/delete access.",
     color: "blue",
     permissions: {
+      // People & HR - View and manage team
+      "people.overview": { view: true, create: false, edit: false, delete: false },
       "people.directory": { view: true, create: false, edit: true, delete: false },
+      "people.roles": { view: true, create: false, edit: true, delete: false },
       "people.onboarding": { view: true, create: true, edit: true, delete: false },
       "people.offboarding": { view: true, create: true, edit: true, delete: false },
+      "people.timeoff": { view: true, create: true, edit: true, delete: false },
+      "people.documents": { view: true, create: true, edit: true, delete: false },
+      // Assets - Limited
+      "assets.overview": { view: true, create: false, edit: false, delete: false },
       "assets.inventory": { view: true, create: false, edit: true, delete: false },
       "assets.assignments": { view: true, create: true, edit: true, delete: false },
+      // Security - View only
+      "security.overview": { view: true, create: false, edit: false, delete: false },
+      "security.risks": { view: true, create: false, edit: false, delete: false },
+      // Settings - View only
       "settings.organization": { view: true, create: false, edit: false, delete: false },
       "settings.users": { view: true, create: false, edit: false, delete: false },
       "settings.roles": { view: true, create: false, edit: false, delete: false },
-      "settings.audit": { view: true, create: false, edit: false, delete: false },
+      "settings.auditlog": { view: true, create: false, edit: false, delete: false },
     },
   },
   member: {
@@ -103,9 +148,16 @@ const SYSTEM_ROLES: Record<string, {
     description: "Standard employee access - view most records, limited editing.",
     color: "green",
     permissions: {
+      // People & HR - View directory, manage own time off
+      "people.overview": { view: true, create: false, edit: false, delete: false },
       "people.directory": { view: true, create: false, edit: false, delete: false },
+      "people.timeoff": { view: true, create: true, edit: false, delete: false }, // Can request time off
+      "people.documents": { view: true, create: false, edit: false, delete: false },
+      // Assets - View only
+      "assets.overview": { view: true, create: false, edit: false, delete: false },
       "assets.inventory": { view: true, create: false, edit: false, delete: false },
       "assets.assignments": { view: true, create: false, edit: false, delete: false },
+      // Settings - View org only
       "settings.organization": { view: true, create: false, edit: false, delete: false },
     },
   },
@@ -114,6 +166,7 @@ const SYSTEM_ROLES: Record<string, {
     description: "Read-only access to allowed areas.",
     color: "gray",
     permissions: {
+      "people.overview": { view: true, create: false, edit: false, delete: false },
       "people.directory": { view: true, create: false, edit: false, delete: false },
       "settings.organization": { view: true, create: false, edit: false, delete: false },
     },
