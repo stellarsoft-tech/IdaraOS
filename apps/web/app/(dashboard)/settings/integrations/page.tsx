@@ -65,6 +65,7 @@ export default function IntegrationsPage() {
   
   const [showSecrets, setShowSecrets] = useState(false)
   const [scimToken, setScimToken] = useState<string | null>(null)
+  const [scimGroupPrefix, setScimGroupPrefix] = useState("")
   
   // Form state for configuration
   const [formData, setFormData] = useState({
@@ -81,6 +82,7 @@ export default function IntegrationsPage() {
         clientId: entraConfig.clientId || "",
         clientSecret: "",
       })
+      setScimGroupPrefix(entraConfig.scimGroupPrefix || "")
     }
   }, [entraConfig])
 
@@ -161,6 +163,30 @@ export default function IntegrationsPage() {
         scimEnabled: enabled,
       })
       toast.success(enabled ? "SCIM enabled" : "SCIM disabled")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update")
+    }
+  }
+
+  const handleUpdateScimGroupPrefix = async (prefix: string) => {
+    try {
+      await updateEntra.mutateAsync({
+        provider: "entra",
+        scimGroupPrefix: prefix,
+      })
+      toast.success("SCIM group prefix updated")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update")
+    }
+  }
+
+  const handleToggleBidirectionalSync = async (enabled: boolean) => {
+    try {
+      await updateEntra.mutateAsync({
+        provider: "entra",
+        scimBidirectionalSync: enabled,
+      })
+      toast.success(enabled ? "Bidirectional sync enabled" : "Bidirectional sync disabled")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update")
     }
@@ -500,6 +526,71 @@ export default function IntegrationsPage() {
                         disabled={!canEdit || updateEntra.isPending}
                       />
                     </div>
+
+                    {/* Group Role Mapping Settings */}
+                    <Card>
+                      <CardHeader className="pt-0">
+                        <CardTitle className="text-base">Group Role Mapping</CardTitle>
+                        <CardDescription>
+                          Configure how Entra ID groups map to application roles
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="scimGroupPrefix" className="text-muted-foreground text-xs uppercase tracking-wide">
+                            Group Name Prefix
+                          </Label>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="scimGroupPrefix"
+                              placeholder="e.g., IdaraOS-"
+                              value={scimGroupPrefix}
+                              onChange={(e) => setScimGroupPrefix(e.target.value)}
+                              disabled={!canEdit || updateEntra.isPending}
+                              className="flex-1"
+                            />
+                            <Button 
+                              variant="outline"
+                              onClick={() => handleUpdateScimGroupPrefix(scimGroupPrefix)}
+                              disabled={!canEdit || updateEntra.isPending || scimGroupPrefix === (entraConfig?.scimGroupPrefix || "")}
+                            >
+                              {updateEntra.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Save
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Groups with this prefix will be mapped to roles. For example, if prefix is &quot;IdaraOS-&quot;, 
+                            a group named &quot;IdaraOS-Admin&quot; will map to the &quot;Admin&quot; role.
+                          </p>
+                        </div>
+
+                        <Separator />
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-sm">Bidirectional Sync</div>
+                            <div className="text-xs text-muted-foreground">
+                              Allow role changes in the UI to sync back to Entra ID groups
+                            </div>
+                          </div>
+                          <Switch 
+                            checked={entraConfig?.scimBidirectionalSync || false} 
+                            onCheckedChange={handleToggleBidirectionalSync}
+                            disabled={!canEdit || updateEntra.isPending}
+                          />
+                        </div>
+                        
+                        {!entraConfig?.scimBidirectionalSync && (
+                          <Alert variant="default" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                            <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                              When disabled, SCIM-assigned roles cannot be modified in the Users settings. 
+                              This ensures Entra ID remains the source of truth for user roles.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </CardContent>
+                    </Card>
 
                     <Card>
                       <CardHeader className="pt-0">

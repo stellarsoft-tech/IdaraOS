@@ -32,7 +32,7 @@ interface PersonInfo {
 // Transform DB record to API response
 function toApiResponse(
   record: typeof users.$inferSelect,
-  userRolesData: { roleId: string; roleName: string; roleColor: string | null }[],
+  userRolesData: { roleId: string; roleName: string; roleColor: string | null; source?: string; scimGroupId?: string | null }[],
   personInfo?: PersonInfo | null
 ) {
   return {
@@ -55,6 +55,8 @@ function toApiResponse(
     // Flags for UI badges
     hasLinkedPerson: !!record.personId,
     hasEntraLink: !!record.entraId,
+    // SCIM flags
+    hasScimRoles: userRolesData.some(r => r.source === "scim"),
   }
 }
 
@@ -83,6 +85,8 @@ export async function GET(request: NextRequest) {
             roleId: roles.id,
             roleName: roles.name,
             roleColor: roles.color,
+            source: userRoles.source,
+            scimGroupId: userRoles.scimGroupId,
           })
           .from(userRoles)
           .innerJoin(roles, eq(userRoles.roleId, roles.id))
@@ -106,13 +110,15 @@ export async function GET(request: NextRequest) {
       : []
 
     // Create lookup maps
-    const rolesByUserId = new Map<string, { roleId: string; roleName: string; roleColor: string | null }[]>()
+    const rolesByUserId = new Map<string, { roleId: string; roleName: string; roleColor: string | null; source: string; scimGroupId: string | null }[]>()
     for (const assignment of roleAssignments) {
       const existing = rolesByUserId.get(assignment.userId) || []
       existing.push({
         roleId: assignment.roleId,
         roleName: assignment.roleName,
         roleColor: assignment.roleColor,
+        source: assignment.source,
+        scimGroupId: assignment.scimGroupId,
       })
       rolesByUserId.set(assignment.userId, existing)
     }

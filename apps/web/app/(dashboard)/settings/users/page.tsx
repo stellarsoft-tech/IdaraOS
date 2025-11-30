@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { Plus, Shield, UserCog, Trash2, Loader2, Search, Building2, User } from "lucide-react"
+import { Plus, Shield, UserCog, Trash2, Loader2, Search, Building2, User, Lock, RefreshCw } from "lucide-react"
 
 import { PageShell } from "@/components/primitives/page-shell"
 import { DataTableAdvanced } from "@/components/primitives/data-table-advanced"
@@ -40,6 +40,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import {
   Command,
   CommandEmpty,
@@ -225,13 +232,27 @@ export default function UsersPage() {
             return <span className="text-muted-foreground text-sm">No roles</span>
           }
           return (
-            <div className="flex flex-wrap gap-1">
-              {assignedRoles.map((role) => (
-                <Badge key={role.roleId} className={getRoleColorClass(role.roleColor)}>
-                  {role.roleName}
-                </Badge>
-              ))}
-            </div>
+            <TooltipProvider>
+              <div className="flex flex-wrap gap-1">
+                {assignedRoles.map((role) => (
+                  <Tooltip key={role.roleId}>
+                    <TooltipTrigger asChild>
+                      <Badge className={`${getRoleColorClass(role.roleColor)} ${role.source === "scim" ? "pr-1" : ""}`}>
+                        {role.roleName}
+                        {role.source === "scim" && (
+                          <RefreshCw className="h-2.5 w-2.5 ml-1 opacity-70" />
+                        )}
+                      </Badge>
+                    </TooltipTrigger>
+                    {role.source === "scim" && (
+                      <TooltipContent>
+                        <p>Assigned via SCIM (Entra ID)</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                ))}
+              </div>
+            </TooltipProvider>
           )
         },
       },
@@ -765,35 +786,69 @@ export default function UsersPage() {
                   Select which roles this user should have. Roles determine what the user can access.
                 </p>
                 
+                {/* SCIM Warning */}
+                {sheetMode === "edit" && editUserRoles.some(r => r.source === "scim") && (
+                  <Alert variant="default" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                    <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                      Some roles are assigned via SCIM (Entra ID) and cannot be modified here. 
+                      To change these roles, update the user&apos;s group membership in Microsoft Entra ID.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
                 <div className="space-y-3">
-                  {roles.map((role) => (
-                    <div 
-                      key={role.id} 
-                      className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                    >
-                      <Checkbox
-                        id={role.id}
-                        checked={formData.roleIds.includes(role.id)}
-                        onCheckedChange={() => handleRoleToggle(role.id)}
-                      />
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={role.id} className="cursor-pointer font-medium">
-                            {role.name}
-                          </Label>
-                          <Badge className={`${getRoleColorClass(role.color)} text-xs`}>
-                            {role.permissionCount || 0} permissions
-                          </Badge>
-                          {role.isSystem && (
-                            <Badge variant="outline" className="text-xs">System</Badge>
-                          )}
+                  {roles.map((role) => {
+                    // Check if this role is SCIM-assigned for this user
+                    const scimRole = editUserRoles.find(r => r.roleId === role.id && r.source === "scim")
+                    const isScimAssigned = !!scimRole
+                    
+                    return (
+                      <div 
+                        key={role.id} 
+                        className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
+                          isScimAssigned 
+                            ? "bg-muted/30 border-blue-200 dark:border-blue-800" 
+                            : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <Checkbox
+                          id={role.id}
+                          checked={formData.roleIds.includes(role.id)}
+                          onCheckedChange={() => handleRoleToggle(role.id)}
+                          disabled={isScimAssigned}
+                        />
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Label 
+                              htmlFor={role.id} 
+                              className={`font-medium ${isScimAssigned ? "text-muted-foreground" : "cursor-pointer"}`}
+                            >
+                              {role.name}
+                            </Label>
+                            <Badge className={`${getRoleColorClass(role.color)} text-xs`}>
+                              {role.permissionCount || 0} permissions
+                            </Badge>
+                            {role.isSystem && (
+                              <Badge variant="outline" className="text-xs">System</Badge>
+                            )}
+                            {isScimAssigned && (
+                              <Badge variant="outline" className="text-xs gap-1 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400">
+                                <RefreshCw className="h-2.5 w-2.5" />
+                                SCIM
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {role.description || "No description"}
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {role.description || "No description"}
-                        </p>
+                        {isScimAssigned && (
+                          <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 {formData.roleIds.length === 0 && (

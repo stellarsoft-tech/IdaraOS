@@ -4,32 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getEntraConfig } from "@/lib/auth/entra-config"
-import { decrypt } from "@/lib/encryption"
-
-/**
- * Verify SCIM authentication token
- */
-async function verifyScimToken(request: NextRequest): Promise<boolean> {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return false
-  }
-
-  const token = authHeader.substring(7)
-  const config = await getEntraConfig()
-  
-  if (!config || !config.scimEnabled || !config.scimTokenEncrypted) {
-    return false
-  }
-
-  try {
-    const decryptedToken = decrypt(config.scimTokenEncrypted)
-    return decryptedToken === token
-  } catch {
-    return false
-  }
-}
+import { verifyScimToken } from "@/lib/scim/helpers"
 
 /**
  * GET /api/scim/v2/ResourceTypes - List supported resource types
@@ -44,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-    totalResults: 1,
+    totalResults: 2,
     Resources: [
       {
         schemas: ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],
@@ -56,6 +31,19 @@ export async function GET(request: NextRequest) {
         schemaExtensions: [],
         meta: {
           location: `${baseUrl}/api/scim/v2/ResourceTypes/User`,
+          resourceType: "ResourceType",
+        },
+      },
+      {
+        schemas: ["urn:ietf:params:scim:schemas:core:2.0:ResourceType"],
+        id: "Group",
+        name: "Group",
+        endpoint: "/Groups",
+        description: "Group",
+        schema: "urn:ietf:params:scim:schemas:core:2.0:Group",
+        schemaExtensions: [],
+        meta: {
+          location: `${baseUrl}/api/scim/v2/ResourceTypes/Group`,
           resourceType: "ResourceType",
         },
       },

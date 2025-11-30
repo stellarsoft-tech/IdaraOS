@@ -76,6 +76,8 @@ export interface UserRole {
   roleDescription: string | null
   isSystem: boolean
   assignedAt: string
+  source: "manual" | "scim"
+  scimGroupId: string | null
 }
 
 export interface UserPermissions {

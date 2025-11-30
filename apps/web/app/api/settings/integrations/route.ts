@@ -110,6 +110,9 @@ const UpdateEntraConfigSchema = z.object({
   ssoEnabled: z.boolean().optional(),
   passwordAuthDisabled: z.boolean().optional(),
   scimEnabled: z.boolean().optional(),
+  // SCIM Group provisioning settings
+  scimGroupPrefix: z.string().optional(),
+  scimBidirectionalSync: z.boolean().optional(),
 })
 
 /**
@@ -150,6 +153,9 @@ export async function GET(request: NextRequest) {
           passwordAuthDisabled: false,
           scimEnabled: false,
           scimEndpoint: null,
+          hasScimToken: false,
+          scimGroupPrefix: null,
+          scimBidirectionalSync: false,
           lastSyncAt: null,
           syncedUserCount: 0,
           syncedGroupCount: 0,
@@ -169,6 +175,9 @@ export async function GET(request: NextRequest) {
         scimEndpoint: integration.scimEndpoint,
         // Don't expose the actual token, just indicate if it exists
         hasScimToken: !!integration.scimTokenEncrypted,
+        // SCIM Group settings
+        scimGroupPrefix: integration.scimGroupPrefix,
+        scimBidirectionalSync: integration.scimBidirectionalSync,
         lastSyncAt: integration.lastSyncAt?.toISOString(),
         syncedUserCount: parseInt(integration.syncedUserCount || "0"),
         syncedGroupCount: parseInt(integration.syncedGroupCount || "0"),
@@ -407,6 +416,12 @@ export async function PATCH(request: NextRequest) {
       if (data.scimEnabled !== undefined) {
         updateData.scimEnabled = data.scimEnabled
       }
+      if (data.scimGroupPrefix !== undefined) {
+        updateData.scimGroupPrefix = data.scimGroupPrefix || null
+      }
+      if (data.scimBidirectionalSync !== undefined) {
+        updateData.scimBidirectionalSync = data.scimBidirectionalSync
+      }
 
       const [updated] = await db
         .update(integrations)
@@ -420,6 +435,8 @@ export async function PATCH(request: NextRequest) {
         ssoEnabled: updated.ssoEnabled,
         passwordAuthDisabled: updated.passwordAuthDisabled,
         scimEnabled: updated.scimEnabled,
+        scimGroupPrefix: updated.scimGroupPrefix,
+        scimBidirectionalSync: updated.scimBidirectionalSync,
         message: "Integration updated",
       })
     }

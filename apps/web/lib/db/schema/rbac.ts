@@ -115,6 +115,12 @@ export const rolePermissions = pgTable(
 )
 
 /**
+ * Role assignment source - how the role was assigned
+ */
+export const roleAssignmentSourceValues = ["manual", "scim"] as const
+export type RoleAssignmentSource = (typeof roleAssignmentSourceValues)[number]
+
+/**
  * User Roles - many-to-many between users and roles
  * Users can have multiple roles, permissions are combined (union)
  */
@@ -125,11 +131,21 @@ export const userRoles = pgTable(
     roleId: uuid("role_id").notNull().references(() => roles.id, { onDelete: "cascade" }),
     assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
     assignedBy: uuid("assigned_by").references(() => users.id, { onDelete: "set null" }),
+    
+    // Source of assignment - "manual" (UI/API) or "scim" (provisioned from Entra)
+    // SCIM-assigned roles cannot be modified in the UI unless bidirectional sync is enabled
+    source: text("source", { enum: roleAssignmentSourceValues }).notNull().default("manual"),
+    
+    // If assigned via SCIM, reference to the SCIM group that granted this role
+    // This allows proper cleanup when group membership changes
+    scimGroupId: uuid("scim_group_id"),
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.roleId] }),
     index("idx_rbac_user_roles_user").on(table.userId),
     index("idx_rbac_user_roles_role").on(table.roleId),
+    index("idx_rbac_user_roles_source").on(table.source),
+    index("idx_rbac_user_roles_scim_group").on(table.scimGroupId),
   ]
 )
 
@@ -209,4 +225,5 @@ export type NewRolePermission = typeof rolePermissions.$inferInsert
 
 export type UserRole = typeof userRoles.$inferSelect
 export type NewUserRole = typeof userRoles.$inferInsert
+export type { RoleAssignmentSource }
 

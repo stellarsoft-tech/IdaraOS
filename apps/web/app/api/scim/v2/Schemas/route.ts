@@ -4,32 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getEntraConfig } from "@/lib/auth/entra-config"
-import { decrypt } from "@/lib/encryption"
-
-/**
- * Verify SCIM authentication token
- */
-async function verifyScimToken(request: NextRequest): Promise<boolean> {
-  const authHeader = request.headers.get("authorization")
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return false
-  }
-
-  const token = authHeader.substring(7)
-  const config = await getEntraConfig()
-  
-  if (!config || !config.scimEnabled || !config.scimTokenEncrypted) {
-    return false
-  }
-
-  try {
-    const decryptedToken = decrypt(config.scimTokenEncrypted)
-    return decryptedToken === token
-  } catch {
-    return false
-  }
-}
+import { verifyScimToken } from "@/lib/scim/helpers"
 
 /**
  * GET /api/scim/v2/Schemas - List supported schemas
@@ -44,8 +19,9 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-    totalResults: 1,
+    totalResults: 2,
     Resources: [
+      // User Schema
       {
         schemas: ["urn:ietf:params:scim:schemas:core:2.0:Schema"],
         id: "urn:ietf:params:scim:schemas:core:2.0:User",
@@ -171,6 +147,78 @@ export async function GET(request: NextRequest) {
         meta: {
           resourceType: "Schema",
           location: `${baseUrl}/api/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User`,
+        },
+      },
+      // Group Schema
+      {
+        schemas: ["urn:ietf:params:scim:schemas:core:2.0:Schema"],
+        id: "urn:ietf:params:scim:schemas:core:2.0:Group",
+        name: "Group",
+        description: "Group",
+        attributes: [
+          {
+            name: "displayName",
+            type: "string",
+            multiValued: false,
+            description: "Human-readable name for the Group",
+            required: true,
+            caseExact: false,
+            mutability: "readWrite",
+            returned: "default",
+            uniqueness: "server",
+          },
+          {
+            name: "members",
+            type: "complex",
+            multiValued: true,
+            description: "A list of members of the Group",
+            required: false,
+            subAttributes: [
+              {
+                name: "value",
+                type: "string",
+                multiValued: false,
+                description: "Identifier of the member of this Group",
+                required: false,
+                mutability: "immutable",
+                returned: "default",
+              },
+              {
+                name: "$ref",
+                type: "reference",
+                multiValued: false,
+                description: "The URI of the member resource",
+                required: false,
+                mutability: "immutable",
+                returned: "default",
+              },
+              {
+                name: "display",
+                type: "string",
+                multiValued: false,
+                description: "A human-readable name for the member",
+                required: false,
+                mutability: "immutable",
+                returned: "default",
+              },
+            ],
+            mutability: "readWrite",
+            returned: "default",
+          },
+          {
+            name: "externalId",
+            type: "string",
+            multiValued: false,
+            description: "External identifier from the provisioning client",
+            required: false,
+            caseExact: true,
+            mutability: "readWrite",
+            returned: "default",
+          },
+        ],
+        meta: {
+          resourceType: "Schema",
+          location: `${baseUrl}/api/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:Group`,
         },
       },
     ],
