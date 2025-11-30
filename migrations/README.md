@@ -1,111 +1,64 @@
 # Database Migrations
 
-SQL migration files for IdaraOS database schema.
+**Note:** We use Drizzle ORM with schema-first migrations. The schema files in `apps/web/lib/db/schema/` are the source of truth.
 
-## Naming Convention
-
-```
-{timestamp}_description.sql
-```
-
-Example:
-```
-1701234567890_create_people_persons.sql
-1701234568000_create_security_risks.sql
-```
-
-## Running Migrations
-
-### Manual
-```bash
-psql -d idara_db -f migrations/1701234567890_create_people_persons.sql
-```
-
-### Automated (TODO)
-```bash
-pnpm migrate:up    # Run pending migrations
-pnpm migrate:down  # Rollback last migration
-```
-
-## Generated Migrations
-
-Migrations are auto-generated from `spec.json` files when you run:
+## Quick Start
 
 ```bash
-pnpm generate specs/modules/<area>/<entity>/spec.json
+# 1. Start PostgreSQL (Docker)
+docker run -d --name idaraos-db -p 5432:5432 \
+  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_DB=idaraos \
+  postgres:16
+
+# 2. Push schema to database (dev only)
+cd apps/web
+pnpm db:push
+
+# 3. (Optional) Seed demo data
+pnpm db:seed
+
+# 4. View database in browser
+pnpm db:studio
 ```
 
-This creates:
-- `migrations/{timestamp}_create_{entity}s.sql`
+## Commands
 
-## Migration Structure
+| Command | Description |
+|---------|-------------|
+| `pnpm db:generate` | Generate migration from schema changes |
+| `pnpm db:migrate` | Run pending migrations |
+| `pnpm db:push` | Push schema directly (dev only) |
+| `pnpm db:studio` | Open Drizzle Studio UI |
+| `pnpm db:seed` | Insert demo data (optional) |
 
-Each migration includes:
-1. **CREATE TABLE** with all fields
-2. **Indexes** for performance
-3. **Constraints** (enums, foreign keys)
-4. **Functions** for computed fields
-5. **RLS Policies** for security
-6. **Triggers** for updated_at
-7. **Comments** for documentation
+## Environment
 
-## RLS Setup
+Create `apps/web/.env.local`:
 
-Migrations include Row-Level Security policies that require these settings:
-
-```sql
--- Set current user context
-SET app.current_user_id = '{user_id}';
-SET app.current_role = '{role}';
-SET app.current_org_id = '{org_id}';
+```env
+DATABASE_URL=postgresql://postgres:password@localhost:5432/idaraos
 ```
 
-Your application must set these before querying.
+## Schema Location
 
-## Rollback
+Drizzle schema files are in: `apps/web/lib/db/schema/`
 
-To rollback a migration, manually write the reverse operations:
-- DROP TABLE
-- DROP INDEX
-- DROP FUNCTION
-- DROP POLICY
+- `index.ts` - Exports all tables
+- `people.ts` - People/employees table
 
-Store rollbacks in: `migrations/{timestamp}_rollback_{description}.sql`
+## Adding New Tables
 
-## Best Practices
+1. Create schema file in `apps/web/lib/db/schema/` (e.g., `assets.ts`)
+2. Export from `index.ts`
+3. **For development:** Run `pnpm db:push` to apply directly
+4. **For production:** Run `pnpm db:generate` to create migration files, then `pnpm db:migrate` to apply
 
-1. **Never edit applied migrations** - create new ones
-2. **Test migrations** on dev database first
-3. **Backup before running** in production
-4. **Review generated SQL** before applying
-5. **Commit migrations** with code changes
-6. **Document manual changes** if you edit generated SQL
+## Production
 
-## Common Tasks
-
-### Create table from spec
-```bash
-pnpm generate specs/modules/people/person/spec.json
-# Creates: migrations/{timestamp}_create_persons.sql
-```
-
-### Add column
-```sql
-ALTER TABLE people_persons
-ADD COLUMN phone VARCHAR(50);
-```
-
-### Create index
-```sql
-CREATE INDEX idx_people_persons_phone ON people_persons(phone);
-```
-
-### Add RLS policy
-```sql
-CREATE POLICY persons_manager_read ON people_persons
-FOR SELECT
-USING (
-  manager_id = current_setting('app.current_user_id')::UUID
-);
-```
-
+For production:
+1. Use managed PostgreSQL (Supabase, Neon, Railway, etc.)
+2. Set `DATABASE_URL` environment variable
+3. Generate migrations: `pnpm db:generate` (creates files in `apps/web/drizzle/`)
+4. Run migrations: `pnpm db:migrate` in CI/CD pipeline
+5. **Never run `db:push` in production** - always use generated migrations

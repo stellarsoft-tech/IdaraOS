@@ -2,44 +2,155 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus } from "lucide-react"
+import { MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 import { DataTableAdvanced as DataTable } from "@/components/primitives/data-table-advanced"
 import { PageShell } from "@/components/primitives/page-shell"
 import { FormDrawer } from "@/components/primitives/form-drawer"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Protected } from "@/components/rbac/protected"
 
 // Generated from spec
-import { columns } from "@/lib/generated/people/person/columns"
+import { columns as baseColumns } from "@/lib/generated/people/person/columns"
 import { formConfig, createFormSchema, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
-import type { Person, CreatePerson } from "@/lib/generated/people/person/types"
+import type { Person, CreatePerson, UpdatePerson } from "@/lib/generated/people/person/types"
 
-// Mock data (TODO: Replace with API calls)
-import { people } from "@/lib/seed-data"
+// API hooks
+import { usePeopleList, useCreatePerson, useUpdatePerson, useDeletePerson } from "@/lib/api/people"
+
+// Form fields
+const createFields = getFormFields("create")
+const editFields = getFormFields("edit")
 
 export default function DirectoryPage() {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
   
-  // TODO: Replace with useListQuery hook
-  const data: Person[] = people as any
-  const loading = false
+  // Fetch people with React Query
+  const { data: people = [], isLoading, error } = usePeopleList()
+  const createMutation = useCreatePerson()
+  const updateMutation = useUpdatePerson()
+  const deleteMutation = useDeletePerson()
+  
+  // Add actions column
+  const columns = [
+    ...baseColumns,
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }: { row: { original: Person } }) => {
+        const person = row.original
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Actions</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={() => router.push(`/people/directory/${person.slug}`)}>
+                View details
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => { setSelectedPerson(person); setEditOpen(true); }}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => { setSelectedPerson(person); setDeleteOpen(true); }}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+      enableSorting: false,
+      enableColumnFilter: false,
+      size: 50,
+    },
+  ]
   
   const handleCreate = async (values: CreatePerson) => {
-    // TODO: Implement API call
-    console.log("Creating person:", values)
-    // await api.post("/api/people/person", values)
+    try {
+      const person = await createMutation.mutateAsync(values)
+      toast.success(`${person.name} has been added to the directory`)
+      setCreateOpen(false)
+    } catch {
+      toast.error("Failed to create person")
+    }
+  }
+  
+  const handleEdit = async (values: UpdatePerson) => {
+    if (!selectedPerson) return
+    try {
+      await updateMutation.mutateAsync({ id: selectedPerson.id, data: values })
+      toast.success("Person updated successfully")
+      setEditOpen(false)
+      setSelectedPerson(null)
+    } catch {
+      toast.error("Failed to update person")
+    }
+  }
+  
+  const handleDelete = async () => {
+    if (!selectedPerson) return
+    try {
+      await deleteMutation.mutateAsync(selectedPerson.id)
+      toast.success(`${selectedPerson.name} has been removed`)
+      setDeleteOpen(false)
+      setSelectedPerson(null)
+    } catch {
+      toast.error("Failed to delete person")
+    }
+  }
+  
+  if (error) {
+    return (
+      <PageShell
+        title="Directory"
+        description="View and manage all employees in your organization."
+      >
+        <div className="flex items-center justify-center h-64 text-destructive">
+          Failed to load people directory
+        </div>
+      </PageShell>
+    )
   }
   
   return (
     <PageShell
       title="Directory"
       description="View and manage all employees in your organization."
-      breadcrumbs={[
-        { label: "People", href: "/people" },
-        { label: "Directory" },
-      ]}
       action={
         <Protected resource="people.person" action="write">
           <Button onClick={() => setCreateOpen(true)}>
@@ -51,34 +162,35 @@ export default function DirectoryPage() {
     >
       <DataTable
         columns={columns}
-        data={data}
-        loading={loading}
+        data={people}
+        loading={isLoading}
         searchKey="name"
         searchPlaceholder="Search people..."
-        onRowClick={(person) => router.push(`/people/directory/${person.slug || person.id}`)}
+        onRowClick={(person) => router.push(`/people/directory/${person.slug}`)}
         facetedFilters={{
-          status: {
-            type: "enum",
-            options: [
-              { label: "Active", value: "active" },
-              { label: "Onboarding", value: "onboarding" },
-              { label: "Offboarding", value: "offboarding" },
-              { label: "Inactive", value: "inactive" },
-            ],
-          },
-          role: {
-            type: "text",
-          },
-          team: {
-            type: "text",
-          },
+          status: { type: "enum" },
+          team: { type: "enum" },
+          role: { type: "enum" },
+          startDate: { type: "date" },
         }}
         enableColumnFilters
         enableSorting
         enableExport
         enableColumnVisibility
+        emptyState={
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">No employees found</p>
+            <Protected resource="people.person" action="write">
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add your first employee
+              </Button>
+            </Protected>
+          </div>
+        }
       />
       
+      {/* Create Drawer */}
       <FormDrawer
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -86,10 +198,59 @@ export default function DirectoryPage() {
         description="Create a new employee record"
         schema={createFormSchema}
         config={formConfig}
-        fields={getFormFields("create")}
+        fields={createFields}
         mode="create"
         onSubmit={handleCreate}
       />
+      
+      {/* Edit Drawer */}
+      {selectedPerson && (
+        <FormDrawer
+          open={editOpen}
+          onOpenChange={(open) => { setEditOpen(open); if (!open) setSelectedPerson(null); }}
+          title={`Edit ${selectedPerson.name}`}
+          description="Update employee information"
+          schema={editFormSchema}
+          config={formConfig}
+          fields={editFields}
+          mode="edit"
+          defaultValues={{
+            name: selectedPerson.name,
+            email: selectedPerson.email,
+            role: selectedPerson.role,
+            team: selectedPerson.team || "",
+            status: selectedPerson.status,
+            startDate: selectedPerson.startDate,
+            endDate: selectedPerson.endDate || "",
+            phone: selectedPerson.phone || "",
+            location: selectedPerson.location || "",
+            bio: selectedPerson.bio || "",
+          }}
+          onSubmit={handleEdit}
+        />
+      )}
+      
+      {/* Delete Dialog */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedPerson?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the employee
+              record and remove all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedPerson(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   )
 }
