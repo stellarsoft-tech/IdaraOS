@@ -112,9 +112,10 @@ const nextConfig: NextConfig = {
   },
 
   // Rewrites for SCIM endpoint case sensitivity
-  // Azure AD expects /Users (capital U) but Next.js routes use lowercase
+  // Azure AD expects /Users and /Groups with capital letters but Next.js routes use lowercase
   async rewrites() {
     return [
+      // Users endpoint rewrites
       {
         source: "/api/scim/v2/Users",
         destination: "/api/scim/v2/users",
@@ -122,6 +123,16 @@ const nextConfig: NextConfig = {
       {
         source: "/api/scim/v2/Users/:id",
         destination: "/api/scim/v2/users/:id",
+      },
+      // Groups endpoint - already using capital G in the filesystem, no rewrite needed
+      // But add lowercase fallback just in case
+      {
+        source: "/api/scim/v2/groups",
+        destination: "/api/scim/v2/Groups",
+      },
+      {
+        source: "/api/scim/v2/groups/:id",
+        destination: "/api/scim/v2/Groups/:id",
       },
     ];
   },

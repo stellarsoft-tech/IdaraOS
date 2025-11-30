@@ -39,6 +39,12 @@ export const integrations = pgTable("core_integrations", {
   scimEndpoint: text("scim_endpoint"),
   scimTokenEncrypted: text("scim_token_encrypted"), // Store encrypted
   
+  // SCIM Group provisioning settings
+  // Groups with this prefix will be mapped to roles (e.g., "IdaraOS-Admin" -> "admin" role)
+  scimGroupPrefix: text("scim_group_prefix"),
+  // Allow bidirectional sync (app can update Entra groups)
+  scimBidirectionalSync: boolean("scim_bidirectional_sync").notNull().default(false),
+  
   // SSO configuration
   ssoEnabled: boolean("sso_enabled").notNull().default(false),
   passwordAuthDisabled: boolean("password_auth_disabled").notNull().default(false),

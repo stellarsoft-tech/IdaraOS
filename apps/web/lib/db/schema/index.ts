@@ -34,3 +34,4 @@ export {
   type NewUserRole,
 } from "./rbac"
 export * from "./integrations"
+export * from "./scim"

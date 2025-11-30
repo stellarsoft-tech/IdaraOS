@@ -23,6 +23,8 @@ export interface EntraIntegration {
   scimEndpoint: string | null
   scimToken?: string // Only returned on create/update
   hasScimToken?: boolean
+  scimGroupPrefix: string | null // Prefix to match group names to roles (e.g., "IdaraOS-")
+  scimBidirectionalSync: boolean // If true, role changes in UI sync back to Entra groups
   lastSyncAt: string | null
   syncedUserCount: number
   syncedGroupCount: number
@@ -46,6 +48,8 @@ export interface UpdateEntraConfig {
   ssoEnabled?: boolean
   passwordAuthDisabled?: boolean
   scimEnabled?: boolean
+  scimGroupPrefix?: string
+  scimBidirectionalSync?: boolean
 }
 
 // API functions
