@@ -156,11 +156,16 @@ jobs:
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
-          echo "🌱 Seeding RBAC system..."
+          echo "🌱 Seeding RBAC system (includes admin user creation)..."
           pnpm db:seed-rbac
           echo "🌱 Seeding demo data..."
           pnpm db:seed || echo "⚠️ Demo data seeding skipped (optional)"
           echo "✅ Database seeding completed"
+          echo ""
+          echo "📋 Admin credentials created:"
+          echo "  Email: admin@example.com"
+          echo "  Password: Admin123!"
+          echo "  Role: Owner (full access)"
 
       - name: Deploy to Container App
         id: deploy
@@ -354,11 +359,16 @@ jobs:
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
-          echo "🌱 Seeding RBAC system..."
+          echo "🌱 Seeding RBAC system (includes admin user creation)..."
           pnpm db:seed-rbac
           echo "🌱 Seeding demo data..."
           pnpm db:seed || echo "⚠️ Demo data seeding skipped (optional)"
           echo "✅ Database seeding completed"
+          echo ""
+          echo "📋 Admin credentials created:"
+          echo "  Email: admin@example.com"
+          echo "  Password: Admin123!"
+          echo "  Role: Owner (full access)"
 
       - name: Deploy to Container App
         id: deploy
@@ -544,11 +554,16 @@ jobs:
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
-          echo "🌱 Seeding RBAC system..."
+          echo "🌱 Seeding RBAC system (includes admin user creation)..."
           pnpm db:seed-rbac
           echo "🌱 Seeding demo data..."
           pnpm db:seed || echo "⚠️ Demo data seeding skipped (optional)"
           echo "✅ Database seeding completed"
+          echo ""
+          echo "📋 Admin credentials created:"
+          echo "  Email: admin@example.com"
+          echo "  Password: Admin123!"
+          echo "  Role: Owner (full access)"
 
       - name: Deploy to Container App
         id: deploy
