@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
-import { createSessionToken, setSessionCookie, hashPassword, verifyPassword } from "@/lib/auth/session"
+import { createSessionToken, setSessionCookie, verifyPassword } from "@/lib/auth/session"
+import { getEntraConfig } from "@/lib/auth/entra-config"
 import { z } from "zod"
 
 const LoginSchema = z.object({
@@ -17,6 +18,15 @@ const LoginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if password authentication is disabled
+    const entraConfig = await getEntraConfig()
+    if (entraConfig?.passwordAuthDisabled && entraConfig?.ssoEnabled) {
+      return NextResponse.json(
+        { error: "Password authentication is disabled. Please sign in with Microsoft." },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
 
     // Validate input

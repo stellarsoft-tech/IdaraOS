@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, ilike, or, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { persons } from "@/lib/db/schema"
+import { persons, users } from "@/lib/db/schema"
 import { CreatePersonSchema } from "@/lib/generated/people/person/types"
 
 // Generate slug from name
@@ -20,8 +20,20 @@ function slugify(name: string): string {
     .replaceAll(/^-+|-+$/g, "")
 }
 
+// Linked user info type
+interface LinkedUserInfo {
+  id: string
+  name: string
+  email: string
+  status: string
+  hasEntraLink: boolean
+}
+
 // Transform DB record to API response
-function toApiResponse(record: typeof persons.$inferSelect) {
+function toApiResponse(
+  record: typeof persons.$inferSelect,
+  linkedUser?: LinkedUserInfo | null
+) {
   return {
     id: record.id,
     slug: record.slug,
@@ -38,6 +50,10 @@ function toApiResponse(record: typeof persons.$inferSelect) {
     avatar: record.avatar ?? undefined,
     bio: record.bio ?? undefined,
     assignedAssets: 0, // TODO: Compute from assets table
+    // Linked user info
+    linkedUser: linkedUser || null,
+    hasLinkedUser: !!linkedUser,
+    hasEntraLink: linkedUser?.hasEntraLink || false,
   }
 }
 
@@ -85,7 +101,40 @@ export async function GET(request: NextRequest) {
       ? await query.where(conditions.length === 1 ? conditions[0] : or(...conditions)).orderBy(asc(persons.name))
       : await query.orderBy(asc(persons.name))
     
-    return NextResponse.json(results.map(toApiResponse))
+    // Get linked users for all people
+    const personIds = results.map(p => p.id)
+    
+    const linkedUsers = personIds.length > 0
+      ? await db
+          .select({
+            id: users.id,
+            personId: users.personId,
+            name: users.name,
+            email: users.email,
+            status: users.status,
+            entraId: users.entraId,
+          })
+          .from(users)
+          .where(inArray(users.personId, personIds))
+      : []
+
+    // Create lookup map for linked users
+    const userByPersonId = new Map<string, LinkedUserInfo>()
+    for (const user of linkedUsers) {
+      if (user.personId) {
+        userByPersonId.set(user.personId, {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          status: user.status,
+          hasEntraLink: !!user.entraId,
+        })
+      }
+    }
+    
+    return NextResponse.json(
+      results.map(person => toApiResponse(person, userByPersonId.get(person.id)))
+    )
   } catch (error) {
     console.error("Error fetching people:", error)
     return NextResponse.json(

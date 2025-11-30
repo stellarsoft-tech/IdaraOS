@@ -47,7 +47,7 @@ const RBACContext = React.createContext<RBACContextValue>({
 })
 
 // Pages that don't require authentication
-const PUBLIC_PATHS = ["/login", "/setup", "/forgot-password"]
+const PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/registration-incomplete"]
 
 /**
  * RBAC Provider - wraps app to provide user context, permissions, and auth state

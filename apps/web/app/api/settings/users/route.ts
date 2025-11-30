@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { users, organizations, userRoleValues, userRoles, roles } from "@/lib/db/schema"
+import { users, organizations, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
 import { z } from "zod"
 
 // TODO: Get orgId from authenticated session
@@ -39,17 +39,29 @@ const CreateUserSchema = z.object({
   email: z.string().email(),
   role: z.enum(userRoleValues),
   personId: z.string().uuid().optional().nullable(),
+  entraId: z.string().optional().nullable(),
 })
+
+// Person link info type
+interface PersonInfo {
+  id: string
+  name: string
+  slug: string
+  role: string
+  team: string | null
+}
 
 // Transform DB record to API response
 function toApiResponse(
   record: typeof users.$inferSelect,
-  userRolesData: { roleId: string; roleName: string; roleColor: string | null }[]
+  userRolesData: { roleId: string; roleName: string; roleColor: string | null }[],
+  personInfo?: PersonInfo | null
 ) {
   return {
     id: record.id,
     orgId: record.orgId,
     personId: record.personId,
+    entraId: record.entraId,
     email: record.email,
     name: record.name,
     avatar: record.avatar,
@@ -60,6 +72,11 @@ function toApiResponse(
     invitedAt: record.invitedAt?.toISOString(),
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+    // Linked person info
+    person: personInfo || null,
+    // Flags for UI badges
+    hasLinkedPerson: !!record.personId,
+    hasEntraLink: !!record.entraId,
   }
 }
 
@@ -90,7 +107,24 @@ export async function GET() {
           .innerJoin(roles, eq(userRoles.roleId, roles.id))
       : []
 
-    // Group role assignments by user
+    // Get linked person info for users that have personId
+    const personIds = usersData
+      .map(u => u.personId)
+      .filter((id): id is string => id !== null)
+    
+    const personsData = personIds.length > 0
+      ? await db
+          .select({
+            id: persons.id,
+            name: persons.name,
+            slug: persons.slug,
+            role: persons.role,
+            team: persons.team,
+          })
+          .from(persons)
+      : []
+
+    // Create lookup maps
     const rolesByUserId = new Map<string, { roleId: string; roleName: string; roleColor: string | null }[]>()
     for (const assignment of roleAssignments) {
       const existing = rolesByUserId.get(assignment.userId) || []
@@ -102,9 +136,18 @@ export async function GET() {
       rolesByUserId.set(assignment.userId, existing)
     }
 
+    const personById = new Map<string, PersonInfo>()
+    for (const person of personsData) {
+      personById.set(person.id, person)
+    }
+
     // Build response
     const response = usersData.map(user => 
-      toApiResponse(user, rolesByUserId.get(user.id) || [])
+      toApiResponse(
+        user, 
+        rolesByUserId.get(user.id) || [],
+        user.personId ? personById.get(user.personId) : null
+      )
     )
 
     return NextResponse.json(response)
@@ -161,12 +204,13 @@ export async function POST(request: NextRequest) {
         name: data.name,
         role: data.role,
         personId: data.personId || null,
+        entraId: data.entraId || null,
         status: "invited",
         invitedAt: new Date(),
       })
       .returning()
 
-    return NextResponse.json(toApiResponse(record), { status: 201 })
+    return NextResponse.json(toApiResponse(record, []), { status: 201 })
   } catch (error) {
     console.error("Error creating user:", error)
     return NextResponse.json(

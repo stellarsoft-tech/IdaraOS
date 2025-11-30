@@ -8,8 +8,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { users, userRoleValues, userStatusValues } from "@/lib/db/schema"
+import { users, userRoleValues, userStatusValues, persons } from "@/lib/db/schema"
 import { z } from "zod"
+import { syncUserToEntra, isEntraSyncEnabled } from "@/lib/auth/entra-sync"
 
 // TODO: Get orgId from authenticated session
 const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
@@ -88,7 +89,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const data = parseResult.data
 
-    // Update user
+    // Update user in database
     const [record] = await db
       .update(users)
       .set({
@@ -102,7 +103,47 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    return NextResponse.json(toApiResponse(record))
+    // Sync to Entra ID if SCIM is enabled
+    let entraSync: { success: boolean; message: string } | null = null
+    
+    try {
+      const syncEnabled = await isEntraSyncEnabled()
+      
+      if (syncEnabled) {
+        // Get phone from linked person if available
+        let phone: string | undefined
+        if (record.personId) {
+          const [person] = await db
+            .select({ phone: persons.phone })
+            .from(persons)
+            .where(eq(persons.id, record.personId))
+            .limit(1)
+          phone = person?.phone || undefined
+        }
+
+        // Sync user to Entra
+        entraSync = await syncUserToEntra(record.email, {
+          name: data.name || record.name,
+          status: data.status || record.status,
+          phone,
+        })
+
+        if (entraSync.success) {
+          console.log(`Synced user ${record.email} to Entra ID`)
+        } else {
+          console.warn(`Entra sync warning for ${record.email}: ${entraSync.message}`)
+        }
+      }
+    } catch (syncError) {
+      console.error("Error syncing to Entra:", syncError)
+      // Don't fail the request if sync fails
+      entraSync = { success: false, message: "Sync failed" }
+    }
+
+    return NextResponse.json({
+      ...toApiResponse(record),
+      entraSync: entraSync || undefined,
+    })
   } catch (error) {
     console.error("Error updating user:", error)
     return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
@@ -116,6 +157,18 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params
 
+    // Get user email before deleting (for Entra sync)
+    const [userToDelete] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.orgId, DEMO_ORG_ID)))
+      .limit(1)
+
+    if (!userToDelete) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Delete from database
     const result = await db
       .delete(users)
       .where(and(eq(users.id, id), eq(users.orgId, DEMO_ORG_ID)))
@@ -123,6 +176,22 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     if (result.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Disable user in Entra if SCIM is enabled
+    try {
+      const syncEnabled = await isEntraSyncEnabled()
+      
+      if (syncEnabled) {
+        // Set accountEnabled to false in Entra (don't delete, just disable)
+        await syncUserToEntra(userToDelete.email, {
+          status: "deactivated",
+        })
+        console.log(`Disabled user ${userToDelete.email} in Entra ID`)
+      }
+    } catch (syncError) {
+      console.error("Error disabling user in Entra:", syncError)
+      // Don't fail the request if sync fails
     }
 
     return new NextResponse(null, { status: 204 })

@@ -1,0 +1,208 @@
+/**
+ * Integrations API - React Query hooks
+ */
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+
+// Query keys
+export const integrationsKeys = {
+  all: ["integrations"] as const,
+  provider: (provider: string) => ["integrations", provider] as const,
+}
+
+// Types
+export interface EntraIntegration {
+  id?: string
+  provider: "entra"
+  status: "connected" | "disconnected" | "pending" | "error"
+  tenantId: string | null
+  clientId: string | null
+  ssoEnabled: boolean
+  passwordAuthDisabled: boolean
+  scimEnabled: boolean
+  scimEndpoint: string | null
+  scimToken?: string // Only returned on create/update
+  hasScimToken?: boolean
+  lastSyncAt: string | null
+  syncedUserCount: number
+  syncedGroupCount: number
+  lastError?: string | null
+  lastErrorAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface SaveEntraConfig {
+  provider: "entra"
+  tenantId: string
+  clientId: string
+  clientSecret: string
+  ssoEnabled?: boolean
+  scimEnabled?: boolean
+}
+
+export interface UpdateEntraConfig {
+  provider: "entra"
+  ssoEnabled?: boolean
+  passwordAuthDisabled?: boolean
+  scimEnabled?: boolean
+}
+
+// API functions
+async function fetchEntraIntegration(): Promise<EntraIntegration> {
+  const response = await fetch("/api/settings/integrations?provider=entra")
+  if (!response.ok) {
+    throw new Error("Failed to fetch integration")
+  }
+  return response.json()
+}
+
+async function saveEntraIntegration(data: SaveEntraConfig): Promise<EntraIntegration> {
+  const response = await fetch("/api/settings/integrations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "Failed to save integration")
+  }
+  return response.json()
+}
+
+async function updateEntraIntegration(data: UpdateEntraConfig): Promise<EntraIntegration> {
+  const response = await fetch("/api/settings/integrations", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "Failed to update integration")
+  }
+  return response.json()
+}
+
+async function disconnectEntraIntegration(): Promise<void> {
+  const response = await fetch("/api/settings/integrations?provider=entra", {
+    method: "DELETE",
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "Failed to disconnect integration")
+  }
+}
+
+async function regenerateScimToken(): Promise<{ scimToken: string }> {
+  const response = await fetch("/api/settings/integrations/entra/regenerate-token", {
+    method: "POST",
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "Failed to regenerate token")
+  }
+  return response.json()
+}
+
+// React Query hooks
+
+/**
+ * Get Entra integration configuration
+ */
+export function useEntraIntegration() {
+  return useQuery({
+    queryKey: integrationsKeys.provider("entra"),
+    queryFn: fetchEntraIntegration,
+    staleTime: 30000, // 30 seconds
+  })
+}
+
+/**
+ * Save/Connect Entra integration
+ */
+export function useSaveEntraIntegration() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: saveEntraIntegration,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
+    },
+  })
+}
+
+/**
+ * Update Entra integration settings (SSO/SCIM toggles)
+ */
+export function useUpdateEntraIntegration() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateEntraIntegration,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
+    },
+  })
+}
+
+/**
+ * Disconnect Entra integration
+ */
+export function useDisconnectEntraIntegration() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: disconnectEntraIntegration,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
+    },
+  })
+}
+
+/**
+ * Regenerate SCIM token
+ */
+export function useRegenerateScimToken() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: regenerateScimToken,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
+    },
+  })
+}
+
+// Entra Users types
+export interface EntraUser {
+  id: string
+  name: string
+  email: string
+  firstName: string | null
+  lastName: string | null
+  jobTitle: string | null
+  department: string | null
+}
+
+// Search Entra users
+async function searchEntraUsers(search: string): Promise<EntraUser[]> {
+  const response = await fetch(`/api/settings/integrations/entra/users?search=${encodeURIComponent(search)}`)
+  if (!response.ok) {
+    throw new Error("Failed to search Entra users")
+  }
+  const data = await response.json()
+  return data.users || []
+}
+
+/**
+ * Search Entra ID users (excludes already registered users)
+ */
+export function useSearchEntraUsers(search: string, enabled: boolean = true) {
+  return useQuery({
+    queryKey: [...integrationsKeys.provider("entra"), "users", search] as const,
+    queryFn: () => searchEntraUsers(search),
+    enabled: enabled && search.length >= 1,
+    staleTime: 10000, // 10 seconds
+  })
+}
+

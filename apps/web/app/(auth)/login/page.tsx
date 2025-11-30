@@ -9,6 +9,26 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+
+// Microsoft Entra ID Icon
+function MicrosoftIcon({ className }: { readonly className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+    </svg>
+  )
+}
+
+interface SSOConfig {
+  ssoAvailable: boolean
+  tenantId: string | null
+  clientId: string | null
+  passwordAuthDisabled: boolean
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -16,11 +36,26 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
+  const [urlError, setUrlError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isSSOLoading, setIsSSOLoading] = useState(false)
   const [appName, setAppName] = useState("IdaraOS")
+  const [ssoConfig, setSSOConfig] = useState<SSOConfig | null>(null)
 
-  // Fetch public branding
+  // Check for error in URL params
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const errorParam = params.get("error")
+    if (errorParam) {
+      setUrlError(decodeURIComponent(errorParam))
+      // Clean up URL
+      window.history.replaceState({}, "", "/login")
+    }
+  }, [])
+
+  // Fetch public branding and SSO config
+  useEffect(() => {
+    // Fetch branding
     fetch("/api/public/branding")
       .then(res => res.json())
       .then(data => {
@@ -28,6 +63,18 @@ export default function LoginPage() {
       })
       .catch(() => {
         // Keep default on error
+      })
+
+    // Check if SSO is available via environment variables
+    fetch("/api/auth/sso-config")
+      .then(res => res.json())
+      .then(data => {
+        if (data.ssoAvailable) {
+          setSSOConfig(data)
+        }
+      })
+      .catch(() => {
+        // SSO not available
       })
   }, [])
 
@@ -60,6 +107,17 @@ export default function LoginPage() {
     }
   }
 
+  const handleMicrosoftSSO = async () => {
+    setIsSSOLoading(true)
+    setError("")
+    setUrlError("")
+
+    // Redirect to our SSO login endpoint which handles the OAuth flow
+    window.location.href = "/api/auth/login/azure-ad"
+  }
+
+  const ssoAvailable = ssoConfig?.ssoAvailable === true
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4">
       <div className="w-full max-w-md">
@@ -82,14 +140,49 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
-              {error && (
-                <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
-                  {error}
-                </div>
-              )}
-              
+          <CardContent className="space-y-4">
+            {(error || urlError) && (
+              <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
+                {error || urlError}
+              </div>
+            )}
+
+            {/* Microsoft SSO Button */}
+            {ssoAvailable && (
+              <>
+                <Button 
+                  type="button"
+                  variant={ssoConfig?.passwordAuthDisabled ? "default" : "outline"}
+                  className="w-full h-11 gap-3"
+                  onClick={handleMicrosoftSSO}
+                  disabled={isSSOLoading}
+                >
+                  {isSSOLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <MicrosoftIcon className="h-5 w-5" />
+                  )}
+                  Sign in with Microsoft
+                </Button>
+
+                {!ssoConfig?.passwordAuthDisabled && (
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <Separator className="w-full" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">
+                        Or continue with email
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Email/Password Form - Only show if password auth is not disabled */}
+            {(!ssoAvailable || !ssoConfig?.passwordAuthDisabled) && (
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -100,7 +193,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  autoFocus
+                  autoFocus={!ssoAvailable}
                 />
               </div>
               
@@ -140,22 +233,30 @@ export default function LoginPage() {
                   </Button>
                 </div>
               </div>
-            </CardContent>
-            
-            <CardFooter className="flex flex-col gap-3 pt-4">
+              
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign in
               </Button>
-              
+            </form>
+            )}
+
+            {/* SSO Only Message */}
+            {ssoAvailable && ssoConfig?.passwordAuthDisabled && (
               <p className="text-sm text-center text-muted-foreground">
-                Don&apos;t have an account?{" "}
-                <Link href="/setup" className="text-primary hover:underline">
-                  Set up your account
-                </Link>
+                Your organization requires sign-in with Microsoft.
               </p>
-            </CardFooter>
-          </form>
+            )}
+          </CardContent>
+          
+          <CardFooter className="flex flex-col gap-3 pt-2">
+            <p className="text-sm text-center text-muted-foreground">
+              Don&apos;t have an account?{" "}
+              <Link href="/setup" className="text-primary hover:underline">
+                Set up your account
+              </Link>
+            </p>
+          </CardFooter>
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
@@ -168,4 +269,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

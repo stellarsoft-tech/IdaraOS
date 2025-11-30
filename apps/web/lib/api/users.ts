@@ -29,11 +29,21 @@ export interface AssignedRole {
   roleColor: string | null
 }
 
+// Linked person info
+export interface LinkedPerson {
+  id: string
+  name: string
+  slug: string
+  role: string
+  team: string | null
+}
+
 // API User type
 export interface ApiUser {
   id: string
   orgId: string
   personId: string | null
+  entraId: string | null
   email: string
   name: string
   avatar: string | null
@@ -44,6 +54,10 @@ export interface ApiUser {
   invitedAt: string | null
   createdAt: string
   updatedAt: string
+  // Linked entity info
+  person: LinkedPerson | null
+  hasLinkedPerson: boolean
+  hasEntraLink: boolean
 }
 
 // Create/Update types
@@ -52,6 +66,7 @@ export interface CreateUser {
   email: string
   role: UserRole
   personId?: string | null
+  entraId?: string | null
 }
 
 export interface UpdateUser {
@@ -60,6 +75,7 @@ export interface UpdateUser {
   role?: UserRole
   status?: UserStatus
   personId?: string | null
+  entraId?: string | null
   avatar?: string | null
 }
 
@@ -162,6 +178,8 @@ export function useUpdateUser() {
     onSuccess: (user) => {
       queryClient.invalidateQueries({ queryKey: usersKeys.lists() })
       queryClient.invalidateQueries({ queryKey: usersKeys.detail(user.id) })
+      // Also invalidate people queries since personId link may have changed
+      queryClient.invalidateQueries({ queryKey: ["people"] })
     },
   })
 }

@@ -1,283 +1,156 @@
-# Code Generators
+# IdaraOS Scripts
 
-This directory contains TypeScript generators that create code from `spec.json` files.
+This folder contains utility scripts for setting up and managing IdaraOS.
 
-## Overview
+## Scripts
 
-Generators read a module's `spec.json` and produce:
+### `setup-entra-sso.ps1`
 
-1. **types.ts**: Zod schemas + TypeScript types
-2. **columns.tsx**: TanStack Table column definitions
-3. **form-config.ts**: react-hook-form field configurations
+PowerShell script to configure Microsoft Entra ID (Azure AD) for Single Sign-On (SSO) with IdaraOS.
 
-All generated code outputs to: `apps/web/lib/generated/<namespace>/<entity>/`
+#### Prerequisites
 
-## Usage
+- PowerShell 7+ (recommended) or Windows PowerShell 5.1
+- Azure PowerShell modules (`Az.Accounts`, `Az.Resources`)
+- Azure account with permission to create App Registrations
+- **Your Azure AD Tenant ID** (find it in Azure Portal → Entra ID → Overview)
 
-### Generate from a single spec
+#### Installing Prerequisites
 
-```bash
-pnpm generate specs/modules/people/person/spec.json
+```powershell
+# Install Azure PowerShell modules
+Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force
 ```
 
-### Watch mode (regenerate on changes)
+#### Finding Your Tenant ID
 
-```bash
-pnpm generate:watch
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Navigate to **Microsoft Entra ID** → **Overview**
+3. Copy the **Tenant ID** value
+
+Or via PowerShell (if already logged in):
+```powershell
+(Get-AzContext).Tenant.Id
 ```
 
-### Generate all specs
+#### Usage
 
-```bash
-pnpm generate:all
+**Recommended: Specify your tenant ID explicitly:**
+
+```powershell
+.\setup-entra-sso.ps1 -TenantId "12345678-1234-1234-1234-123456789012"
 ```
 
-## Generator Scripts
+**Production setup with custom URL:**
 
-### 1. types.ts - Type Generator
-
-**Input**: `spec.json`
-
-**Output**: `apps/web/lib/generated/<module>/types.ts`
-
-**Generates**:
-- Zod schema for validation
-- TypeScript types (inferred from Zod)
-- Field metadata for UI (labels, placeholders, help text)
-
-**Example Output**:
-
-```typescript
-import { z } from "zod"
-
-// Zod schema
-export const personSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email"),
-  role: z.string().min(1, "Role is required"),
-  status: z.enum(["active", "onboarding", "offboarding", "inactive"]),
-  start_date: z.string(),
-})
-
-// TypeScript types
-export type Person = z.infer<typeof personSchema>
-export type PersonInput = z.infer<typeof personSchema>
-
-// Field metadata
-export const personFields = {
-  name: {
-    label: "Name",
-    placeholder: "Enter name",
-    type: "text"
-  },
-  email: {
-    label: "Email",
-    placeholder: "Enter email",
-    type: "email"
-  },
-  // ... more fields
-}
+```powershell
+.\setup-entra-sso.ps1 -TenantId "your-tenant-id" -AppName "MyCompany IdaraOS" -AppUrl "https://idaraos.mycompany.com"
 ```
 
-### 2. columns.tsx - Table Column Generator
+**Using current Azure context (if already logged in to correct tenant):**
 
-**Input**: `spec.json`
-
-**Output**: `apps/web/lib/generated/<module>/columns.tsx`
-
-**Generates**:
-- TanStack Table column definitions
-- Cell renderers based on field type
-- Sort/filter configurations
-
-**Example Output**:
-
-```typescript
-import { ColumnDef } from "@tanstack/react-table"
-import { StatusBadge } from "@/components/status-badge"
-import { Person } from "./types"
-
-export const columns: ColumnDef<Person>[] = [
-  {
-    accessorKey: "name",
-    header: "Name",
-    cell: ({ row }) => (
-      <div className="font-medium">{row.getValue("name")}</div>
-    ),
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: ({ row }) => {
-      const status = row.getValue("status") as string
-      return <StatusBadge variant={statusVariants[status]}>{status}</StatusBadge>
-    },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
-  },
-  // ... more columns
-]
+```powershell
+.\setup-entra-sso.ps1
 ```
 
-### 3. form-config.ts - Form Configuration Generator
+#### Parameters
 
-**Input**: `spec.json`
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `-TenantId` | **RECOMMENDED** Azure AD tenant ID | Current context |
+| `-AppName` | Display name for the app in Entra ID | `IdaraOS` |
+| `-AppUrl` | Base URL where IdaraOS is hosted | `http://localhost:3000` |
+| `-SubscriptionName` | Azure subscription name (not required for app registrations) | Current context |
+| `-CreateSecret` | Whether to create a client secret | `$true` |
+| `-SecretExpiryYears` | Years until secret expires | `2` |
 
-**Output**: `apps/web/lib/generated/<module>/form-config.ts`
+#### What the Script Does
 
-**Generates**:
-- Form field configurations
-- Component mapping (type → shadcn component)
-- Validation schemas for create/edit
+1. **Checks prerequisites** - Verifies Azure PowerShell modules are installed
+2. **Authenticates** - Connects to Azure (interactive login if needed)
+3. **Creates App Registration** - Creates or updates the Entra ID application
+4. **Creates Service Principal** - Enables the app for enterprise use
+5. **Generates Client Secret** - Creates a secure secret for authentication
+6. **Configures OAuth** - Sets up redirect URIs and permissions
 
-**Example Output**:
+#### Output
 
-```typescript
-import { personSchema } from "./types"
-import { z } from "zod"
+The script outputs:
+- **Tenant ID** - Your Azure AD tenant identifier
+- **Client ID** - The application (client) ID
+- **Client Secret** - The secret for authentication (shown only once!)
+- **Redirect URI** - Already configured in the app
+- **Portal Links** - Direct links to manage the app
 
-export const createSchema = personSchema.omit({ person_id: true })
-export const editSchema = personSchema
+The configuration is also saved to a JSON file for reference.
 
-export const formConfig = {
-  name: {
-    component: "input",
-    label: "Name",
-    placeholder: "Enter name",
-    required: true,
-  },
-  email: {
-    component: "input",
-    type: "email",
-    label: "Email",
-    placeholder: "Enter email",
-    required: true,
-  },
-  status: {
-    component: "select",
-    label: "Status",
-    options: [
-      { value: "active", label: "Active" },
-      { value: "onboarding", label: "Onboarding" },
-      { value: "offboarding", label: "Offboarding" },
-      { value: "inactive", label: "Inactive" },
-    ],
-    required: true,
-  },
-  // ... more fields
-}
+#### Idempotency
+
+The script is idempotent - running it multiple times will:
+- Update the existing app registration (not create duplicates)
+- Create a new client secret each time (if `-CreateSecret` is `$true`)
+- Update redirect URIs if the URL changed
+
+#### After Running
+
+1. Copy the **Tenant ID**, **Client ID**, and **Client Secret**
+2. Go to IdaraOS → Settings → Integrations
+3. Click "Connect Microsoft Entra ID"
+4. Paste the credentials and connect
+
+#### Troubleshooting
+
+**"Missing required modules"**
+```powershell
+Install-Module -Name Az -Scope CurrentUser -Repository PSGallery -Force
 ```
 
-### 4. index.ts - CLI Runner
+**"No tenant ID" or "Tenant: (not available)"**
+- This is the most common issue. Always provide your tenant ID:
+  ```powershell
+  .\setup-entra-sso.ps1 -TenantId "your-tenant-id"
+  ```
+- Find your tenant ID at: Azure Portal → Entra ID → Overview
 
-**Input**: Command-line arguments
+**"App creation returned null"**
+- Usually caused by missing tenant context
+- Run with explicit tenant ID:
+  ```powershell
+  .\setup-entra-sso.ps1 -TenantId "your-tenant-id"
+  ```
+- Or re-authenticate with tenant:
+  ```powershell
+  Connect-AzAccount -TenantId "your-tenant-id" -AuthScope MicrosoftGraphEndpointResourceId
+  ```
 
-**Runs**: All generators in sequence
+**"Unable to acquire token for tenant"**
+- This warning can usually be ignored if another tenant works
+- The script will prompt you to select or skip subscriptions
+- App registrations don't require a subscription
 
-**Usage**:
+**"Insufficient privileges"**
+- You need at least `Application.ReadWrite.All` permission in Azure AD
+- Contact your Azure admin if you can't create app registrations
 
-```bash
-node scripts/generate/index.js <spec-path>
-```
+**"No Azure context found"**
+- The script will prompt for interactive login
+- Use the `-TenantId` parameter for best results
 
-## How Generators Work
-
-1. **Read Spec**: Parse `spec.json` and validate structure
-2. **Transform**: Map spec fields to code constructs
-3. **Template**: Use template strings to generate code
-4. **Write**: Output to `apps/web/lib/generated/`
-5. **Format**: Run prettier on generated files (optional)
-
-## Type Mapping
-
-| Spec Type | Zod Schema | TS Type | Component | Cell Renderer |
-|-----------|------------|---------|-----------|---------------|
-| string | z.string() | string | Input | Text |
-| text | z.string() | string | Textarea | Truncated text |
-| number | z.number() | number | Input[type=number] | Number |
-| boolean | z.boolean() | boolean | Switch | Check/X icon |
-| date | z.string() | string | DatePicker | Formatted date |
-| enum | z.enum([...]) | union | Select | StatusBadge |
-| uuid | z.string().uuid() | string | AsyncSelect | Linked name |
-| computed | (none) | inferred | (none) | Computed value |
-
-## Validation Mapping
-
-| Spec Validation | Zod Method |
-|-----------------|------------|
-| required: true | No .optional() |
-| validation: "email" | .email() |
-| validation: "url" | .url() |
-| validation: "min:3" | .min(3) |
-| validation: "max:255" | .max(255) |
-| values: [...] | .enum([...]) |
-
-## Cell Renderer Logic
-
-```typescript
-// Enum fields → StatusBadge
-if (field.type === "enum") {
-  return `<StatusBadge variant={getVariant(value)}>{value}</StatusBadge>`
-}
-
-// Reference fields → Linked name
-if (field.ref) {
-  return `<Link href={getDetailUrl(value)}>{getName(value)}</Link>`
-}
-
-// Date fields → Formatted date
-if (field.type === "date") {
-  return `{format(new Date(value), "MMM d, yyyy")}`
-}
-
-// Default → Plain text
-return `{value}`
-```
-
-## Adding a New Generator
-
-1. Create `scripts/generate/new-generator.ts`
-2. Export a function: `export async function generateNew(spec: Spec): Promise<string>`
-3. Add to `scripts/generate/index.ts`
-4. Update this README
-
-## Troubleshooting
-
-### Generator fails with "Invalid spec"
-
-- Check spec.json syntax (valid JSON)
-- Ensure required fields are present
-- Validate field types against supported types
-- Check for circular references
-
-### Generated code has type errors
-
-- Re-run generator after spec changes
-- Check if custom types are imported
-- Ensure ref targets exist
-
-### Generated code not formatted
-
-- Run `pnpm format` after generation
-- Or integrate prettier into generator
-
-## Development
-
-### Run generator locally
-
-```bash
-cd scripts/generate
-npx tsx index.ts ../../specs/modules/people/person/spec.json
-```
-
-### Test generators
-
-```bash
-pnpm test:generators
-```
+**"Authentication failed for Microsoft Graph API"**
+- Run with Graph scope:
+  ```powershell
+  Connect-AzAccount -TenantId "your-tenant-id" -AuthScope MicrosoftGraphEndpointResourceId
+  ```
+- Then run the script again
 
 ---
 
-**Remember**: Generators are tools, not gospel. Customize generated code when needed, but always regenerate from spec when the spec changes.
+## Adding New Scripts
 
+When adding new scripts to this folder:
+
+1. Use descriptive file names
+2. Include comment-based help (`<# .SYNOPSIS ... #>`)
+3. Make scripts idempotent when possible
+4. Document parameters and examples
+5. Update this README
