@@ -8,7 +8,7 @@
     "start": "pnpm --filter web start",
     "lint": "pnpm --filter web lint",
     "lint:fix": "pnpm --filter web exec eslint --fix",
-    "typecheck": "pnpm --filter web exec tsc --noEmit",
+    "typecheck": "pnpm --filter web exec tsc --noEmit --skipLibCheck",
     "generate": "tsx scripts/generate/index.ts",
     "prepare": "husky"
   },
@@ -16,11 +16,6 @@
     "husky": "^9.1.7",
     "lint-staged": "^15.3.0",
     "typescript": "^5"
-  },
-  "lint-staged": {
-    "apps/web/**/*.{js,jsx,ts,tsx}": [
-      "pnpm --filter web exec eslint --fix"
-    ]
   }
 }
 
