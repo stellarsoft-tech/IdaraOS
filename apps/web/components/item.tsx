@@ -1,6 +1,6 @@
 export const itemVariants = {
-  default: 'bg-transparent',
-  outline: 'border',
+        default: 'bg-transparent',
+        outline: 'border',
   muted: 'bg-muted/50',
 } as const
 

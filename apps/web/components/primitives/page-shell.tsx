@@ -35,7 +35,7 @@ export function PageShell({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             {Icon && <Icon className="h-8 w-8 text-muted-foreground" />}
-            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
           </div>
           {description && (
             <p className="text-muted-foreground">{description}</p>
