@@ -14,8 +14,6 @@ yarn-debug.log*
 .vscode/
 .DS_Store
 *.local
-# Generated code
-apps/web/lib/generated/
 # OS/Editor specific
 Thumbs.db
 # Test outputs
