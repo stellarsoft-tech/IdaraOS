@@ -205,11 +205,24 @@ export async function GET(request: NextRequest) {
       orgId: user.orgId,
     })
 
-    // Set session cookie
-    await setSessionCookie(token)
+    console.log(`[Azure AD Callback] Creating session for user: ${user.email} (${user.id})`)
 
-    // Redirect to the return URL or dashboard
-    return NextResponse.redirect(new URL(returnTo, appUrl))
+    // Create redirect response
+    const redirectResponse = NextResponse.redirect(new URL(returnTo, appUrl))
+    
+    // Set session cookie directly on the response
+    // This ensures the cookie is set before the redirect happens
+    redirectResponse.cookies.set("idaraos_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
+    })
+
+    console.log(`[Azure AD Callback] Session cookie set, redirecting to: ${returnTo}`)
+
+    return redirectResponse
   } catch (error) {
     console.error("Azure AD callback error:", error)
     return NextResponse.redirect(
