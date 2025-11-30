@@ -70,7 +70,7 @@ export function orgFilterWith<T>(
   ...additionalConditions: SQL[]
 ): SQL {
   const conditions = [eq(orgIdColumn.orgId, orgId), ...additionalConditions]
-  return conditions.length === 1 ? conditions[0] : and(...conditions)
+  return conditions.length === 1 ? conditions[0] : and(...conditions)!
 }
 
 /**

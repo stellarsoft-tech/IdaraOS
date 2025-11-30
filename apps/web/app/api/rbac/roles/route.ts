@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { roles, rolePermissions, userRoles, organizations } from "@/lib/db/schema"
-import { eq, asc, sql } from "drizzle-orm"
+import { roles, rolePermissions } from "@/lib/db/schema"
+import { eq, asc, sql, and } from "drizzle-orm"
 import { requireOrgId } from "@/lib/api/context"
 
 export async function GET(request: NextRequest) {
