@@ -89,30 +89,33 @@ export async function GET(request: NextRequest) {
 
   try {
     // Parse filter (e.g., "userName eq \"user@example.com\"")
-    let whereConditions = eq(users.orgId, DEMO_ORG_ID)
+    let emailFilter: string | null = null
 
     if (filter) {
       // Simple filter parsing for userName
       const userNameMatch = filter.match(/userName eq "([^"]+)"/)
       if (userNameMatch) {
-        whereConditions = and(
-          eq(users.orgId, DEMO_ORG_ID),
-          eq(users.email, userNameMatch[1])
-        )
+        emailFilter = userNameMatch[1]
       }
     }
+
+    // Build query with optional email filter
+    const baseCondition = eq(users.orgId, DEMO_ORG_ID)
+    const whereCondition = emailFilter 
+      ? and(baseCondition, eq(users.email, emailFilter))!
+      : baseCondition
 
     // Get total count
     const totalResults = await db
       .select({ count: users.id })
       .from(users)
-      .where(whereConditions)
+      .where(whereCondition)
 
     // Get users
     const userList = await db
       .select()
       .from(users)
-      .where(whereConditions)
+      .where(whereCondition)
       .limit(count)
       .offset(startIndex - 1)
 
@@ -180,16 +183,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
+    const emailCondition = eq(users.email, userName)
+    const externalIdCondition = externalId ? eq(users.entraId, externalId) : null
+    
     const existing = await db
       .select()
       .from(users)
-      .where(and(
-        eq(users.orgId, DEMO_ORG_ID),
-        or(
-          eq(users.email, userName),
-          externalId ? eq(users.entraId, externalId) : undefined
-        )
-      ))
+      .where(
+        externalIdCondition
+          ? and(eq(users.orgId, DEMO_ORG_ID), or(emailCondition, externalIdCondition))!
+          : and(eq(users.orgId, DEMO_ORG_ID), emailCondition)!
+      )
       .limit(1)
 
     if (existing.length > 0) {
