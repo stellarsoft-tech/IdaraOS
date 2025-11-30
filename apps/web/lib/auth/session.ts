@@ -5,6 +5,7 @@
 
 import { cookies } from "next/headers"
 import { SignJWT, jwtVerify } from "jose"
+import { createHash } from "crypto"
 
 const SESSION_COOKIE_NAME = "idaraos_session"
 const SESSION_DURATION = 60 * 60 * 24 * 7 // 7 days in seconds
@@ -92,8 +93,7 @@ export async function clearSession(): Promise<void> {
  */
 export function hashPassword(password: string): string {
   // Simple hash for demo - in production use bcrypt
-  const crypto = require("crypto")
-  return crypto.createHash("sha256").update(password).digest("hex")
+  return createHash("sha256").update(password).digest("hex")
 }
 
 /**

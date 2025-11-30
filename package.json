@@ -7,6 +7,7 @@
     "build": "pnpm --filter web build",
     "start": "pnpm --filter web start",
     "lint": "pnpm --filter web lint",
+    "lint:fix": "pnpm --filter web exec eslint --fix",
     "generate": "tsx scripts/generate/index.ts",
     "prepare": "husky"
   },
@@ -17,7 +18,7 @@
   },
   "lint-staged": {
     "apps/web/**/*.{js,jsx,ts,tsx}": [
-      "eslint --fix"
+      "pnpm --filter web exec eslint --fix"
     ]
   }
 }

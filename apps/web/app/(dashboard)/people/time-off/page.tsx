@@ -123,7 +123,7 @@ export default function TimeOffPage() {
                 <span className="text-xs text-muted-foreground">Dec 25</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm">New Year's Day</span>
+                <span className="text-sm">New Year&apos;s Day</span>
                 <span className="text-xs text-muted-foreground">Jan 1</span>
               </div>
             </CardContent>

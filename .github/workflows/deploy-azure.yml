@@ -1,15 +1,13 @@
 # =============================================================================
 # IdaraOS - Deploy to Azure Container Apps
 # =============================================================================
-# Triggered on: Push to main (auto-deploy to dev) or manual dispatch
+# Triggered on: Manual dispatch only
 # Actions: Deploy to Azure Container Apps with environment-specific config
 # =============================================================================
 
 name: Deploy to Azure
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -29,12 +27,12 @@ env:
 
 jobs:
   # ===========================================================================
-  # Deploy to Development (auto on push to main)
+  # Deploy to Development (manual only)
   # ===========================================================================
   deploy-dev:
     name: Deploy to Dev
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    if: github.event.inputs.environment == 'dev'
 
     environment:
       name: dev
