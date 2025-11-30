@@ -5,10 +5,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, ilike, or, inArray, asc } from "drizzle-orm"
+import { eq, ilike, or, and, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { persons, users } from "@/lib/db/schema"
 import { CreatePersonSchema } from "@/lib/generated/people/person/types"
+import { requireOrgId } from "@/lib/api/context"
 
 // Generate slug from name
 function slugify(name: string): string {
@@ -67,14 +68,11 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const team = searchParams.get("team")
     
-    // TODO: Get org_id from auth session
-    // const orgId = await getOrgIdFromSession(request)
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
     
-    // Build query
-    let query = db.select().from(persons)
-    
-    // Apply filters using Drizzle's query builder
-    const conditions = []
+    // Build query - always filter by organization
+    const conditions = [eq(persons.orgId, orgId)]
     
     if (search) {
       conditions.push(
@@ -96,10 +94,12 @@ export async function GET(request: NextRequest) {
       conditions.push(inArray(persons.team, teams))
     }
     
-    // Execute query with conditions
-    const results = conditions.length > 0
-      ? await query.where(conditions.length === 1 ? conditions[0] : or(...conditions)).orderBy(asc(persons.name))
-      : await query.orderBy(asc(persons.name))
+    // Execute query with conditions (orgId AND other filters)
+    const results = await db
+      .select()
+      .from(persons)
+      .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+      .orderBy(asc(persons.name))
     
     // Get linked users for all people
     const personIds = results.map(p => p.id)
@@ -136,6 +136,14 @@ export async function GET(request: NextRequest) {
       results.map(person => toApiResponse(person, userByPersonId.get(person.id)))
     )
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching people:", error)
     return NextResponse.json(
       { error: "Failed to fetch people" },
@@ -163,8 +171,8 @@ export async function POST(request: NextRequest) {
     const data = parseResult.data
     const slug = slugify(data.name)
     
-    // TODO: Get org_id from auth session
-    const orgId = "00000000-0000-0000-0000-000000000001" // Demo org for now
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
     
     // Check duplicate email
     const existing = await db
@@ -200,6 +208,14 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(record), { status: 201 })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error creating person:", error)
     return NextResponse.json(
       { error: "Failed to create person" },

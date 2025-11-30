@@ -25,5 +25,47 @@ COPY apps/web ./apps/web
 # Set environment
 ENV NODE_ENV=development
 
-# Run migrations and seeding
-CMD ["sh", "-c", "cd apps/web && pnpm db:push && pnpm db:seed && pnpm db:seed-rbac && echo 'Database initialized successfully!'"]
+# Run migrations and seeding with explicit output
+CMD ["sh", "-exc", "\
+echo '=========================================='; \
+echo 'IdaraOS Database Initialization'; \
+echo '=========================================='; \
+echo ''; \
+echo 'DATABASE_URL is set:' $(if [ -n \"$DATABASE_URL\" ]; then echo 'YES'; else echo 'NO'; fi); \
+echo ''; \
+cd /app/apps/web; \
+echo 'Working directory:' $(pwd); \
+echo ''; \
+echo 'Checking schema files...'; \
+ls -la lib/db/schema/; \
+echo ''; \
+echo 'Checking drizzle config...'; \
+cat drizzle.config.ts; \
+echo ''; \
+echo 'Step 1: Pushing database schema...'; \
+echo '------------------------------------------'; \
+npx drizzle-kit push --force 2>&1; \
+echo '✅ Database schema pushed successfully'; \
+echo ''; \
+echo 'Step 2: Seeding database...'; \
+echo '------------------------------------------'; \
+pnpm db:seed 2>&1; \
+echo '✅ Database seeded successfully'; \
+echo ''; \
+echo 'Step 3: Seeding RBAC permissions...'; \
+echo '------------------------------------------'; \
+pnpm db:seed-rbac 2>&1; \
+echo '✅ RBAC permissions seeded successfully'; \
+echo ''; \
+echo 'Step 4: Creating admin user...'; \
+echo '------------------------------------------'; \
+pnpm db:create-admin 2>&1; \
+echo '✅ Admin user created successfully'; \
+echo ''; \
+echo '=========================================='; \
+echo '✅ Database initialization complete!'; \
+echo ''; \
+echo 'Login credentials:'; \
+echo '  Email: admin@example.com'; \
+echo '  Password: Admin123!'; \
+echo '=========================================='"]

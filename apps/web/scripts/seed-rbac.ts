@@ -21,6 +21,9 @@ const pool = new Pool({
 
 const db = drizzle(pool, { schema })
 
+// Fixed demo org ID - must match what APIs expect
+const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+
 // ============ Default Data ============
 
 const DEFAULT_MODULES = [
@@ -176,11 +179,15 @@ const SYSTEM_ROLES: Record<string, {
 async function seedRBAC() {
   console.log("🔐 Seeding RBAC system...")
 
-  // Get or create the demo org
-  let org = await db.query.organizations.findFirst()
+  // Get or create the demo org with fixed ID
+  let org = await db.query.organizations.findFirst({
+    where: eq(schema.organizations.id, DEMO_ORG_ID),
+  })
+  
   if (!org) {
     console.log("  Creating demo organization...")
     const [newOrg] = await db.insert(schema.organizations).values({
+      id: DEMO_ORG_ID,
       name: "Demo Organization",
       slug: "demo-org",
     }).returning()

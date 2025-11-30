@@ -8,27 +8,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { roles, rolePermissions, userRoles, organizations } from "@/lib/db/schema"
 import { eq, asc, sql } from "drizzle-orm"
+import { requireOrgId } from "@/lib/api/context"
 
-// Demo org ID - in production, get from session
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
-
-async function ensureOrgExists() {
-  const existingOrg = await db.query.organizations.findFirst({
-    where: eq(organizations.id, DEMO_ORG_ID),
-  })
-
-  if (!existingOrg) {
-    await db.insert(organizations).values({
-      id: DEMO_ORG_ID,
-      name: "Demo Organization",
-      slug: "demo-org",
-    })
-  }
-}
-
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await ensureOrgExists()
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
 
     // Get roles with permission and user counts
     const allRoles = await db
@@ -52,11 +37,19 @@ export async function GET() {
         )::int`,
       })
       .from(roles)
-      .where(eq(roles.orgId, DEMO_ORG_ID))
+      .where(eq(roles.orgId, orgId))
       .orderBy(asc(roles.isSystem), asc(roles.name))
 
     return NextResponse.json(allRoles)
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching roles:", error)
     return NextResponse.json(
       { error: "Failed to fetch roles" },
@@ -67,7 +60,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureOrgExists()
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
 
     const body = await request.json()
     const { name, description, color, permissionIds } = body
@@ -85,9 +79,12 @@ export async function POST(request: NextRequest) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "")
 
-    // Check for duplicate slug
+    // Check for duplicate slug in this organization
     const existing = await db.query.roles.findFirst({
-      where: eq(roles.slug, slug),
+      where: and(
+        eq(roles.slug, slug),
+        eq(roles.orgId, orgId)
+      ),
     })
 
     if (existing) {
@@ -101,7 +98,7 @@ export async function POST(request: NextRequest) {
     const [newRole] = await db
       .insert(roles)
       .values({
-        orgId: DEMO_ORG_ID,
+        orgId,
         slug,
         name: name.trim(),
         description: description?.trim() || null,
@@ -123,6 +120,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(newRole, { status: 201 })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error creating role:", error)
     return NextResponse.json(
       { error: "Failed to create role" },

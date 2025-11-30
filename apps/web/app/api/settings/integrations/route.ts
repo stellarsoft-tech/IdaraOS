@@ -9,9 +9,7 @@ import { integrations, organizations, type IntegrationProvider } from "@/lib/db/
 import { eq, and } from "drizzle-orm"
 import { z } from "zod"
 import crypto from "crypto"
-
-// Demo org ID for single-tenant demo
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requireOrgId } from "@/lib/api/context"
 
 // Simple encryption for demo (in production, use proper key management)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "demo-key-change-in-production-32c"
@@ -41,22 +39,6 @@ function decrypt(encryptedText: string): string {
   }
 }
 
-// Ensure org exists
-async function ensureOrgExists() {
-  const existing = await db
-    .select({ id: organizations.id })
-    .from(organizations)
-    .where(eq(organizations.id, DEMO_ORG_ID))
-    .limit(1)
-
-  if (existing.length === 0) {
-    await db.insert(organizations).values({
-      id: DEMO_ORG_ID,
-      name: "Demo Organization",
-      slug: "demo",
-    })
-  }
-}
 
 // Validation schemas
 const SaveEntraConfigSchema = z.object({
@@ -83,13 +65,12 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get("provider")
-
-    await ensureOrgExists()
+    const orgId = await requireOrgId(request)
 
     let query = db
       .select()
       .from(integrations)
-      .where(eq(integrations.orgId, DEMO_ORG_ID))
+      .where(eq(integrations.orgId, orgId))
 
     if (provider) {
       const results = await db
@@ -97,7 +78,7 @@ export async function GET(request: NextRequest) {
         .from(integrations)
         .where(
           and(
-            eq(integrations.orgId, DEMO_ORG_ID),
+            eq(integrations.orgId, orgId),
             eq(integrations.provider, provider as IntegrationProvider)
           )
         )
@@ -157,6 +138,14 @@ export async function GET(request: NextRequest) {
       }))
     )
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching integrations:", error)
     return NextResponse.json(
       { error: "Failed to fetch integrations" },
@@ -172,8 +161,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-
-    await ensureOrgExists()
+    const orgId = await requireOrgId(request)
 
     // For now, only handle Entra
     if (body.provider === "entra") {
@@ -193,7 +181,7 @@ export async function POST(request: NextRequest) {
         .from(integrations)
         .where(
           and(
-            eq(integrations.orgId, DEMO_ORG_ID),
+            eq(integrations.orgId, orgId),
             eq(integrations.provider, "entra")
           )
         )
@@ -239,7 +227,7 @@ export async function POST(request: NextRequest) {
       const [created] = await db
         .insert(integrations)
         .values({
-          orgId: DEMO_ORG_ID,
+          orgId,
           provider: "entra",
           status: "connected",
           tenantId: data.tenantId,
@@ -274,6 +262,14 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error saving integration:", error)
     return NextResponse.json(
       { error: "Failed to save integration" },
@@ -289,6 +285,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
+    const orgId = await requireOrgId(request)
 
     if (body.provider === "entra") {
       const parseResult = UpdateEntraConfigSchema.safeParse(body)
@@ -306,7 +303,7 @@ export async function PATCH(request: NextRequest) {
         .from(integrations)
         .where(
           and(
-            eq(integrations.orgId, DEMO_ORG_ID),
+            eq(integrations.orgId, orgId),
             eq(integrations.provider, "entra")
           )
         )
@@ -354,6 +351,14 @@ export async function PATCH(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error updating integration:", error)
     return NextResponse.json(
       { error: "Failed to update integration" },
@@ -370,6 +375,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get("provider")
+    const orgId = await requireOrgId(request)
 
     if (!provider) {
       return NextResponse.json(
@@ -383,7 +389,7 @@ export async function DELETE(request: NextRequest) {
       .from(integrations)
       .where(
         and(
-          eq(integrations.orgId, DEMO_ORG_ID),
+          eq(integrations.orgId, orgId),
           eq(integrations.provider, provider as IntegrationProvider)
         )
       )
@@ -402,6 +408,14 @@ export async function DELETE(request: NextRequest) {
       message: "Integration disconnected successfully",
     })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error deleting integration:", error)
     return NextResponse.json(
       { error: "Failed to disconnect integration" },

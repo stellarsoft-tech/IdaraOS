@@ -54,8 +54,9 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Deployment configs (not needed in image)
+# Deployment configs (not needed in image, except init script)
 deployment
+!deployment/docker/init-db.sh
 .github
 
 # Specs and scripts (development only)
