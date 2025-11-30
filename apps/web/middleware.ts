@@ -77,7 +77,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Get session token from cookies
-  const sessionToken = request.cookies.get("session")?.value
+  const sessionToken = request.cookies.get("idaraos_session")?.value
 
   // Check if path is public (no auth required)
   const isPublicRoute = matchesPath(pathname, publicRoutes)
