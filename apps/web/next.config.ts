@@ -3,7 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Enable standalone output for Docker deployment
   // This creates a minimal production build with all dependencies bundled
-  output: "standalone",
+  // 
+  // WINDOWS USERS: If you get EPERM symlink errors, you have two options:
+  // 1. Enable Developer Mode: Settings > Privacy & Security > For developers > Developer Mode
+  // 2. Disable standalone for local builds: Set ENABLE_STANDALONE=false environment variable
+  //    Example: $env:ENABLE_STANDALONE="false"; pnpm build
+  output: process.env.ENABLE_STANDALONE === "false" ? undefined : "standalone",
 
   // Disable x-powered-by header for security
   poweredByHeader: false,
