@@ -97,6 +97,71 @@ jobs:
           echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
           echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "Running database migrations..."
+          pnpm db:push
+          echo "✅ Database migrations completed"
+
+      - name: Check if database is seeded
+        id: check-seeded
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          # Check if default organization exists (indicates database is already seeded)
+          ORG_EXISTS=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            pool.query('SELECT id FROM core_organizations WHERE id = \$1', ['00000000-0000-0000-0000-000000000001'])
+              .then(result => {
+                console.log(result.rows.length > 0 ? 'true' : 'false');
+                pool.end();
+              })
+              .catch(() => {
+                console.log('false');
+                pool.end();
+              });
+          ")
+          echo "org_exists=$ORG_EXISTS" >> $GITHUB_OUTPUT
+          if [ "$ORG_EXISTS" = "true" ]; then
+            echo "✅ Database already seeded, skipping seed step"
+          else
+            echo "🌱 Database not seeded, will run seed scripts"
+          fi
+
+      - name: Seed database (first time only)
+        if: steps.check-seeded.outputs.org_exists != 'true'
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "🌱 Seeding RBAC system..."
+          pnpm db:seed-rbac
+          echo "🌱 Seeding demo data..."
+          pnpm db:seed || echo "⚠️ Demo data seeding skipped (optional)"
+          echo "✅ Database seeding completed"
+
       - name: Deploy to Container App
         id: deploy
         run: |
@@ -230,6 +295,71 @@ jobs:
           echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
           echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "Running database migrations..."
+          pnpm db:push
+          echo "✅ Database migrations completed"
+
+      - name: Check if database is seeded
+        id: check-seeded
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          # Check if default organization exists (indicates database is already seeded)
+          ORG_EXISTS=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            pool.query('SELECT id FROM core_organizations WHERE id = \$1', ['00000000-0000-0000-0000-000000000001'])
+              .then(result => {
+                console.log(result.rows.length > 0 ? 'true' : 'false');
+                pool.end();
+              })
+              .catch(() => {
+                console.log('false');
+                pool.end();
+              });
+          ")
+          echo "org_exists=$ORG_EXISTS" >> $GITHUB_OUTPUT
+          if [ "$ORG_EXISTS" = "true" ]; then
+            echo "✅ Database already seeded, skipping seed step"
+          else
+            echo "🌱 Database not seeded, will run seed scripts"
+          fi
+
+      - name: Seed database (first time only)
+        if: steps.check-seeded.outputs.org_exists != 'true'
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "🌱 Seeding RBAC system..."
+          pnpm db:seed-rbac
+          echo "🌱 Seeding demo data..."
+          pnpm db:seed || echo "⚠️ Demo data seeding skipped (optional)"
+          echo "✅ Database seeding completed"
+
       - name: Deploy to Container App
         id: deploy
         run: |
@@ -354,6 +484,71 @@ jobs:
           echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
           echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
           echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: |
+          pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "Running database migrations..."
+          pnpm db:push
+          echo "✅ Database migrations completed"
+
+      - name: Check if database is seeded
+        id: check-seeded
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          # Check if default organization exists (indicates database is already seeded)
+          ORG_EXISTS=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            pool.query('SELECT id FROM core_organizations WHERE id = \$1', ['00000000-0000-0000-0000-000000000001'])
+              .then(result => {
+                console.log(result.rows.length > 0 ? 'true' : 'false');
+                pool.end();
+              })
+              .catch(() => {
+                console.log('false');
+                pool.end();
+              });
+          ")
+          echo "org_exists=$ORG_EXISTS" >> $GITHUB_OUTPUT
+          if [ "$ORG_EXISTS" = "true" ]; then
+            echo "✅ Database already seeded, skipping seed step"
+          else
+            echo "🌱 Database not seeded, will run seed scripts"
+          fi
+
+      - name: Seed database (first time only)
+        if: steps.check-seeded.outputs.org_exists != 'true'
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "🌱 Seeding RBAC system..."
+          pnpm db:seed-rbac
+          echo "🌱 Seeding demo data..."
+          pnpm db:seed || echo "⚠️ Demo data seeding skipped (optional)"
+          echo "✅ Database seeding completed"
 
       - name: Deploy to Container App
         id: deploy
