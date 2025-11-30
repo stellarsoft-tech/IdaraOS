@@ -5,9 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, asc } from "drizzle-orm"
+import { and, asc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { users, organizations, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
+import { users, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
 import { z } from "zod"
 import { requireOrgId } from "@/lib/api/context"
 

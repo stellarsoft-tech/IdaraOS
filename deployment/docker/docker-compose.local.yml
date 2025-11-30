@@ -1,17 +1,43 @@
 # =============================================================================
-# IdaraOS - Docker Compose for Local Development
+# IdaraOS - Docker Compose for Local Production Build (HTTPS)
 # =============================================================================
-# This file provides a complete local development environment with:
+# This file provides a complete local environment with:
 # - PostgreSQL database
 # - Database migrations and seeding
-# - The IdaraOS web application
+# - The IdaraOS web application (production build)
+# - Caddy reverse proxy for automatic HTTPS
 # =============================================================================
 # Usage:
 #   cd deployment/docker
 #   docker-compose -f docker-compose.local.yml up -d
+#
+# Access:
+#   https://localhost (HTTPS - recommended for Entra SSO)
+#   http://localhost:3000 (direct, no HTTPS)
 # =============================================================================
 
+name: idaraos-local
+
 services:
+  # ---------------------------------------------------------------------------
+  # Caddy Reverse Proxy (HTTPS)
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: idaraos-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    environment:
+      - CADDY_AGREE=true
+
   # ---------------------------------------------------------------------------
   # PostgreSQL Database
   # ---------------------------------------------------------------------------
@@ -64,6 +90,9 @@ services:
       DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
       JWT_SECRET: local-dev-jwt-secret-change-in-prod-32chars
       ENCRYPTION_KEY: local-dev-encryption-key-32chars!
+      # HTTPS URL for Entra SSO callbacks
+      NEXTAUTH_URL: https://localhost
+      NEXT_PUBLIC_APP_URL: https://localhost
     depends_on:
       db:
         condition: service_healthy
@@ -77,4 +106,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
     driver: local

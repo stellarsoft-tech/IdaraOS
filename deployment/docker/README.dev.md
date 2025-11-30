@@ -1,6 +1,6 @@
 # Development Docker Setup
 
-This guide explains how to use the development Docker Compose setup for IdaraOS with hot reloading.
+This guide explains how to use the development Docker Compose setup for IdaraOS with hot reloading and HTTPS.
 
 ## Quick Start
 
@@ -9,7 +9,63 @@ cd deployment/docker
 docker-compose -f docker-compose.dev.yml up
 ```
 
-The application will be available at http://localhost:3000
+The application will be available at:
+- **https://localhost** (recommended for Entra SSO)
+- http://localhost:3000 (direct, no HTTPS)
+
+## HTTPS Setup
+
+The development environment includes **Caddy** as a reverse proxy that provides automatic HTTPS with self-signed certificates.
+
+### First Time Setup (Trust Certificate)
+
+When you first access https://localhost, your browser will show a security warning. This is expected for self-signed certificates:
+
+**Chrome/Edge:**
+1. Click "Advanced"
+2. Click "Proceed to localhost (unsafe)"
+
+**Firefox:**
+1. Click "Advanced"
+2. Click "Accept the Risk and Continue"
+
+**Optional: Trust the certificate system-wide:**
+```bash
+# Access the Caddy container
+docker exec -it idaraos-caddy-dev sh
+
+# The certificate is at /data/caddy/pki/authorities/local/root.crt
+# Copy it out and add to your system's trusted certificates
+```
+
+### Why HTTPS?
+
+- **Entra ID SSO**: Microsoft's OAuth requires HTTPS redirect URIs
+- **Security Headers**: Caddy adds security headers (HSTS, X-Frame-Options, etc.)
+- **Closer to Production**: Test with the same protocol as production
+
+## Entra ID (Azure AD) Setup
+
+Before using SSO, register your app in Entra ID:
+
+```powershell
+# From the repository root
+cd deployment/azure/scripts
+./register-entra-app.ps1 -CreateClientSecret
+```
+
+This script will:
+1. Create an Entra ID app registration
+2. Configure HTTPS redirect URIs (https://localhost, https://idaraos.local)
+3. Set up API permissions
+4. Output environment variables for your `.env.local`
+
+Then add to your `.env.local`:
+```env
+AZURE_AD_CLIENT_ID=<from script output>
+AZURE_AD_TENANT_ID=<from script output>
+AZURE_AD_CLIENT_SECRET=<from script output>
+```
 
 ## How It Works
 
@@ -19,13 +75,13 @@ The development setup mounts your entire repository into the container:
 
 ```yaml
 volumes:
-  - ../../:/app                    # Mount entire repo
-  - /app/node_modules              # Exclude host node_modules
-  - /app/apps/web/node_modules    # Use container's node_modules
-  - /app/apps/web/.next           # Exclude build cache
+  - ../../:/app                           # Mount entire repo
+  - web_node_modules:/app/node_modules    # Container's node_modules
+  - web_app_node_modules:/app/apps/web/node_modules
+  - web_next_cache:/app/apps/web/.next    # Build cache
 ```
 
-**Why exclude node_modules?**
+**Why use named volumes for node_modules?**
 - Container has dependencies installed for Linux (Alpine)
 - Host might have different OS (Windows/Mac)
 - Prevents conflicts between host and container dependencies
@@ -37,11 +93,14 @@ volumes:
 - Changes to `.ts`, `.tsx`, `.css` files trigger automatic reloads
 - No need to restart the container
 
-### Database
+### Services
 
-- Uses the same PostgreSQL setup as production build
-- Database persists in `postgres_data_dev` volume
-- Migrations run automatically on first start via `db-init` container
+| Service | Purpose | Port |
+|---------|---------|------|
+| `caddy` | HTTPS reverse proxy | 80, 443 |
+| `web` | Next.js dev server | 3000 |
+| `db` | PostgreSQL database | 5432 |
+| `db-init` | Migrations & seeding | - |
 
 ## Common Tasks
 
@@ -60,7 +119,12 @@ docker-compose -f docker-compose.dev.yml up -d
 ### View Logs
 
 ```bash
+# All services
+docker-compose -f docker-compose.dev.yml logs -f
+
+# Specific service
 docker-compose -f docker-compose.dev.yml logs -f web
+docker-compose -f docker-compose.dev.yml logs -f caddy
 ```
 
 ### Stop Environment
@@ -79,7 +143,7 @@ docker-compose -f docker-compose.dev.yml up
 ### Rebuild Container (after dependency changes)
 
 ```bash
-docker-compose -f docker-compose.dev.yml build web
+docker-compose -f docker-compose.dev.yml build --no-cache web
 docker-compose -f docker-compose.dev.yml up
 ```
 
@@ -96,6 +160,17 @@ docker exec -it idaraos-web-dev pnpm --filter web lint
 
 ## Troubleshooting
 
+### HTTPS Certificate Errors
+
+If you get certificate errors even after accepting:
+
+1. **Clear HSTS** for localhost in browser
+2. **Regenerate certificates**:
+   ```bash
+   docker-compose -f docker-compose.dev.yml down -v
+   docker-compose -f docker-compose.dev.yml up
+   ```
+
 ### Changes Not Reflecting
 
 1. **Check file watcher**: Ensure `CHOKIDAR_USEPOLLING=true` is set (it is by default)
@@ -110,12 +185,19 @@ docker exec -it idaraos-web-dev pnpm --filter web lint
 
 ### Port Already in Use
 
-If port 3000 is already in use:
+If port 443 or 3000 is already in use:
 
 ```yaml
 # In docker-compose.dev.yml, change:
 ports:
-  - "3001:3000"  # Use 3001 on host, 3000 in container
+  - "8443:443"  # Use 8443 for HTTPS
+  - "3001:3000" # Use 3001 for HTTP
+```
+
+Then update `NEXTAUTH_URL`:
+```yaml
+environment:
+  NEXTAUTH_URL: https://localhost:8443
 ```
 
 ### Database Connection Issues
@@ -135,6 +217,20 @@ ports:
    docker exec -it idaraos-web-dev env | grep DATABASE_URL
    ```
 
+### Caddy Not Proxying
+
+1. **Check Caddy logs**:
+   ```bash
+   docker-compose -f docker-compose.dev.yml logs caddy
+   ```
+
+2. **Verify web container is running**:
+   ```bash
+   docker-compose -f docker-compose.dev.yml ps web
+   ```
+
+3. **Test direct access**: http://localhost:3000 should work
+
 ### Node Modules Issues
 
 If you see module resolution errors:
@@ -144,7 +240,7 @@ If you see module resolution errors:
    docker-compose -f docker-compose.dev.yml build --no-cache web
    ```
 
-2. **Check volume mounts** (node_modules should be excluded):
+2. **Check volume mounts** (node_modules should be in named volumes):
    ```bash
    docker exec -it idaraos-web-dev ls -la /app/node_modules
    ```
@@ -161,6 +257,7 @@ If you see module resolution errors:
 |---------|------------|------------|
 | **Build** | No build step | Full Next.js build |
 | **Hot Reload** | ✅ Enabled | ❌ Disabled |
+| **HTTPS** | ✅ Self-signed | ✅ Real certs |
 | **Source Maps** | ✅ Full | ⚠️ Limited |
 | **File Watching** | ✅ Active | ❌ None |
 | **Volume Mounts** | ✅ Yes | ❌ No |
@@ -174,6 +271,7 @@ If you see module resolution errors:
 3. **Rebuild container** after major dependency changes
 4. **Use separate volumes** - Dev uses `postgres_data_dev`, prod uses `postgres_data`
 5. **Check logs regularly** - Development mode shows more verbose output
+6. **Use HTTPS** - Always use https://localhost for Entra SSO testing
 
 ## Integration with IDE
 
@@ -185,3 +283,18 @@ Most IDEs will work normally since files are on your host machine:
 - ✅ **File Search**: IDE search works across mounted files
 
 The container only runs the dev server - all editing happens on your host machine.
+
+## Custom Domain (Optional)
+
+To use `idaraos.local` instead of `localhost`:
+
+1. **Add to hosts file**:
+   ```
+   # Windows: C:\Windows\System32\drivers\etc\hosts
+   # Mac/Linux: /etc/hosts
+   127.0.0.1 idaraos.local
+   ```
+
+2. **Access at**: https://idaraos.local
+
+This is already configured in the Caddyfile.

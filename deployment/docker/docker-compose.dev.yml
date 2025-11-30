@@ -1,14 +1,19 @@
 # =============================================================================
-# IdaraOS - Docker Compose for Development (Hot Reload)
+# IdaraOS - Docker Compose for Development (Hot Reload + HTTPS)
 # =============================================================================
 # This file provides a development environment with:
 # - PostgreSQL database
 # - Database migrations and seeding
 # - The IdaraOS web application with hot reloading via volume mounts
+# - Caddy reverse proxy for automatic HTTPS
 # =============================================================================
 # Usage:
 #   cd deployment/docker
 #   docker-compose -f docker-compose.dev.yml up
+#
+# Access:
+#   https://localhost (HTTPS - recommended for Entra SSO)
+#   http://localhost:3000 (direct, no HTTPS)
 # =============================================================================
 # 
 # Key Features:
@@ -16,9 +21,31 @@
 # - Next.js dev server runs inside container with hot reloading
 # - Database is initialized automatically on first run
 # - Changes to code are reflected immediately without rebuilding
+# - Automatic HTTPS with self-signed certificates via Caddy
 # =============================================================================
 
+name: idaraos-dev
+
 services:
+  # ---------------------------------------------------------------------------
+  # Caddy Reverse Proxy (HTTPS)
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: idaraos-caddy-dev
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data_dev:/data
+      - caddy_config_dev:/config
+    depends_on:
+      - web
+    environment:
+      - CADDY_AGREE=true
+
   # ---------------------------------------------------------------------------
   # PostgreSQL Database
   # ---------------------------------------------------------------------------
@@ -72,6 +99,9 @@ services:
       DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
       JWT_SECRET: local-dev-jwt-secret-change-in-prod-32chars
       ENCRYPTION_KEY: local-dev-encryption-key-32chars!
+      # HTTPS URL for Entra SSO callbacks
+      NEXTAUTH_URL: https://localhost
+      NEXT_PUBLIC_APP_URL: https://localhost
       # Enable Next.js fast refresh and hot reloading
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
@@ -100,4 +130,8 @@ volumes:
   web_app_node_modules:
     driver: local
   web_next_cache:
+    driver: local
+  caddy_data_dev:
+    driver: local
+  caddy_config_dev:
     driver: local

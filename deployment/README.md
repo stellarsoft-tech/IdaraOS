@@ -13,9 +13,9 @@ This directory contains deployment configurations for IdaraOS across different p
 
 ## Quick Start
 
-### Local Development with Docker (Hot Reload)
+### Local Development with Docker (Hot Reload + HTTPS)
 
-For active development with instant file changes and hot reloading:
+For active development with instant file changes, hot reloading, and HTTPS:
 
 ```bash
 cd deployment/docker
@@ -26,10 +26,14 @@ This will:
 1. Start a PostgreSQL database
 2. Run database migrations and seed data (via `db-init` container)
 3. Start the IdaraOS web application in development mode with hot reloading
+4. Start Caddy reverse proxy for automatic HTTPS
 
-Access the app at http://localhost:3000
+**Access the app:**
+- **https://localhost** (recommended for Entra SSO)
+- http://localhost:3000 (direct, no HTTPS)
 
 **Features:**
+- ✅ **HTTPS** - Automatic self-signed certificates via Caddy
 - ✅ **Hot Reloading** - Changes to source files are reflected immediately
 - ✅ **Volume Mounts** - Your local repository is mounted into the container
 - ✅ **No Rebuilds** - Edit files locally, see changes instantly
@@ -50,7 +54,7 @@ docker-compose -f docker-compose.dev.yml down -v
 docker-compose -f docker-compose.dev.yml up
 ```
 
-### Local Development with Docker (Production Build)
+### Local Development with Docker (Production Build + HTTPS)
 
 For testing production builds locally:
 
@@ -59,7 +63,11 @@ cd deployment/docker
 docker-compose -f docker-compose.local.yml up -d
 ```
 
-This builds a production-optimized image and runs it.
+This builds a production-optimized image and runs it with HTTPS.
+
+**Access the app:**
+- **https://localhost** (recommended for Entra SSO)
+- http://localhost:3000 (direct, no HTTPS)
 
 **To rebuild after code changes:**
 ```bash
@@ -71,6 +79,25 @@ docker-compose -f docker-compose.local.yml up -d --build
 docker-compose -f docker-compose.local.yml down -v
 docker-compose -f docker-compose.local.yml up -d
 ```
+
+### Entra ID (Azure AD) SSO Setup
+
+To enable Entra ID SSO for local development:
+
+```powershell
+# Register the app in Entra ID with HTTPS redirect URIs
+cd deployment/azure/scripts
+./register-entra-app.ps1 -CreateClientSecret
+```
+
+Then add the output to your `.env.local`:
+```env
+AZURE_AD_CLIENT_ID=<from script output>
+AZURE_AD_TENANT_ID=<from script output>
+AZURE_AD_CLIENT_SECRET=<from script output>
+```
+
+See [docker/README.dev.md](./docker/README.dev.md) for detailed HTTPS setup instructions.
 
 ### Azure Deployment
 
@@ -142,12 +169,15 @@ IdaraOS/
 │   │   ├── Dockerfile                  # Multi-stage production build
 │   │   ├── Dockerfile.dev              # Development image with hot reload
 │   │   ├── Dockerfile.init             # Database initialization container
+│   │   ├── Caddyfile                   # Caddy reverse proxy config (HTTPS)
 │   │   ├── docker-compose.local.yml    # Production build for local testing
-│   │   └── docker-compose.dev.yml      # Development with hot reloading
+│   │   ├── docker-compose.dev.yml      # Development with hot reloading
+│   │   └── README.dev.md               # Development Docker documentation
 │   │
 │   ├── azure/
 │   │   ├── scripts/
-│   │   │   ├── init-infrastructure.ps1    # One-time setup
+│   │   │   ├── init-infrastructure.ps1    # One-time Azure setup
+│   │   │   ├── register-entra-app.ps1     # Entra ID app registration
 │   │   │   ├── create-pim-rbac-groups.ps1 # PIM groups
 │   │   │   └── deploy-aca-service.ps1     # Deploy container
 │   │   └── README.md               # Azure-specific docs

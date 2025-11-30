@@ -110,6 +110,10 @@ jobs:
           # Check if app exists
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             echo "Updating existing Container App..."
+            # Get current FQDN for APP_URL
+            FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+            APP_URL="https://$FQDN"
+            
             az containerapp update \
               --name $APP \
               --resource-group $RG \
@@ -118,7 +122,8 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
-                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
+                "NEXT_PUBLIC_APP_URL=$APP_URL"
           else
             echo "Creating new Container App..."
             az containerapp create \
@@ -140,11 +145,19 @@ jobs:
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+            
+            # Get FQDN after creation
+            FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+            APP_URL="https://$FQDN"
+            
+            # Update with APP_URL (needs second update after we know the FQDN)
+            az containerapp update \
+              --name $APP \
+              --resource-group $RG \
+              --set-env-vars "NEXT_PUBLIC_APP_URL=$APP_URL"
           fi
 
-          # Get app URL
-          FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-          APP_URL="https://$FQDN"
+          # Output app URL
           echo "app_url=$APP_URL" >> $GITHUB_OUTPUT
           echo "Deployed to: $APP_URL"
 
@@ -228,6 +241,9 @@ jobs:
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
+            FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+            APP_URL="https://$FQDN"
+            
             az containerapp update \
               --name $APP \
               --resource-group $RG \
@@ -236,7 +252,8 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
-                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
+                "NEXT_PUBLIC_APP_URL=$APP_URL"
           else
             az containerapp create \
               --name $APP \
@@ -257,10 +274,17 @@ jobs:
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+            
+            FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+            APP_URL="https://$FQDN"
+            
+            az containerapp update \
+              --name $APP \
+              --resource-group $RG \
+              --set-env-vars "NEXT_PUBLIC_APP_URL=$APP_URL"
           fi
 
-          FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-          echo "app_url=https://$FQDN" >> $GITHUB_OUTPUT
+          echo "app_url=$APP_URL" >> $GITHUB_OUTPUT
 
   # ===========================================================================
   # Deploy to Production (manual with approval)
@@ -342,6 +366,9 @@ jobs:
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
+            FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+            APP_URL="https://$FQDN"
+            
             az containerapp update \
               --name $APP \
               --resource-group $RG \
@@ -350,7 +377,8 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
-                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
+                "NEXT_PUBLIC_APP_URL=$APP_URL"
           else
             az containerapp create \
               --name $APP \
@@ -371,7 +399,14 @@ jobs:
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+            
+            FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+            APP_URL="https://$FQDN"
+            
+            az containerapp update \
+              --name $APP \
+              --resource-group $RG \
+              --set-env-vars "NEXT_PUBLIC_APP_URL=$APP_URL"
           fi
 
-          FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-          echo "app_url=https://$FQDN" >> $GITHUB_OUTPUT
+          echo "app_url=$APP_URL" >> $GITHUB_OUTPUT

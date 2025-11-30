@@ -18,8 +18,10 @@ export async function GET(request: NextRequest) {
 
   const { tenantId, clientId } = entraConfig
   
-  // Get app URL from request or env
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`
+  // Get app URL - prioritize env var, then forwarded headers, then request
+  const forwardedProto = request.headers.get("x-forwarded-proto") || request.nextUrl.protocol.replace(":", "")
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || request.nextUrl.host
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${forwardedProto}://${forwardedHost}`
   const redirectUri = `${appUrl}/api/auth/callback/azure-ad`
   
   // Get return URL from query params

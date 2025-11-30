@@ -38,18 +38,24 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error")
   const errorDescription = searchParams.get("error_description")
 
+  // Get app URL - prioritize env var, then forwarded headers, then request
+  // This must be calculated early so all redirects use the correct base URL
+  const forwardedProto = request.headers.get("x-forwarded-proto") || request.nextUrl.protocol.replace(":", "")
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host") || request.nextUrl.host
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${forwardedProto}://${forwardedHost}`
+
   // Handle OAuth errors
   if (error) {
     console.error("Azure AD OAuth error:", error, errorDescription)
     return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent(errorDescription || error)}`, request.url)
+      new URL(`/login?error=${encodeURIComponent(errorDescription || error)}`, appUrl)
     )
   }
 
   if (!code) {
     console.error("No authorization code received")
     return NextResponse.redirect(
-      new URL("/login?error=No authorization code received", request.url)
+      new URL("/login?error=No authorization code received", appUrl)
     )
   }
 
@@ -71,14 +77,11 @@ export async function GET(request: NextRequest) {
     if (!entraConfig) {
       console.error("Entra ID not configured in database")
       return NextResponse.redirect(
-        new URL("/login?error=SSO not configured", request.url)
+        new URL("/login?error=SSO not configured", appUrl)
       )
     }
 
     const { tenantId, clientId, clientSecret } = entraConfig
-    
-    // Get app URL from request or env
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${request.nextUrl.protocol}//${request.nextUrl.host}`
     const redirectUri = `${appUrl}/api/auth/callback/azure-ad`
 
     // Exchange authorization code for tokens
@@ -104,7 +107,7 @@ export async function GET(request: NextRequest) {
       const errorData = await tokenResponse.json()
       console.error("Token exchange failed:", errorData)
       return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(errorData.error_description || "Token exchange failed")}`, request.url)
+        new URL(`/login?error=${encodeURIComponent(errorData.error_description || "Token exchange failed")}`, appUrl)
       )
     }
 
@@ -121,7 +124,7 @@ export async function GET(request: NextRequest) {
       const errorData = await userInfoResponse.json()
       console.error("Failed to get user info:", errorData)
       return NextResponse.redirect(
-        new URL("/login?error=Failed to get user info from Microsoft", request.url)
+        new URL("/login?error=Failed to get user info from Microsoft", appUrl)
       )
     }
 
@@ -133,7 +136,7 @@ export async function GET(request: NextRequest) {
     if (!userEmail) {
       console.error("No email found for Microsoft user:", msUser.id)
       return NextResponse.redirect(
-        new URL("/login?error=No email associated with Microsoft account", request.url)
+        new URL("/login?error=No email associated with Microsoft account", appUrl)
       )
     }
 
@@ -163,7 +166,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       // User not registered - redirect to registration incomplete page
-      const redirectUrl = new URL("/registration-incomplete", request.url)
+      const redirectUrl = new URL("/registration-incomplete", appUrl)
       redirectUrl.searchParams.set("email", userEmail)
       return NextResponse.redirect(redirectUrl)
     }
@@ -171,13 +174,13 @@ export async function GET(request: NextRequest) {
     // Check user status
     if (user.status === "suspended") {
       return NextResponse.redirect(
-        new URL("/login?error=Your account has been suspended", request.url)
+        new URL("/login?error=Your account has been suspended", appUrl)
       )
     }
 
     if (user.status === "deactivated") {
       return NextResponse.redirect(
-        new URL("/login?error=Your account has been deactivated", request.url)
+        new URL("/login?error=Your account has been deactivated", appUrl)
       )
     }
 
@@ -206,11 +209,11 @@ export async function GET(request: NextRequest) {
     await setSessionCookie(token)
 
     // Redirect to the return URL or dashboard
-    return NextResponse.redirect(new URL(returnTo, request.url))
+    return NextResponse.redirect(new URL(returnTo, appUrl))
   } catch (error) {
     console.error("Azure AD callback error:", error)
     return NextResponse.redirect(
-      new URL("/login?error=Authentication failed", request.url)
+      new URL("/login?error=Authentication failed", appUrl)
     )
   }
 }
