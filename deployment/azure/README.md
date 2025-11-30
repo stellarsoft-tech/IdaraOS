@@ -76,89 +76,63 @@ Run the infrastructure setup script for each environment:
     -EnablePim
 ```
 
-### 2. Configure GitHub Secrets
+### 2. Configure GitHub OIDC Authentication
 
-Add these secrets to your GitHub repository (Settings > Secrets and variables > Actions):
+Run the setup script to create the Azure AD App Registration with federated credentials:
 
-| Secret | Description | How to Get |
-|--------|-------------|------------|
-| `AZURE_CLIENT_ID` | Azure AD App Registration Client ID | Create in Azure Portal |
-| `AZURE_TENANT_ID` | Azure AD Tenant ID | `az account show --query tenantId` |
-| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID | `az account show --query id` |
-| `ACR_NAME` | Container Registry name (without .azurecr.io) | e.g., `cridaraos` |
-
-### 3. Configure GitHub OIDC Authentication
-
-Create a federated credential for passwordless GitHub Actions authentication:
-
-```bash
-# Get your GitHub org/repo
-GITHUB_ORG="your-org"
-GITHUB_REPO="your-repo"
-
-# Create App Registration
-APP_ID=$(az ad app create --display-name "idaraos-github-deploy" --query appId -o tsv)
-
-# Create Service Principal
-az ad sp create --id $APP_ID
-
-# Add federated credential for main branch
-az ad app federated-credential create --id $APP_ID --parameters '{
-    "name": "github-main",
-    "issuer": "https://token.actions.githubusercontent.com",
-    "subject": "repo:'$GITHUB_ORG'/'$GITHUB_REPO':ref:refs/heads/main",
-    "audiences": ["api://AzureADTokenExchange"]
-}'
-
-# Add federated credential for environments
-for ENV in dev staging production; do
-    az ad app federated-credential create --id $APP_ID --parameters '{
-        "name": "github-env-'$ENV'",
-        "issuer": "https://token.actions.githubusercontent.com",
-        "subject": "repo:'$GITHUB_ORG'/'$GITHUB_REPO':environment:'$ENV'",
-        "audiences": ["api://AzureADTokenExchange"]
-    }'
-done
-
-# Grant Contributor role on subscription
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-az role assignment create \
-    --assignee $APP_ID \
-    --role "Contributor" \
-    --scope "/subscriptions/$SUBSCRIPTION_ID"
-
-# Grant AcrPush role on Container Registry
-az role assignment create \
-    --assignee $APP_ID \
-    --role "AcrPush" \
-    --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/rg-idaraos-shared/providers/Microsoft.ContainerRegistry/registries/cridaraos"
-
-# Grant Key Vault Secrets User role
-for ENV in dev staging prod; do
-    az role assignment create \
-        --assignee $APP_ID \
-        --role "Key Vault Secrets User" \
-        --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/rg-idaraos-$ENV-uks-001/providers/Microsoft.KeyVault/vaults/kv-idaraos-$ENV-001"
-done
-
-echo "AZURE_CLIENT_ID=$APP_ID"
+```powershell
+# Replace with your GitHub org/username and repo name
+./scripts/setup-github-oidc.ps1 `
+    -GitHubOrg "your-github-username" `
+    -GitHubRepo "IdaraOS"
 ```
 
-### 4. Deploy
+The script will:
+- Create an Azure AD App Registration
+- Configure federated credentials for GitHub Actions
+- Assign necessary RBAC roles
+- Output the secrets you need to add to GitHub
 
-Push to main branch to trigger automatic deployment to dev:
+### 3. Add GitHub Secrets
 
-```bash
-git push origin main
-```
+The script outputs the values you need. Add them to your GitHub repository:
 
-Or manually deploy to staging/prod via GitHub Actions UI:
-1. Go to Actions tab
-2. Select "Deploy to Azure" workflow
-3. Click "Run workflow"
-4. Select environment
+**Settings → Secrets and variables → Actions → New repository secret**
+
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CLIENT_ID` | Azure AD App Registration Client ID |
+| `AZURE_TENANT_ID` | Azure AD Tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID |
+| `ACR_NAME` | Container Registry name (e.g., `cridaraos`) |
+
+### 4. Create GitHub Environments
+
+Go to your GitHub repo → **Settings** → **Environments** → **New environment**
+
+Create these environments:
+1. **dev** - No protection rules
+2. **staging** - Optional: require reviewers
+3. **production** - Required: require reviewers, restrict branches to `main`
+
+### 5. Deploy
+
+Push to main branch to trigger automatic deployment to dev, or manually deploy via GitHub Actions.
 
 ## Scripts Reference
+
+### setup-github-oidc.ps1
+
+Configures GitHub OIDC authentication for Azure deployments.
+
+**Parameters:**
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `-GitHubOrg` | Yes | - | GitHub organization or username |
+| `-GitHubRepo` | Yes | - | GitHub repository name |
+| `-AppName` | No | idaraos | Application name prefix |
+| `-EnvironmentName` | No | dev | Environment for Key Vault access |
+| `-SkipRoleAssignments` | No | false | Skip RBAC assignments |
 
 ### init-infrastructure.ps1
 
