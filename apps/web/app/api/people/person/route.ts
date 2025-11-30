@@ -75,13 +75,14 @@ export async function GET(request: NextRequest) {
     const conditions = [eq(persons.orgId, orgId)]
     
     if (search) {
-      conditions.push(
-        or(
-          ilike(persons.name, `%${search}%`),
-          ilike(persons.email, `%${search}%`),
-          ilike(persons.role, `%${search}%`)
-        )
+      const searchCondition = or(
+        ilike(persons.name, `%${search}%`),
+        ilike(persons.email, `%${search}%`),
+        ilike(persons.role, `%${search}%`)
       )
+      if (searchCondition) {
+        conditions.push(searchCondition)
+      }
     }
     
     if (status) {

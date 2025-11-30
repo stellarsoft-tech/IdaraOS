@@ -1,0 +1,52 @@
+# =============================================================================
+# IdaraOS - Caddy Configuration for Local HTTPS
+# =============================================================================
+# Provides automatic HTTPS with self-signed certificates for local development
+# =============================================================================
+
+{
+    # Use internal/self-signed certificates for local development
+    local_certs
+    # Skip OCSP stapling for local certs
+    skip_install_trust
+    # Log format
+    log {
+        output stdout
+        format console
+    }
+}
+
+# Main application - HTTPS on port 443
+https://localhost {
+    reverse_proxy web:3000 {
+        # Pass correct headers so app knows the real host/protocol
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+    
+    # Enable compression
+    encode gzip
+    
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}
+
+# Also listen on custom domain for development
+https://idaraos.local {
+    reverse_proxy web:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+    encode gzip
+}
