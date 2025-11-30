@@ -317,6 +317,8 @@ export function useUpdateUserRoles() {
       queryClient.invalidateQueries({ queryKey: rbacKeys.userRoles(userId) })
       queryClient.invalidateQueries({ queryKey: rbacKeys.userPermissions() })
       queryClient.invalidateQueries({ queryKey: rbacKeys.roles() }) // User count changed
+      // Also invalidate users list since roles are displayed in the user table
+      queryClient.invalidateQueries({ queryKey: ["users"] })
     },
   })
 }

@@ -163,7 +163,7 @@ function renderField(
           defaultValue={field.value}
           disabled={commonProps.disabled}
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder={config.placeholder} />
           </SelectTrigger>
           <SelectContent>

@@ -327,7 +327,7 @@ export default function SettingsPage() {
                       value={formData.timezone}
                       onValueChange={(value) => setFormData({ ...formData, timezone: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select timezone" />
                       </SelectTrigger>
                       <SelectContent>
@@ -348,7 +348,7 @@ export default function SettingsPage() {
                       value={formData.currency}
                       onValueChange={(value) => setFormData({ ...formData, currency: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select currency" />
                       </SelectTrigger>
                       <SelectContent>
@@ -369,7 +369,7 @@ export default function SettingsPage() {
                       value={formData.dateFormat}
                       onValueChange={(value) => setFormData({ ...formData, dateFormat: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select format" />
                       </SelectTrigger>
                       <SelectContent>

@@ -240,7 +240,7 @@ function renderFormControl(
           value={(field.value as string) || ""}
           disabled={fieldDef.disabled}
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder={fieldDef.placeholder} />
           </SelectTrigger>
           <SelectContent>

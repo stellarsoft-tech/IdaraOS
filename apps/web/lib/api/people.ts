@@ -4,7 +4,23 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import type { Person, CreatePerson, UpdatePerson, PersonFilters } from "@/lib/generated/people/person/types"
+import type { Person as BasePerson, CreatePerson, UpdatePerson, PersonFilters } from "@/lib/generated/people/person/types"
+
+// Linked user info (when person has a system account)
+export interface LinkedUser {
+  id: string
+  name: string
+  email: string
+  status: string
+  hasEntraLink: boolean
+}
+
+// Extended Person type with linked user info
+export interface Person extends BasePerson {
+  linkedUser: LinkedUser | null
+  hasLinkedUser: boolean
+  hasEntraLink: boolean
+}
 
 // Query keys
 export const peopleKeys = {

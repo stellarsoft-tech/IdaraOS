@@ -45,6 +45,7 @@ export const persons = pgTable(
 
 /**
  * Person relations
+ * Note: The 'user' relation links to core_users when a person has a system account
  */
 export const personsRelations = relations(persons, ({ one }) => ({
   manager: one(persons, {
@@ -52,6 +53,9 @@ export const personsRelations = relations(persons, ({ one }) => ({
     references: [persons.id],
     relationName: "manager",
   }),
+  // Note: user relation is defined via users.personId -> persons.id
+  // This is accessed through a join query, not a direct relation here
+  // to avoid circular import issues
 }))
 
 /**

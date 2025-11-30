@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from "react"
-import { Plus, Shield, UserCog, Trash2, Loader2 } from "lucide-react"
+import { Plus, Shield, UserCog, Trash2, Loader2, Search, Building2, User } from "lucide-react"
 
 import { PageShell } from "@/components/primitives/page-shell"
 import { DataTableAdvanced } from "@/components/primitives/data-table-advanced"
@@ -40,6 +40,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { 
   useUsersList, 
@@ -53,9 +66,12 @@ import {
   useUserRoles,
   useUpdateUserRoles,
 } from "@/lib/api/rbac"
+import { useEntraIntegration, useSearchEntraUsers, type EntraUser } from "@/lib/api/integrations"
+import { usePeopleList } from "@/lib/api/people"
 import { userStatusValues } from "@/lib/db/schema"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
+import { useDebounce } from "@/lib/hooks/use-debounce"
 
 // Store handlers in a ref-like pattern to avoid re-render issues
 const userActionsStore = {
@@ -97,6 +113,8 @@ export default function UsersPage() {
 
   const { data: users = [], isLoading: usersLoading } = useUsersList()
   const { data: roles = [], isLoading: rolesLoading } = useRoles()
+  const { data: people = [] } = usePeopleList()
+  const { data: entraIntegration } = useEntraIntegration()
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
   const deleteUser = useDeleteUser()
@@ -107,12 +125,33 @@ export default function UsersPage() {
   const [editUserId, setEditUserId] = useState<string | null>(null)
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
 
+  // Entra user search state
+  const [entraSearchOpen, setEntraSearchOpen] = useState(false)
+  const [entraSearchQuery, setEntraSearchQuery] = useState("")
+  const debouncedEntraSearch = useDebounce(entraSearchQuery, 300)
+  const [selectedEntraUser, setSelectedEntraUser] = useState<EntraUser | null>(null)
+
+  // Check if Entra SSO is enabled
+  const isEntraEnabled = entraIntegration?.status === "connected" && entraIntegration?.ssoEnabled
+
+  // Search Entra users
+  const { data: entraUsers = [], isLoading: entraUsersLoading } = useSearchEntraUsers(
+    debouncedEntraSearch,
+    isEntraEnabled && sheetMode === "create" && debouncedEntraSearch.length >= 1
+  )
+
+  // Get people that are not already linked to a user (for linking)
+  const availablePeople = useMemo(() => {
+    return people.filter(p => !p.hasLinkedUser)
+  }, [people])
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     status: "invited" as typeof userStatusValues[number],
     roleIds: [] as string[],
+    personId: "" as string,
   })
 
   // Get user roles for editing (only fetch when we have an ID)
@@ -136,6 +175,7 @@ export default function UsersPage() {
       email: user.email,
       status: user.status,
       roleIds: [], // Will be populated by useEffect when roles load
+      personId: user.personId || "",
     })
     setEditUserId(user.id)
     setSheetMode("edit")
@@ -208,6 +248,32 @@ export default function UsersPage() {
         },
       },
       {
+        id: "links",
+        header: "Links",
+        cell: ({ row }) => {
+          const user = row.original
+          return (
+            <div className="flex items-center gap-1.5">
+              {user.hasLinkedPerson && (
+                <Badge variant="outline" className="gap-1 text-xs px-1.5 py-0.5">
+                  <User className="h-3 w-3" />
+                  Person
+                </Badge>
+              )}
+              {user.hasEntraLink && (
+                <Badge className="gap-1 text-xs px-1.5 py-0.5 bg-[#0078D4]/10 text-[#0078D4] dark:bg-[#0078D4]/20 dark:text-[#4DA6FF] border-0">
+                  <Building2 className="h-3 w-3" />
+                  Entra
+                </Badge>
+              )}
+              {!user.hasLinkedPerson && !user.hasEntraLink && (
+                <span className="text-muted-foreground text-xs">—</span>
+              )}
+            </div>
+          )
+        },
+      },
+      {
         accessorKey: "lastLoginAt",
         header: "Last Login",
         cell: ({ row }) => {
@@ -268,10 +334,33 @@ export default function UsersPage() {
       email: "",
       status: "invited",
       roleIds: [],
+      personId: "",
     })
     setEditUserId(null)
+    setSelectedEntraUser(null)
+    setEntraSearchQuery("")
     setSheetMode("create")
     setSheetOpen(true)
+  }
+
+  const handleSelectEntraUser = (entraUser: EntraUser) => {
+    setSelectedEntraUser(entraUser)
+    setFormData((prev) => ({
+      ...prev,
+      name: entraUser.name,
+      email: entraUser.email,
+    }))
+    setEntraSearchOpen(false)
+    setEntraSearchQuery("")
+  }
+
+  const handleClearEntraUser = () => {
+    setSelectedEntraUser(null)
+    setFormData((prev) => ({
+      ...prev,
+      name: "",
+      email: "",
+    }))
   }
 
   const handleRoleToggle = (roleId: string) => {
@@ -290,6 +379,10 @@ export default function UsersPage() {
         name: formData.name,
         email: formData.email,
         role: "User", // Legacy field, will be replaced by roles
+        // Include Entra ID if user was selected from Entra
+        entraId: selectedEntraUser?.id || null,
+        // Include person link if selected
+        personId: formData.personId || null,
       })
       
       // Assign roles to the new user
@@ -300,10 +393,11 @@ export default function UsersPage() {
         })
       }
       
-      toast.success("User invited successfully")
+      toast.success("User added successfully")
       setSheetOpen(false)
+      setSelectedEntraUser(null)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to invite user")
+      toast.error(error instanceof Error ? error.message : "Failed to add user")
     }
   }
 
@@ -317,6 +411,7 @@ export default function UsersPage() {
           name: formData.name,
           email: formData.email,
           status: formData.status,
+          personId: formData.personId || null,
         },
       })
       
@@ -365,7 +460,7 @@ export default function UsersPage() {
         <Protected module="settings.users" action="create">
           <Button onClick={handleOpenCreate}>
             <Plus className="mr-2 h-4 w-4" />
-            Invite User
+            Add User
           </Button>
         </Protected>
       }
@@ -441,7 +536,7 @@ export default function UsersPage() {
                   <Protected module="settings.users" action="create">
                     <Button onClick={handleOpenCreate}>
                       <Plus className="mr-2 h-4 w-4" />
-                      Invite your first user
+                      Add your first user
                     </Button>
                   </Protected>
                 </div>
@@ -455,21 +550,134 @@ export default function UsersPage() {
           if (!open) {
             setSheetOpen(false)
             setEditUserId(null)
+            setSelectedEntraUser(null)
           }
         }}>
           <SheetContent className="overflow-y-auto flex flex-col">
             <SheetHeader>
               <SheetTitle>
-                {sheetMode === "edit" ? "Edit User" : "Invite User"}
+                {sheetMode === "edit" ? "Edit User" : "Add User"}
               </SheetTitle>
               <SheetDescription>
                 {sheetMode === "edit"
                   ? "Update user details and role assignments."
-                  : "Send an invitation to a new team member."}
+                  : isEntraEnabled 
+                    ? "Add a user from Microsoft Entra ID or enter details manually."
+                    : "Add a new team member to the system."}
               </SheetDescription>
             </SheetHeader>
 
             <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+              {/* Entra User Search (only in create mode when SSO is enabled) */}
+              {sheetMode === "create" && isEntraEnabled && (
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-[#0078D4]" />
+                    Import from Microsoft Entra ID
+                  </Label>
+                  
+                  {selectedEntraUser ? (
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="text-sm bg-[#0078D4]/10 text-[#0078D4]">
+                          {selectedEntraUser.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{selectedEntraUser.name}</p>
+                        <p className="text-sm text-muted-foreground truncate">{selectedEntraUser.email}</p>
+                        {selectedEntraUser.jobTitle && (
+                          <p className="text-xs text-muted-foreground truncate">{selectedEntraUser.jobTitle}</p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearEntraUser}
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  ) : (
+                    <Popover open={entraSearchOpen} onOpenChange={setEntraSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={entraSearchOpen}
+                          className="w-full justify-start text-muted-foreground"
+                        >
+                          <Search className="mr-2 h-4 w-4" />
+                          Search Entra ID users...
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[400px] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Search by name or email..."
+                            value={entraSearchQuery}
+                            onValueChange={setEntraSearchQuery}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              {entraUsersLoading ? (
+                                <div className="flex items-center justify-center py-6">
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  Searching...
+                                </div>
+                              ) : entraSearchQuery.length < 1 ? (
+                                "Type to search Entra ID users..."
+                              ) : (
+                                "No users found in Entra ID."
+                              )}
+                            </CommandEmpty>
+                            {entraUsers.length > 0 && (
+                              <CommandGroup heading="Entra ID Users">
+                                {entraUsers.map((user) => (
+                                  <CommandItem
+                                    key={user.id}
+                                    value={user.id}
+                                    onSelect={() => handleSelectEntraUser(user)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Avatar className="h-8 w-8 mr-3">
+                                      <AvatarFallback className="text-xs bg-[#0078D4]/10 text-[#0078D4]">
+                                        {user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium truncate">{user.name}</p>
+                                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                                    </div>
+                                    {user.jobTitle && (
+                                      <Badge variant="secondary" className="ml-2 text-xs">
+                                        {user.jobTitle}
+                                      </Badge>
+                                    )}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Or enter manually
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* User Details */}
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -479,6 +687,7 @@ export default function UsersPage() {
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="Enter full name"
+                    disabled={!!selectedEntraUser}
                   />
                 </div>
 
@@ -490,6 +699,7 @@ export default function UsersPage() {
                     value={formData.email}
                     onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                     placeholder="user@example.com"
+                    disabled={!!selectedEntraUser}
                   />
                 </div>
 
@@ -503,7 +713,7 @@ export default function UsersPage() {
                         status: value as typeof userStatusValues[number] 
                       }))}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -516,6 +726,36 @@ export default function UsersPage() {
                     </Select>
                   </div>
                 )}
+
+                {/* Link to Person */}
+                <div className="space-y-2">
+                  <Label htmlFor="personId">Link to Person (Directory)</Label>
+                  <Select
+                    value={formData.personId || "none"}
+                    onValueChange={(value) => setFormData((prev) => ({ 
+                      ...prev, 
+                      personId: value === "none" ? "" : value 
+                    }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a person to link..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No link</SelectItem>
+                      {(formData.personId ? people : availablePeople).map((person) => (
+                        <SelectItem key={person.id} value={person.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{person.name}</span>
+                            <span className="text-xs text-muted-foreground">({person.email})</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Link this user account to an employee in the People Directory.
+                  </p>
+                </div>
               </div>
 
               {/* Role Assignment */}
@@ -587,7 +827,7 @@ export default function UsersPage() {
                 {(createUser.isPending || updateUser.isPending || updateUserRoles.isPending) && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
-                {sheetMode === "edit" ? "Update User" : "Send Invitation"}
+                {sheetMode === "edit" ? "Update User" : "Add User"}
               </Button>
             </SheetFooter>
           </SheetContent>
