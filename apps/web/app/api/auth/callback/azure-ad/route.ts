@@ -209,7 +209,7 @@ export async function GET(request: NextRequest) {
 
     // Create redirect response
     const redirectResponse = NextResponse.redirect(new URL(returnTo, appUrl))
-    
+
     // Set session cookie directly on the response
     // This ensures the cookie is set before the redirect happens
     redirectResponse.cookies.set("idaraos_session", token, {
