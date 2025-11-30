@@ -61,6 +61,12 @@ export const permissions: Record<string, Permission> = {
   },
   
   // Settings module
+  "settings.organization": {
+    resource: "settings.organization",
+    actions: ["read", "write"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
   "settings.users": {
     resource: "settings.users",
     actions: ["read", "write"],

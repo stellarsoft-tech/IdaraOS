@@ -38,10 +38,8 @@ export function PageShell({
         {action && <div className="flex items-center gap-2">{action}</div>}
       </div>
       
-      {/* Content */}
-      <div className="rounded-xl border bg-card">
-        <div className="p-6">{children}</div>
-      </div>
+      {/* Content - children manage their own spacing */}
+      <div className="space-y-6">{children}</div>
     </div>
   )
 }

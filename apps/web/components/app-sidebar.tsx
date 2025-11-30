@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 
 import { NavUser } from "@/components/nav-user"
+import { useUser } from "@/lib/rbac"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Sidebar,
@@ -33,6 +34,7 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const navigationData = [
   {
@@ -134,6 +136,7 @@ const navigationData = [
     items: [
       { title: "Organization", url: "/settings" },
       { title: "Users & Access", url: "/settings/users" },
+      { title: "Roles & Permissions", url: "/settings/roles" },
       { title: "Integrations", url: "/settings/integrations" },
       { title: "Audit Log", url: "/settings/audit-log" },
       { title: "Branding", url: "/settings/branding" },
@@ -141,14 +144,9 @@ const navigationData = [
   },
 ]
 
-const user = {
-  name: "Hamza Abdullah",
-  email: "hamza@idaraos.com",
-  avatar: "/diverse-avatars.png",
-}
-
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
+  const { user, isLoading } = useUser()
 
   const isActive = (url: string) => {
     if (url === "/") return pathname === "/"
@@ -235,7 +233,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <NavUser user={user} />
+        {isLoading ? (
+          <div className="flex items-center gap-2 p-2">
+            <Skeleton className="h-8 w-8 rounded-lg" />
+            <div className="flex-1">
+              <Skeleton className="h-4 w-24 mb-1" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </div>
+        ) : user ? (
+          <NavUser user={{ name: user.name, email: user.email, avatar: user.avatar || null }} />
+        ) : null}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

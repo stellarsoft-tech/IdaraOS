@@ -1,0 +1,141 @@
+/**
+ * Users API Routes
+ * GET /api/settings/users - List all users
+ * POST /api/settings/users - Create/invite a user
+ */
+
+import { NextRequest, NextResponse } from "next/server"
+import { eq, asc } from "drizzle-orm"
+import { db } from "@/lib/db"
+import { users, organizations, userRoleValues } from "@/lib/db/schema"
+import { z } from "zod"
+
+// TODO: Get orgId from authenticated session
+const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+
+// Ensure demo org exists
+async function ensureOrgExists() {
+  const [existingOrg] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, DEMO_ORG_ID))
+    .limit(1)
+
+  if (!existingOrg) {
+    await db.insert(organizations).values({
+      id: DEMO_ORG_ID,
+      name: "My Organization",
+      slug: "my-org",
+      timezone: "UTC",
+      dateFormat: "YYYY-MM-DD",
+      currency: "USD",
+    })
+  }
+}
+
+// Create user schema
+const CreateUserSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  role: z.enum(userRoleValues),
+  personId: z.string().uuid().optional().nullable(),
+})
+
+// Transform DB record to API response
+function toApiResponse(record: typeof users.$inferSelect) {
+  return {
+    id: record.id,
+    orgId: record.orgId,
+    personId: record.personId,
+    email: record.email,
+    name: record.name,
+    avatar: record.avatar,
+    role: record.role,
+    status: record.status,
+    lastLoginAt: record.lastLoginAt?.toISOString(),
+    invitedAt: record.invitedAt?.toISOString(),
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+  }
+}
+
+/**
+ * GET /api/settings/users
+ */
+export async function GET() {
+  try {
+    const results = await db
+      .select()
+      .from(users)
+      .where(eq(users.orgId, DEMO_ORG_ID))
+      .orderBy(asc(users.name))
+
+    return NextResponse.json(results.map(toApiResponse))
+  } catch (error) {
+    console.error("Error fetching users:", error)
+    return NextResponse.json(
+      { error: "Failed to fetch users" },
+      { status: 500 }
+    )
+  }
+}
+
+/**
+ * POST /api/settings/users
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+
+    // Validate
+    const parseResult = CreateUserSchema.safeParse(body)
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: "Invalid request body", details: parseResult.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    const data = parseResult.data
+
+    // Ensure org exists
+    await ensureOrgExists()
+
+    // Check if email already exists
+    const existing = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, data.email))
+      .limit(1)
+
+    if (existing.length > 0) {
+      return NextResponse.json(
+        { error: "A user with this email already exists" },
+        { status: 409 }
+      )
+    }
+
+    // Create user
+    const [record] = await db
+      .insert(users)
+      .values({
+        orgId: DEMO_ORG_ID,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        personId: data.personId || null,
+        status: "invited",
+        invitedAt: new Date(),
+      })
+      .returning()
+
+    return NextResponse.json(toApiResponse(record), { status: 201 })
+  } catch (error) {
+    console.error("Error creating user:", error)
+    return NextResponse.json(
+      { error: "Failed to create user" },
+      { status: 500 }
+    )
+  }
+}
+

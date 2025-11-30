@@ -1,12 +1,26 @@
 "use client"
 
 import * as React from "react"
+import dynamic from "next/dynamic"
 
-import { AppSidebar } from "@/components/app-sidebar"
 import { ChatsyDrawer } from "@/components/chatsy-drawer"
-import { CommandPalette } from "@/components/command-palette"
-import { TopBar } from "@/components/top-bar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+
+// Dynamic imports to avoid hydration mismatch from Radix UI dynamic IDs
+const AppSidebar = dynamic(
+  () => import("@/components/app-sidebar").then((mod) => mod.AppSidebar),
+  { ssr: false }
+)
+
+const TopBar = dynamic(
+  () => import("@/components/top-bar").then((mod) => mod.TopBar),
+  { ssr: false }
+)
+
+const CommandPalette = dynamic(
+  () => import("@/components/command-palette").then((mod) => mod.CommandPalette),
+  { ssr: false }
+)
 
 export default function DashboardLayout({
   children,

@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Protected } from "@/components/rbac/protected"
+import { Protected } from "@/components/primitives/protected"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -136,13 +136,13 @@ export default function PersonDetailPage() {
       description={`${person.role} • ${person.team || "No team"}`}
       action={
         <div className="flex gap-2">
-          <Protected resource="people.person" action="write">
+          <Protected module="people.directory" action="edit">
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Button>
           </Protected>
-          <Protected resource="people.person" action="delete">
+          <Protected module="people.directory" action="delete">
             <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
