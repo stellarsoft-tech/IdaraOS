@@ -1,0 +1,160 @@
+# IdaraOS - Cursor AI Rules
+
+## Project Context
+
+This is IdaraOS, a spec-driven development system where JSON specifications generate types, forms, tables, and database schemas.
+
+## Core Principles
+
+1. **Spec-First**: Every module starts with `spec.json` in `specs/modules/`
+2. **Generate, Don't Write**: Use generators for types, columns, forms, SQL
+3. **Primitives Over Custom**: Use DataTable, FormBuilder, PageShell, ResourceLayout, FormDrawer
+4. **RBAC Always**: Check permissions with `usePermission()` and `<Protected>`
+5. **No New Dependencies**: Unless approved in `docs/DECISIONS.md`
+
+## File Structure
+
+- `specs/modules/<area>/<entity>/spec.json` - Module specifications
+- `apps/web/lib/generated/` - Generated code (DO NOT EDIT)
+- `apps/web/components/primitives/` - Reusable components
+- `apps/web/lib/api/` - Data fetching utilities
+- `apps/web/lib/rbac/` - Permission system
+- `apps/web/lib/navigation/` - Route config
+
+## Development Workflow
+
+### When Adding a Module:
+
+1. Create `specs/modules/<area>/<entity>/spec.json`
+2. Run `pnpm generate <spec-path>`
+3. Create list page using generated columns + DataTable
+4. Create detail page using ResourceLayout
+5. Add FormDrawer for create/edit using generated form-config
+6. Add to navigation in `lib/navigation/routes.ts`
+7. Add permissions to `lib/rbac/permissions.ts`
+8. Write E2E tests in `tests/e2e/`
+
+### When Editing Code:
+
+- ✅ Edit spec.json, regenerate
+- ❌ Don't edit generated files directly
+- ✅ Use TypeScript strict mode
+- ✅ Use Tailwind for styling
+- ✅ Use semantic HTML
+- ✅ Add permission checks
+- ✅ Add loading states
+
+## Using Cursor Prompts
+
+Reference these systematic prompts:
+
+- `docs/prompts/01-architect.md` - Plan before coding
+- `docs/prompts/02-generate-types.md` - Generate types
+- `docs/prompts/03-generate-sql.md` - Generate database schema
+- `docs/prompts/04-generate-columns.md` - Generate table columns
+- `docs/prompts/05-generate-form.md` - Generate forms
+- `docs/prompts/06-generate-routes.md` - Scaffold pages
+- `docs/prompts/07-generate-tests.md` - Generate tests
+- `docs/prompts/08-critique.md` - Review code
+
+## Key Files to Reference
+
+- `docs/DECISIONS.md` - Technical decisions (frozen)
+- `docs/CONTRIBUTING.md` - Development workflow
+- `specs/README.md` - Spec schema documentation
+- `scripts/README.md` - Generator usage
+
+## Code Style
+
+- Use "use client" directive for interactive components
+- Prefer arrow functions for components
+- Use const, avoid let
+- Destructure props
+- Add JSDoc for exported functions
+- Use descriptive variable names
+
+## Data Fetching
+
+- Use React Query hooks from `lib/api/hooks.ts`
+- Use `useListQuery`, `useDetailQuery`, `useCreateMutation`, etc.
+- Always handle loading and error states
+- Show toast notifications on success/error
+
+## Forms
+
+- Use FormBuilder with Zod schema
+- Use generated form-config from specs
+- Add field-level validation errors
+- Disable submit during submission
+- Show success toast on completion
+
+## Tables
+
+- Use DataTable primitive
+- Server-mode for 50+ rows
+- Enable column visibility, filters, sorting
+- Add CSV export when relevant
+- Use generated columns from specs
+
+## Security
+
+- Check permissions with `usePermission(resource, action)`
+- Wrap protected UI in `<Protected>` component
+- Never trust client-only checks
+- Always validate server-side
+- Scope all queries by org_id
+
+## Accessibility
+
+- Use semantic HTML elements
+- Add ARIA labels where needed
+- Support keyboard navigation
+- Ensure focus management in modals
+- Test color contrast
+
+## Testing
+
+- Write E2E tests for critical flows
+- Test validation edge cases
+- Test permission checks
+- Use data-testid for stable selectors
+
+## Don'ts
+
+- ❌ Don't add new npm packages without approval
+- ❌ Don't edit generated files
+- ❌ Don't use inline styles
+- ❌ Don't skip permission checks
+- ❌ Don't use `any` types
+- ❌ Don't create excessive documentation
+- ❌ Don't hardcode data (use API calls)
+
+## Commands
+
+```bash
+# Generate code from spec
+pnpm generate specs/modules/<area>/<entity>/spec.json
+
+# Run dev server
+pnpm dev
+
+# Run tests
+pnpm test        # Vitest
+pnpm test:e2e    # Playwright
+
+# Lint
+pnpm lint
+```
+
+## When Stuck
+
+1. Check `docs/DECISIONS.md` for technical guidance
+2. Check `specs/README.md` for spec schema
+3. Look at reference modules: people/person, security/isms/risk
+4. Use Cursor prompts in `docs/prompts/`
+5. Review `docs/CONTRIBUTING.md` for workflow
+
+---
+
+**Remember**: Spec first, generate second, customize last. Keep it fast, consistent, and AI-friendly.
+
