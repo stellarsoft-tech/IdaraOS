@@ -120,7 +120,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         <CommandEmpty>
           <div className="flex flex-col items-center gap-2 py-6">
             <Search className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No results found for "{search}"</p>
+            <p className="text-sm text-muted-foreground">No results found for &quot;{search}&quot;</p>
           </div>
         </CommandEmpty>
 
