@@ -75,7 +75,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run unit tests
-        run: pnpm --filter web test --run
+        run: pnpm --filter web exec vitest --run
 
   # ===========================================================================
   # E2E Tests (optional, runs on PRs to main)
