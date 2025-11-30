@@ -7,8 +7,9 @@
 
 FROM node:22-alpine
 
-# Install pnpm globally
+# Install pnpm globally and expect for handling interactive prompts
 RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN apk add --no-cache expect
 
 WORKDIR /app
 
@@ -44,7 +45,21 @@ cat drizzle.config.ts; \
 echo ''; \
 echo 'Step 1: Pushing database schema...'; \
 echo '------------------------------------------'; \
-npx drizzle-kit push --force 2>&1; \
+cat > /tmp/drizzle-push.exp << 'EXPSCRIPT'
+#!/usr/bin/expect -f
+set timeout 300
+spawn npx drizzle-kit push --force
+expect {
+  \"Do you want to truncate\" { send \"n\\r\"; exp_continue }
+  \"Yes, I want to truncate\" { send \"n\\r\"; exp_continue }
+  \"No, add the constraint\" { send \"\\r\"; exp_continue }
+  -re \".*No.*\" { send \"\\r\"; exp_continue }
+  eof { exit 0 }
+  timeout { exit 1 }
+}
+EXPSCRIPT
+chmod +x /tmp/drizzle-push.exp; \
+expect /tmp/drizzle-push.exp; \
 echo '✅ Database schema pushed successfully'; \
 echo ''; \
 echo 'Step 2: Seeding database...'; \
