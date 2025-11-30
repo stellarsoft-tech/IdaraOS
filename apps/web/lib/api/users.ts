@@ -22,6 +22,13 @@ export interface UserFilters {
   search?: string
 }
 
+// Assigned role info from RBAC system
+export interface AssignedRole {
+  roleId: string
+  roleName: string
+  roleColor: string | null
+}
+
 // API User type
 export interface ApiUser {
   id: string
@@ -30,7 +37,8 @@ export interface ApiUser {
   email: string
   name: string
   avatar: string | null
-  role: UserRole
+  role: UserRole // Legacy field
+  roles: AssignedRole[] // Actual RBAC roles
   status: UserStatus
   lastLoginAt: string | null
   invitedAt: string | null

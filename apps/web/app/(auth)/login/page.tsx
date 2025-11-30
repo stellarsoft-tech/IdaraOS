@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Building2, Loader2, Eye, EyeOff } from "lucide-react"
@@ -17,6 +17,19 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [appName, setAppName] = useState("IdaraOS")
+
+  // Fetch public branding
+  useEffect(() => {
+    fetch("/api/public/branding")
+      .then(res => res.json())
+      .then(data => {
+        if (data.appName) setAppName(data.appName)
+      })
+      .catch(() => {
+        // Keep default on error
+      })
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,7 +69,7 @@ export default function LoginPage() {
             <Building2 className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">IdaraOS</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{appName}</h1>
             <p className="text-sm text-muted-foreground">Company OS</p>
           </div>
         </div>

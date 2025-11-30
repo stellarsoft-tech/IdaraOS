@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { users, organizations, userRoleValues } from "@/lib/db/schema"
+import { users, organizations, userRoleValues, userRoles, roles } from "@/lib/db/schema"
 import { z } from "zod"
 
 // TODO: Get orgId from authenticated session
@@ -42,7 +42,10 @@ const CreateUserSchema = z.object({
 })
 
 // Transform DB record to API response
-function toApiResponse(record: typeof users.$inferSelect) {
+function toApiResponse(
+  record: typeof users.$inferSelect,
+  userRolesData: { roleId: string; roleName: string; roleColor: string | null }[]
+) {
   return {
     id: record.id,
     orgId: record.orgId,
@@ -50,7 +53,8 @@ function toApiResponse(record: typeof users.$inferSelect) {
     email: record.email,
     name: record.name,
     avatar: record.avatar,
-    role: record.role,
+    role: record.role, // Legacy field
+    roles: userRolesData, // Actual assigned roles from RBAC
     status: record.status,
     lastLoginAt: record.lastLoginAt?.toISOString(),
     invitedAt: record.invitedAt?.toISOString(),
@@ -64,13 +68,46 @@ function toApiResponse(record: typeof users.$inferSelect) {
  */
 export async function GET() {
   try {
-    const results = await db
+    // Get all users
+    const usersData = await db
       .select()
       .from(users)
       .where(eq(users.orgId, DEMO_ORG_ID))
       .orderBy(asc(users.name))
 
-    return NextResponse.json(results.map(toApiResponse))
+    // Get all role assignments for these users
+    const userIds = usersData.map(u => u.id)
+    
+    const roleAssignments = userIds.length > 0
+      ? await db
+          .select({
+            userId: userRoles.userId,
+            roleId: roles.id,
+            roleName: roles.name,
+            roleColor: roles.color,
+          })
+          .from(userRoles)
+          .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      : []
+
+    // Group role assignments by user
+    const rolesByUserId = new Map<string, { roleId: string; roleName: string; roleColor: string | null }[]>()
+    for (const assignment of roleAssignments) {
+      const existing = rolesByUserId.get(assignment.userId) || []
+      existing.push({
+        roleId: assignment.roleId,
+        roleName: assignment.roleName,
+        roleColor: assignment.roleColor,
+      })
+      rolesByUserId.set(assignment.userId, existing)
+    }
+
+    // Build response
+    const response = usersData.map(user => 
+      toApiResponse(user, rolesByUserId.get(user.id) || [])
+    )
+
+    return NextResponse.json(response)
   } catch (error) {
     console.error("Error fetching users:", error)
     return NextResponse.json(

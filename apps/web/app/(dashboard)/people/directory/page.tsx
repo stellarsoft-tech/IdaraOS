@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
-import { useCanAccess } from "@/lib/rbac/context"
+import { useCanAccess, usePermission } from "@/lib/rbac/context"
 
 // Generated from spec
 import { columns as baseColumns } from "@/lib/generated/people/person/columns"
@@ -43,6 +43,9 @@ const editFields = getFormFields("edit")
 
 export default function DirectoryPage() {
   const canAccess = useCanAccess("people.directory")
+  const canEdit = usePermission("people.directory", "edit")
+  const canDelete = usePermission("people.directory", "delete")
+  const canCreate = usePermission("people.directory", "create")
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -60,11 +63,11 @@ export default function DirectoryPage() {
     ...baseColumns,
     {
       id: "actions",
-      header: "",
+      header: "Actions",
       cell: ({ row }: { row: { original: Person } }) => {
         const person = row.original
         return (
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
@@ -76,22 +79,26 @@ export default function DirectoryPage() {
                 <span className="sr-only">Actions</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={() => router.push(`/people/directory/${person.slug}`)}>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => router.push(`/people/directory/${person.slug}`)}>
                 View details
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => { setSelectedPerson(person); setEditOpen(true); }}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => { setSelectedPerson(person); setDeleteOpen(true); }}
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
+              {(canEdit || canDelete) && <DropdownMenuSeparator />}
+              {canEdit && (
+                <DropdownMenuItem onSelect={() => { setSelectedPerson(person); setEditOpen(true); }}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+              )}
+              {canDelete && (
+                <DropdownMenuItem 
+                  onSelect={() => { setSelectedPerson(person); setDeleteOpen(true); }}
+                  className="text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )

@@ -23,6 +23,11 @@ export type UpdateOrganization = Partial<{
   name: string
   domain: string | null
   logo: string | null
+  appName: string
+  // Social & professional links
+  linkedIn: string | null
+  twitter: string | null
+  youtube: string | null
   timezone: string
   dateFormat: string
   currency: string
