@@ -3,9 +3,9 @@
  * This should match the permissions defined in spec.json files
  */
 
-import type { Role, Permission } from "./types"
+import type { RoleType, LegacyPermission } from "./types"
 
-export const permissions: Record<string, Permission> = {
+export const permissions: Record<string, LegacyPermission> = {
   // People module
   "people.person": {
     resource: "people.person",
@@ -91,10 +91,15 @@ export const permissions: Record<string, Permission> = {
  * Check if role has permission for action on resource
  */
 export function hasPermission(
-  role: Role,
+  role: RoleType | undefined,
   resource: string,
   action: string = "read"
 ): boolean {
+  // No role = no permission
+  if (!role) {
+    return false
+  }
+  
   // Owner has all permissions
   if (role === "Owner") {
     return true
@@ -108,17 +113,20 @@ export function hasPermission(
     return false
   }
   
-  return permission.roles.includes(role) && permission.actions.includes(action as any)
+  return permission.roles.includes(role) && permission.actions.includes(action)
 }
 
 /**
  * Get all permissions for a role
  */
-export function getRolePermissions(role: Role): Permission[] {
+export function getRolePermissions(role: RoleType | undefined): LegacyPermission[] {
+  if (!role) {
+    return []
+  }
+  
   if (role === "Owner") {
     return Object.values(permissions)
   }
   
   return Object.values(permissions).filter((p) => p.roles.includes(role))
 }
-

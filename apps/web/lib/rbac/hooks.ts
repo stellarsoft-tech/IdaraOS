@@ -1,72 +1,86 @@
 /**
  * RBAC hooks for permission checking
+ * 
+ * These hooks use the permission system from the RBAC context.
+ * For legacy role-based checks, use the context's hasPermission directly.
  */
 
 import { useUser } from "./context"
-import { hasPermission as checkPermission } from "./permissions"
-import type { Role } from "./types"
 
 /**
  * Hook to check if current user has permission
  * 
  * @example
  * const canEdit = usePermission("security.risk", "write")
- * const canView = usePermission("people.person") // defaults to "read"
+ * const canView = usePermission("people.person") // defaults to "view"
  */
-export function usePermission(resource: string, action: string = "read"): boolean {
-  const { user, isLoading } = useUser()
+export function usePermission(module: string, action: string = "view"): boolean {
+  const { hasPermission, isLoading } = useUser()
   
-  if (isLoading || !user) {
+  if (isLoading) {
     return false
   }
   
-  return checkPermission(user.role, resource, action)
+  return hasPermission(module, action)
 }
 
 /**
- * Hook to check if user has specific role
+ * Hook to check if user has any of the specified permissions on a module
  * 
  * @example
- * const isAdmin = useRole("Admin")
- * const isOwner = useRole("Owner")
+ * const canManageRisks = useAnyPermission("security.risk", ["create", "edit", "delete"])
  */
-export function useRole(role: Role): boolean {
-  const { user, isLoading } = useUser()
+export function useAnyPermission(module: string, actions: string[]): boolean {
+  const { hasAnyPermission, isLoading } = useUser()
   
-  if (isLoading || !user) {
+  if (isLoading) {
     return false
   }
   
-  return user.role === role
+  return hasAnyPermission(module, actions)
 }
 
 /**
- * Hook to check if user has any of the specified roles
+ * Hook to check if user has all specified permissions on a module
  * 
  * @example
- * const canManageUsers = useRoles(["Admin", "Owner"])
+ * const canFullyManage = useAllPermissions("security.risk", ["view", "create", "edit", "delete"])
  */
-export function useRoles(roles: Role[]): boolean {
-  const { user, isLoading } = useUser()
+export function useAllPermissions(module: string, actions: string[]): boolean {
+  const { hasAllPermissions, isLoading } = useUser()
   
-  if (isLoading || !user) {
+  if (isLoading) {
     return false
   }
   
-  return roles.includes(user.role)
+  return hasAllPermissions(module, actions)
+}
+
+/**
+ * Hook to check if user can access a module (has view permission)
+ * 
+ * @example
+ * const canAccessSettings = useCanAccess("settings.users")
+ */
+export function useCanAccess(module: string): boolean {
+  const { canAccess, isLoading } = useUser()
+  
+  if (isLoading) {
+    return false
+  }
+  
+  return canAccess(module)
 }
 
 /**
  * Hook to get all permissions for current user
  */
 export function useUserPermissions() {
-  const { user, isLoading } = useUser()
+  const { permissions, isLoading } = useUser()
   
-  if (isLoading || !user) {
-    return []
+  if (isLoading || !permissions) {
+    return null
   }
   
-  // TODO: Fetch from API or compute from role
-  return []
+  return permissions
 }
-

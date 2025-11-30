@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { integrations } from "@/lib/db/schema"
+import { integrations, type IntegrationProvider } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import crypto from "crypto"
 
@@ -34,7 +34,7 @@ export async function POST(
       .where(
         and(
           eq(integrations.orgId, DEMO_ORG_ID),
-          eq(integrations.provider, provider)
+          eq(integrations.provider, provider as IntegrationProvider)
         )
       )
       .limit(1)

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { MoreHorizontal, Pencil, Plus, Trash2, Users, UserCheck, UserPlus, Building2, KeyRound, Link2, Unlink } from "lucide-react"
 import { toast } from "sonner"
+import type { ColumnDef } from "@tanstack/react-table"
 
 import { DataTableAdvanced as DataTable } from "@/components/primitives/data-table-advanced"
 import { PageShell } from "@/components/primitives/page-shell"
@@ -150,12 +151,13 @@ export default function DirectoryPage() {
   }, [people])
   
   // Add links and actions columns
-  const columns = [
-    ...baseColumns,
+  const columns: ColumnDef<Person>[] = [
+    ...(baseColumns as ColumnDef<Person>[]),
     {
       id: "links",
       header: "Links",
-      cell: ({ row }: { row: { original: Person } }) => {
+      accessorFn: () => null,
+      cell: ({ row }) => {
         const person = row.original
         return (
           <div className="flex items-center gap-1.5">
@@ -184,7 +186,8 @@ export default function DirectoryPage() {
     {
       id: "actions",
       header: "Actions",
-      cell: ({ row }: { row: { original: Person } }) => {
+      accessorFn: () => null,
+      cell: ({ row }) => {
         const person = row.original
         return (
           <DropdownMenu modal={false}>

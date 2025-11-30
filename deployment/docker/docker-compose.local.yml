@@ -1,0 +1,80 @@
+# =============================================================================
+# IdaraOS - Docker Compose for Local Development
+# =============================================================================
+# This file provides a complete local development environment with:
+# - PostgreSQL database
+# - Database migrations and seeding
+# - The IdaraOS web application
+# =============================================================================
+# Usage:
+#   cd deployment/docker
+#   docker-compose -f docker-compose.local.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: idaraos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: idaraos
+      POSTGRES_PASSWORD: localdevpassword
+      POSTGRES_DB: idaraos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idaraos -d idaraos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Database Migrations & Seeding (Init Container)
+  # ---------------------------------------------------------------------------
+  db-init:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.init
+    container_name: idaraos-db-init
+    environment:
+      DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
+    depends_on:
+      db:
+        condition: service_healthy
+    # This container exits after running migrations and seeding
+
+  # ---------------------------------------------------------------------------
+  # IdaraOS Web Application
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile
+    container_name: idaraos-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
+      JWT_SECRET: local-dev-jwt-secret-change-in-prod-32chars
+      ENCRYPTION_KEY: local-dev-encryption-key-32chars!
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local

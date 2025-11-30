@@ -12,6 +12,16 @@
 export type ActionType = "view" | "create" | "edit" | "delete"
 
 /**
+ * Legacy action type for backwards compatibility
+ */
+export type Action = "read" | "write" | ActionType
+
+/**
+ * Legacy role type for permissions.ts backwards compatibility
+ */
+export type RoleType = "Owner" | "Admin" | "HR" | "Security" | "Auditor" | "User"
+
+/**
  * User information stored in context
  */
 export interface User {
@@ -20,6 +30,7 @@ export interface User {
   email: string
   orgId: string
   avatar?: string | null
+  role?: RoleType // Optional role for backwards compatibility
 }
 
 /**
@@ -62,7 +73,7 @@ export interface Module {
 }
 
 /**
- * Permission - a module + action combination
+ * Permission - a module + action combination (database format)
  */
 export interface Permission {
   id: string
@@ -71,4 +82,14 @@ export interface Permission {
   moduleCategory: string
   actionSlug: string
   actionName: string
+}
+
+/**
+ * Legacy permission format for static permissions.ts
+ */
+export interface LegacyPermission {
+  resource: string
+  actions: string[]
+  roles: RoleType[]
+  scope: "org" | "user"
 }

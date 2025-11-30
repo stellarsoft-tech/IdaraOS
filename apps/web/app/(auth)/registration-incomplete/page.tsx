@@ -1,13 +1,14 @@
 "use client"
 
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Building2, UserX, Mail, ArrowLeft } from "lucide-react"
+import { Building2, UserX, Mail, ArrowLeft, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 
-export default function RegistrationIncompletePage() {
+function RegistrationIncompleteContent() {
   const searchParams = useSearchParams()
   const email = searchParams.get("email")
 
@@ -87,3 +88,18 @@ export default function RegistrationIncompletePage() {
   )
 }
 
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  )
+}
+
+export default function RegistrationIncompletePage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <RegistrationIncompleteContent />
+    </Suspense>
+  )
+}

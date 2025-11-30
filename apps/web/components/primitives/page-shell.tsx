@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import type { LucideIcon } from "lucide-react"
 
 /**
  * PageShell props
@@ -12,6 +13,7 @@ export interface PageShellProps {
   children: React.ReactNode
   action?: React.ReactNode
   className?: string
+  icon?: LucideIcon
 }
 
 /**
@@ -24,13 +26,17 @@ export function PageShell({
   children,
   action,
   className,
+  icon: Icon,
 }: PageShellProps) {
   return (
     <div className={cn("space-y-6", className)}>
       {/* Page Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className="h-8 w-8 text-muted-foreground" />}
+            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+          </div>
           {description && (
             <p className="text-muted-foreground">{description}</p>
           )}

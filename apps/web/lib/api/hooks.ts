@@ -12,7 +12,7 @@ import { toast } from "sonner"
 export function useListQuery<T>(
   queryKey: string[],
   endpoint: string,
-  params?: Record<string, any>,
+  params?: Record<string, unknown>,
   options?: Omit<UseQueryOptions<{ data: T[]; total: number }, APIError>, "queryKey" | "queryFn">
 ) {
   return useQuery<{ data: T[]; total: number }, APIError>({
@@ -45,21 +45,19 @@ export function useDetailQuery<T>(
 export function useCreateMutation<TData, TVariables>(
   queryKey: string[],
   endpoint: string,
-  options?: UseMutationOptions<TData, APIError, TVariables>
+  options?: Omit<UseMutationOptions<TData, APIError, TVariables, unknown>, "mutationFn" | "onSuccess" | "onError">
 ) {
   const queryClient = useQueryClient()
   
-  return useMutation<TData, APIError, TVariables>({
+  return useMutation<TData, APIError, TVariables, unknown>({
     mutationFn: (data: TVariables) => api.post(endpoint, data),
-    onSuccess: (data, variables, context) => {
+    onSuccess: () => {
       // Invalidate list queries
       queryClient.invalidateQueries({ queryKey })
       toast.success("Created successfully")
-      options?.onSuccess?.(data, variables, context)
     },
-    onError: (error, variables, context) => {
+    onError: (error) => {
       toast.error(error.message)
-      options?.onError?.(error, variables, context)
     },
     ...options,
   })
@@ -71,22 +69,20 @@ export function useCreateMutation<TData, TVariables>(
 export function useUpdateMutation<TData, TVariables extends { id: string | number }>(
   queryKey: string[],
   endpoint: string,
-  options?: UseMutationOptions<TData, APIError, TVariables>
+  options?: Omit<UseMutationOptions<TData, APIError, TVariables, unknown>, "mutationFn" | "onSuccess" | "onError">
 ) {
   const queryClient = useQueryClient()
   
-  return useMutation<TData, APIError, TVariables>({
+  return useMutation<TData, APIError, TVariables, unknown>({
     mutationFn: ({ id, ...data }: TVariables) => api.patch(`${endpoint}/${id}`, data),
-    onSuccess: (data, variables, context) => {
+    onSuccess: (_data, variables) => {
       // Invalidate both list and detail queries
       queryClient.invalidateQueries({ queryKey })
       queryClient.invalidateQueries({ queryKey: [...queryKey, variables.id] })
       toast.success("Updated successfully")
-      options?.onSuccess?.(data, variables, context)
     },
-    onError: (error, variables, context) => {
+    onError: (error) => {
       toast.error(error.message)
-      options?.onError?.(error, variables, context)
     },
     ...options,
   })
@@ -98,22 +94,19 @@ export function useUpdateMutation<TData, TVariables extends { id: string | numbe
 export function useDeleteMutation(
   queryKey: string[],
   endpoint: string,
-  options?: UseMutationOptions<void, APIError, string | number>
+  options?: Omit<UseMutationOptions<void, APIError, string | number, unknown>, "mutationFn" | "onSuccess" | "onError">
 ) {
   const queryClient = useQueryClient()
   
-  return useMutation<void, APIError, string | number>({
+  return useMutation<void, APIError, string | number, unknown>({
     mutationFn: (id: string | number) => api.delete(`${endpoint}/${id}`),
-    onSuccess: (data, variables, context) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey })
       toast.success("Deleted successfully")
-      options?.onSuccess?.(data, variables, context)
     },
-    onError: (error, variables, context) => {
+    onError: (error) => {
       toast.error(error.message)
-      options?.onError?.(error, variables, context)
     },
     ...options,
   })
 }
-
