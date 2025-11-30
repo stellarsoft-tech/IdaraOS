@@ -110,14 +110,72 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Run database migrations
+        env:
+          CI: "true"
+          FORCE_COLOR: "0"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
+          
           echo "Running database migrations..."
-          pnpm drizzle-kit push --force
+          
+          # Install expect for handling interactive prompts reliably
+          sudo apt-get update && sudo apt-get install -y expect
+          
+          # Create expect script to handle drizzle-kit prompts
+          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
+          #!/usr/bin/expect -f
+          set timeout 300
+          spawn pnpm drizzle-kit push --force
+          expect {
+            "Do you want to truncate" { send "n\r"; exp_continue }
+            "Yes, I want to truncate" { send "n\r"; exp_continue }
+            "No, add the constraint" { send "\r"; exp_continue }
+            -re "❯.*No.*" { send "\r"; exp_continue }
+            eof { exit 0 }
+            timeout { exit 1 }
+          }
+          EXPECT_SCRIPT
+          chmod +x /tmp/drizzle-push.exp
+          
+          # Run the expect script
+          expect /tmp/drizzle-push.exp
+          
           echo "✅ Database migrations completed"
+          
+      - name: Verify database schema
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          
+          echo "Verifying new columns exist..."
+          node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            async function verify() {
+              try {
+                // Check rbac_user_roles.source column
+                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles.source column exists');
+                
+                // Check core_integrations.scim_group_prefix column  
+                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
+                console.log('✅ core_integrations.scim_group_prefix column exists');
+                
+                console.log('✅ All schema changes verified');
+              } catch (err) {
+                console.error('❌ Schema verification failed:', err.message);
+                process.exit(1);
+              } finally {
+                await pool.end();
+              }
+            }
+            verify();
+          "
 
       - name: Check if database is seeded
         id: check-seeded
@@ -313,14 +371,68 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Run database migrations
+        env:
+          CI: "true"
+          FORCE_COLOR: "0"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
+          
           echo "Running database migrations..."
-          pnpm drizzle-kit push --force
+          
+          # Install expect for handling interactive prompts reliably
+          sudo apt-get update && sudo apt-get install -y expect
+          
+          # Create expect script to handle drizzle-kit prompts
+          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
+          #!/usr/bin/expect -f
+          set timeout 300
+          spawn pnpm drizzle-kit push --force
+          expect {
+            "Do you want to truncate" { send "n\r"; exp_continue }
+            "Yes, I want to truncate" { send "n\r"; exp_continue }
+            "No, add the constraint" { send "\r"; exp_continue }
+            -re "❯.*No.*" { send "\r"; exp_continue }
+            eof { exit 0 }
+            timeout { exit 1 }
+          }
+          EXPECT_SCRIPT
+          chmod +x /tmp/drizzle-push.exp
+          
+          # Run the expect script
+          expect /tmp/drizzle-push.exp
+          
           echo "✅ Database migrations completed"
+          
+      - name: Verify database schema
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          
+          echo "Verifying new columns exist..."
+          node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            async function verify() {
+              try {
+                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles.source column exists');
+                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
+                console.log('✅ core_integrations.scim_group_prefix column exists');
+                console.log('✅ All schema changes verified');
+              } catch (err) {
+                console.error('❌ Schema verification failed:', err.message);
+                process.exit(1);
+              } finally {
+                await pool.end();
+              }
+            }
+            verify();
+          "
 
       - name: Check if database is seeded
         id: check-seeded
@@ -508,14 +620,68 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Run database migrations
+        env:
+          CI: "true"
+          FORCE_COLOR: "0"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
+          
           echo "Running database migrations..."
-          pnpm drizzle-kit push --force
+          
+          # Install expect for handling interactive prompts reliably
+          sudo apt-get update && sudo apt-get install -y expect
+          
+          # Create expect script to handle drizzle-kit prompts
+          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
+          #!/usr/bin/expect -f
+          set timeout 300
+          spawn pnpm drizzle-kit push --force
+          expect {
+            "Do you want to truncate" { send "n\r"; exp_continue }
+            "Yes, I want to truncate" { send "n\r"; exp_continue }
+            "No, add the constraint" { send "\r"; exp_continue }
+            -re "❯.*No.*" { send "\r"; exp_continue }
+            eof { exit 0 }
+            timeout { exit 1 }
+          }
+          EXPECT_SCRIPT
+          chmod +x /tmp/drizzle-push.exp
+          
+          # Run the expect script
+          expect /tmp/drizzle-push.exp
+          
           echo "✅ Database migrations completed"
+          
+      - name: Verify database schema
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          
+          echo "Verifying new columns exist..."
+          node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            async function verify() {
+              try {
+                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles.source column exists');
+                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
+                console.log('✅ core_integrations.scim_group_prefix column exists');
+                console.log('✅ All schema changes verified');
+              } catch (err) {
+                console.error('❌ Schema verification failed:', err.message);
+                process.exit(1);
+              } finally {
+                await pool.end();
+              }
+            }
+            verify();
+          "
 
       - name: Check if database is seeded
         id: check-seeded
