@@ -125,7 +125,9 @@ function Get-AzureLocationName {
 function GenerateSecurePassword {
     param([int]$Length = 32)
     
-    $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+    # Use alphanumeric + safe special chars that don't cause shell escaping issues
+    # Avoiding: ! $ % ^ & * ( ) | \ ' " ` < > 
+    $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_+=.@#'
     $password = -join ((1..$Length) | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
     return $password
 }
@@ -517,10 +519,14 @@ $pgExists = az postgres flexible-server show `
     --resource-group $resourceGroupName `
     --name $postgresqlName 2>&1
 
-$pgPassword = GenerateSecurePassword -Length 32
+$pgPassword = $null
+$pgServerCreated = $false
 
 if ($LASTEXITCODE -ne 0) {
+    # Server doesn't exist - create it
     if (-not $ValidateOnly) {
+        $pgPassword = GenerateSecurePassword -Length 32
+        
         Write-Host "Creating PostgreSQL server: $postgresqlName" -ForegroundColor Yellow
         Write-Host "  SKU: Standard_B1ms (burstable)" -ForegroundColor Gray
         Write-Host "  Storage: 32GB" -ForegroundColor Gray
@@ -533,7 +539,7 @@ if ($LASTEXITCODE -ne 0) {
             --name $postgresqlName `
             --location $azureLocationName `
             --admin-user pgadmin `
-            --admin-password $pgPassword `
+            --admin-password "$pgPassword" `
             --sku-name Standard_B1ms `
             --tier Burstable `
             --storage-size 32 `
@@ -543,27 +549,7 @@ if ($LASTEXITCODE -ne 0) {
             --output none
         
         Write-Host "PostgreSQL server created" -ForegroundColor Green
-        
-        # Create database
-        Write-Host "Creating database: $AppName" -ForegroundColor Yellow
-        az postgres flexible-server db create `
-            --resource-group $resourceGroupName `
-            --server-name $postgresqlName `
-            --database-name $AppName `
-            --output none
-        Write-Host "Database created" -ForegroundColor Green
-        
-        # Allow Azure services (for Container Apps)
-        if ($publicAccess -eq "Enabled") {
-            Write-Host "Configuring firewall for Azure services..." -ForegroundColor Yellow
-            az postgres flexible-server firewall-rule create `
-                --resource-group $resourceGroupName `
-                --name $postgresqlName `
-                --rule-name AllowAzureServices `
-                --start-ip-address 0.0.0.0 `
-                --end-ip-address 0.0.0.0 `
-                --output none
-        }
+        $pgServerCreated = $true
     }
     else {
         Write-Host "Would create PostgreSQL server (validation mode)" -ForegroundColor Yellow
@@ -571,6 +557,53 @@ if ($LASTEXITCODE -ne 0) {
 }
 else {
     Write-Host "PostgreSQL server already exists" -ForegroundColor Green
+}
+
+# Check/create database (idempotent)
+if (-not $ValidateOnly) {
+    Write-Host "Checking database: $AppName" -ForegroundColor Gray
+    $dbExists = az postgres flexible-server db show `
+        --resource-group $resourceGroupName `
+        --server-name $postgresqlName `
+        --database-name $AppName 2>&1
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Creating database: $AppName" -ForegroundColor Yellow
+        az postgres flexible-server db create `
+            --resource-group $resourceGroupName `
+            --server-name $postgresqlName `
+            --database-name $AppName `
+            --output none
+        Write-Host "  Database created" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  Database already exists" -ForegroundColor Green
+    }
+    
+    # Check/create firewall rule for Azure services (idempotent)
+    $publicAccess = if ($EnvironmentName -eq "prod") { "Disabled" } else { "Enabled" }
+    if ($publicAccess -eq "Enabled") {
+        Write-Host "Checking firewall rule: AllowAzureServices" -ForegroundColor Gray
+        $fwRuleExists = az postgres flexible-server firewall-rule show `
+            --resource-group $resourceGroupName `
+            --name $postgresqlName `
+            --rule-name AllowAzureServices 2>&1
+        
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  Creating firewall rule for Azure services..." -ForegroundColor Yellow
+            az postgres flexible-server firewall-rule create `
+                --resource-group $resourceGroupName `
+                --name $postgresqlName `
+                --rule-name AllowAzureServices `
+                --start-ip-address 0.0.0.0 `
+                --end-ip-address 0.0.0.0 `
+                --output none
+            Write-Host "  Firewall rule created" -ForegroundColor Green
+        }
+        else {
+            Write-Host "  Firewall rule already exists" -ForegroundColor Green
+        }
+    }
 }
 Write-Host ""
 
@@ -584,8 +617,10 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $kvExists = az keyvault show --name $keyVaultName 2>&1
+$kvCreated = $false
 
 if ($LASTEXITCODE -ne 0) {
+    # Key Vault doesn't exist - create it
     if (-not $ValidateOnly) {
         Write-Host "Creating Key Vault: $keyVaultName" -ForegroundColor Yellow
         az keyvault create `
@@ -596,18 +631,7 @@ if ($LASTEXITCODE -ne 0) {
             --tags Owner=$Owner Application=$tagApplication Environment=$tagEnvironment `
             --output none
         Write-Host "Key Vault created" -ForegroundColor Green
-        
-        # Store secrets
-        Write-Host "Storing secrets in Key Vault..." -ForegroundColor Yellow
-        
-        $jwtSecret = GenerateSecurePassword -Length 64
-        $encryptionKey = GenerateSecurePassword -Length 32
-        
-        az keyvault secret set --vault-name $keyVaultName --name "jwt-secret" --value $jwtSecret --output none
-        az keyvault secret set --vault-name $keyVaultName --name "encryption-key" --value $encryptionKey --output none
-        az keyvault secret set --vault-name $keyVaultName --name "pg-password" --value $pgPassword --output none
-        
-        Write-Host "Secrets stored" -ForegroundColor Green
+        $kvCreated = $true
     }
     else {
         Write-Host "Would create Key Vault (validation mode)" -ForegroundColor Yellow
@@ -615,6 +639,81 @@ if ($LASTEXITCODE -ne 0) {
 }
 else {
     Write-Host "Key Vault already exists" -ForegroundColor Green
+}
+
+# Ensure RBAC role assignment for current user (idempotent)
+if (-not $ValidateOnly) {
+    Write-Host "Checking Key Vault RBAC role assignment..." -ForegroundColor Gray
+    $kvResourceId = az keyvault show --name $keyVaultName --query id -o tsv
+    $currentUserOid = az ad signed-in-user show --query id -o tsv 2>$null
+    
+    if ($currentUserOid) {
+        # Check if role already assigned
+        $existingRoleJson = az role assignment list `
+            --assignee $currentUserOid `
+            --role "Key Vault Secrets Officer" `
+            --scope $kvResourceId 2>$null
+        
+        $existingRole = @()
+        if ($existingRoleJson) {
+            try { $existingRole = $existingRoleJson | ConvertFrom-Json } catch { }
+        }
+        
+        if ($existingRole.Count -eq 0) {
+            Write-Host "  Assigning Key Vault Secrets Officer role..." -ForegroundColor Yellow
+            az role assignment create `
+                --role "Key Vault Secrets Officer" `
+                --assignee-object-id $currentUserOid `
+                --assignee-principal-type User `
+                --scope $kvResourceId `
+                --output none 2>$null
+            
+            if ($kvCreated) {
+                # Only wait if we just created the Key Vault
+                Write-Host "  Waiting for RBAC propagation (30s)..." -ForegroundColor Gray
+                Start-Sleep -Seconds 30
+            }
+            Write-Host "  Role assigned" -ForegroundColor Green
+        }
+        else {
+            Write-Host "  Role already assigned" -ForegroundColor Green
+        }
+    }
+    else {
+        Write-Host "  Warning: Could not get current user OID" -ForegroundColor Yellow
+    }
+    
+    # Check and create secrets (idempotent)
+    Write-Host "Checking Key Vault secrets..." -ForegroundColor Gray
+    
+    $secretsToCheck = @(
+        @{ Name = "jwt-secret"; Length = 64; Value = $null },
+        @{ Name = "encryption-key"; Length = 32; Value = $null },
+        @{ Name = "pg-password"; Length = 32; Value = $pgPassword }
+    )
+    
+    foreach ($secret in $secretsToCheck) {
+        $secretName = $secret.Name
+        $secretExists = az keyvault secret show --vault-name $keyVaultName --name $secretName 2>$null
+        
+        if ($LASTEXITCODE -ne 0) {
+            # Secret doesn't exist - create it
+            $secretValue = if ($secret.Value) { $secret.Value } else { GenerateSecurePassword -Length $secret.Length }
+            
+            Write-Host "  Creating secret: $secretName" -ForegroundColor Yellow
+            az keyvault secret set --vault-name $keyVaultName --name $secretName --value "$secretValue" --output none 2>$null
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "    ✓ Created" -ForegroundColor Green
+            }
+            else {
+                Write-Host "    ⚠ Failed to create (check RBAC permissions)" -ForegroundColor Yellow
+            }
+        }
+        else {
+            Write-Host "  ✓ $secretName (already exists)" -ForegroundColor Green
+        }
+    }
 }
 Write-Host ""
 
@@ -697,11 +796,13 @@ Write-Host "  Log Analytics:            $logAnalyticsName" -ForegroundColor Gray
 Write-Host ""
 
 if (-not $ValidateOnly) {
-    # Build connection string
-    $dbConnectionString = "postgresql://pgadmin:$pgPassword@$postgresqlName.postgres.database.azure.com:5432/$AppName?sslmode=require"
+    # Build connection string (use single quotes for literal ? then concatenate)
+    $dbHost = "$postgresqlName.postgres.database.azure.com"
+    $dbConnectionString = "postgresql://pgadmin:$pgPassword@${dbHost}:5432/${AppName}?sslmode=require"
+    $dbConnectionDisplay = "postgresql://pgadmin:<password>@${dbHost}:5432/${AppName}?sslmode=require"
     
     Write-Host "Connection Information:" -ForegroundColor Cyan
-    Write-Host "  DATABASE_URL: postgresql://pgadmin:<password>@$postgresqlName.postgres.database.azure.com:5432/$AppName?sslmode=require" -ForegroundColor Gray
+    Write-Host "  DATABASE_URL: $dbConnectionDisplay" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Secrets stored in Key Vault ($keyVaultName):" -ForegroundColor Cyan
     Write-Host "  - jwt-secret" -ForegroundColor Gray
