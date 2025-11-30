@@ -92,7 +92,6 @@ const navigationData: NavItem[] = [
     title: "Security",
     url: "/security",
     icon: Shield,
-    badge: 3,
     items: [
       { title: "Overview", url: "/security", module: "security.overview" },
       { title: "Frameworks (IMS)", url: "/security/frameworks", module: "security.frameworks" },
@@ -119,7 +118,6 @@ const navigationData: NavItem[] = [
     title: "Docs & Policies",
     url: "/docs",
     icon: FileText,
-    badge: 2,
     items: [
       { title: "Overview", url: "/docs", module: "docs.overview" },
       { title: "Policy Library", url: "/docs/policies", module: "docs.policies" },
