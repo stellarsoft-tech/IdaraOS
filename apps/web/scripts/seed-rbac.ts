@@ -14,6 +14,7 @@ import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
 import { eq, and } from "drizzle-orm"
 import * as schema from "../lib/db/schema"
+import { hashPassword } from "../lib/auth/session"
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/idaraos",
@@ -337,43 +338,74 @@ async function seedRBAC() {
     }
   }
 
-  // 5. Assign Owner role to existing admin user if exists
-  console.log("\n🔄 Checking user role assignments...")
+  // 5. Create admin user and assign Owner role
+  console.log("\n👤 Creating admin user...")
   
-  const adminUser = await db.query.users.findFirst({
+  let adminUser = await db.query.users.findFirst({
     where: eq(schema.users.email, "admin@example.com"),
   })
 
-  if (adminUser) {
-    const ownerRole = await db.query.roles.findFirst({
+  if (!adminUser) {
+    // Create admin user
+    const passwordHash = hashPassword("Admin123!")
+    const [created] = await db.insert(schema.users).values({
+      orgId: org.id,
+      email: "admin@example.com",
+      name: "Demo Admin",
+      role: "Owner",
+      status: "active",
+      passwordHash,
+      invitedAt: new Date(),
+    }).returning()
+    adminUser = created
+    console.log(`  + Created admin user: admin@example.com`)
+  } else {
+    // Update password to ensure it's set correctly
+    const passwordHash = hashPassword("Admin123!")
+    await db
+      .update(schema.users)
+      .set({
+        passwordHash,
+        status: "active",
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.users.email, "admin@example.com"))
+    console.log(`  ✓ Admin user exists: admin@example.com (password updated)`)
+  }
+
+  // Assign Owner RBAC role
+  const ownerRole = await db.query.roles.findFirst({
+    where: and(
+      eq(schema.roles.orgId, org.id),
+      eq(schema.roles.slug, "owner")
+    ),
+  })
+
+  if (ownerRole && adminUser) {
+    // Check if already assigned
+    const existingAssignment = await db.query.userRoles.findFirst({
       where: and(
-        eq(schema.roles.orgId, org.id),
-        eq(schema.roles.slug, "owner")
+        eq(schema.userRoles.userId, adminUser.id),
+        eq(schema.userRoles.roleId, ownerRole.id)
       ),
     })
 
-    if (ownerRole) {
-      // Check if already assigned
-      const existingAssignment = await db.query.userRoles.findFirst({
-        where: and(
-          eq(schema.userRoles.userId, adminUser.id),
-          eq(schema.userRoles.roleId, ownerRole.id)
-        ),
+    if (!existingAssignment) {
+      await db.insert(schema.userRoles).values({
+        userId: adminUser.id,
+        roleId: ownerRole.id,
       })
-
-      if (!existingAssignment) {
-        await db.insert(schema.userRoles).values({
-          userId: adminUser.id,
-          roleId: ownerRole.id,
-        })
-        console.log(`  + Assigned Owner role to admin@example.com`)
-      } else {
-        console.log(`  ✓ admin@example.com already has Owner role`)
-      }
+      console.log(`  + Assigned Owner RBAC role to admin@example.com`)
+    } else {
+      console.log(`  ✓ admin@example.com already has Owner RBAC role`)
     }
   }
 
   console.log("\n✅ RBAC seeding complete!")
+  console.log("\n📋 Admin credentials:")
+  console.log("  Email: admin@example.com")
+  console.log("  Password: Admin123!")
+  console.log("  Role: Owner (full access)")
 }
 
 seedRBAC()

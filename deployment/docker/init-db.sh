@@ -36,6 +36,10 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "✅ RBAC permissions seeded successfully"
+echo ""
+echo "Note: Admin user created with Owner role"
+echo "  Email: admin@example.com"
+echo "  Password: Admin123!"
 
 echo ""
 echo "=========================================="

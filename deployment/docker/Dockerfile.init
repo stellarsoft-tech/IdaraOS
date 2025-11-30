@@ -52,15 +52,10 @@ echo '------------------------------------------'; \
 pnpm db:seed 2>&1; \
 echo '✅ Database seeded successfully'; \
 echo ''; \
-echo 'Step 3: Seeding RBAC permissions...'; \
+echo 'Step 3: Seeding RBAC permissions (includes admin user)...'; \
 echo '------------------------------------------'; \
 pnpm db:seed-rbac 2>&1; \
 echo '✅ RBAC permissions seeded successfully'; \
-echo ''; \
-echo 'Step 4: Creating admin user...'; \
-echo '------------------------------------------'; \
-pnpm db:create-admin 2>&1; \
-echo '✅ Admin user created successfully'; \
 echo ''; \
 echo '=========================================='; \
 echo '✅ Database initialization complete!'; \
@@ -68,4 +63,5 @@ echo ''; \
 echo 'Login credentials:'; \
 echo '  Email: admin@example.com'; \
 echo '  Password: Admin123!'; \
+echo '  Role: Owner (full access)'; \
 echo '=========================================='"]
