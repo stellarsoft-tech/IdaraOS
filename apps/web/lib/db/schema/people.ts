@@ -2,7 +2,7 @@
  * People Schema - Drizzle ORM table definitions
  */
 
-import { pgTable, uuid, text, date, timestamp, index } from "drizzle-orm/pg-core"
+import { pgTable, uuid, text, date, timestamp, index, type AnyPgColumn } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 
 /**
@@ -24,7 +24,7 @@ export const persons = pgTable(
     email: text("email").notNull().unique(),
     role: text("role").notNull(),
     team: text("team"),
-    managerId: uuid("manager_id").references(() => persons.id, { onDelete: "set null" }),
+    managerId: uuid("manager_id").references((): AnyPgColumn => persons.id, { onDelete: "set null" }),
     status: text("status", { enum: personStatusValues }).notNull().default("active"),
     startDate: date("start_date").notNull(),
     endDate: date("end_date"),
@@ -63,4 +63,3 @@ export const personsRelations = relations(persons, ({ one }) => ({
  */
 export type Person = typeof persons.$inferSelect
 export type NewPerson = typeof persons.$inferInsert
-

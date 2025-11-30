@@ -1,0 +1,29 @@
+# =============================================================================
+# IdaraOS - Database Initialization Dockerfile
+# =============================================================================
+# This Dockerfile is used to run database migrations and seeding
+# It runs once and exits after completion
+# =============================================================================
+
+FROM node:22-alpine
+
+# Install pnpm globally
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy package files for dependency installation
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/
+
+# Install all dependencies (including dev dependencies for drizzle-kit)
+RUN pnpm install --frozen-lockfile
+
+# Copy the application source code
+COPY apps/web ./apps/web
+
+# Set environment
+ENV NODE_ENV=development
+
+# Run migrations and seeding
+CMD ["sh", "-c", "cd apps/web && pnpm db:push && pnpm db:seed && pnpm db:seed-rbac && echo 'Database initialized successfully!'"]

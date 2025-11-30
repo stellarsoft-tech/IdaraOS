@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { personSchema, createPersonSchema } from "../../lib/generated/people/person/types"
+import { PersonSchema, CreatePersonSchema } from "../../lib/generated/people/person/types"
 import { riskSchema, createRiskSchema } from "../../lib/generated/security/isms/risk/types"
 
 describe("Generated Types - Person", () => {
@@ -13,7 +13,7 @@ describe("Generated Types - Person", () => {
       start_date: "2024-01-15",
     }
     
-    const result = personSchema.safeParse(validPerson)
+    const result = PersonSchema.safeParse(validPerson)
     expect(result.success).toBe(true)
   })
   
@@ -27,7 +27,7 @@ describe("Generated Types - Person", () => {
       start_date: "2024-01-15",
     }
     
-    const result = personSchema.safeParse(invalidPerson)
+    const result = PersonSchema.safeParse(invalidPerson)
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.errors[0].message).toContain("email")
@@ -44,7 +44,7 @@ describe("Generated Types - Person", () => {
       start_date: "2024-01-15",
     }
     
-    const result = personSchema.safeParse(invalidPerson)
+    const result = PersonSchema.safeParse(invalidPerson)
     expect(result.success).toBe(false)
   })
   
@@ -59,7 +59,7 @@ describe("Generated Types - Person", () => {
       // team is optional
     }
     
-    const result = personSchema.safeParse(validPerson)
+    const result = PersonSchema.safeParse(validPerson)
     expect(result.success).toBe(true)
   })
 })
@@ -122,4 +122,3 @@ describe("Generated Types - Risk", () => {
     expect(result.success).toBe(true)
   })
 })
-

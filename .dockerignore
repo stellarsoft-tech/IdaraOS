@@ -1,0 +1,66 @@
+# =============================================================================
+# Docker Ignore - IdaraOS
+# =============================================================================
+# Exclude files not needed in Docker build context to speed up builds
+# =============================================================================
+
+# Dependencies (will be installed fresh in container)
+node_modules
+**/node_modules
+
+# Build outputs
+.next
+**/.next
+out
+**/out
+dist
+**/dist
+build
+**/build
+
+# Development files
+*.local
+.env
+.env.*
+!.env.example
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.cursor
+
+# Testing
+coverage
+**/coverage
+.vitest
+test-results
+playwright-report
+
+# Documentation (not needed in runtime)
+docs
+*.md
+!README.md
+
+# Misc
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Deployment configs (not needed in image)
+deployment
+.github
+
+# Specs and scripts (development only)
+specs
+scripts/generate
+
+# Storybook
+storybook-static

@@ -66,6 +66,7 @@ import {
   useDeleteRole,
   type Role,
   type Permission,
+  type Module,
 } from "@/lib/api/rbac"
 
 // Color options for role badges
@@ -140,7 +141,7 @@ export default function RolesPage() {
 
   // Group modules by category
   const modulesByCategory = React.useMemo(() => {
-    const map = new Map<string, Array<{ module: typeof modules extends Array<infer T> ? T : never; permissions: Permission[] }>>()
+    const map = new Map<string, Array<{ module: Module; permissions: Permission[] }>>()
 
     for (const [, data] of permissionsByModule) {
       const category = data.module.category

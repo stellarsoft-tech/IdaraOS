@@ -48,7 +48,7 @@ export default function RisksPage() {
       title="Risk Register"
       description="Identify, assess, and manage security risks across your organization."
       action={
-        <Protected resource="security.risk" action="write">
+        <Protected module="security.risk" action="write">
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             New Risk

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { integrations, organizations } from "@/lib/db/schema"
+import { integrations, organizations, type IntegrationProvider } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { z } from "zod"
 import crypto from "crypto"
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
         .where(
           and(
             eq(integrations.orgId, DEMO_ORG_ID),
-            eq(integrations.provider, provider)
+            eq(integrations.provider, provider as IntegrationProvider)
           )
         )
         .limit(1)
@@ -384,7 +384,7 @@ export async function DELETE(request: NextRequest) {
       .where(
         and(
           eq(integrations.orgId, DEMO_ORG_ID),
-          eq(integrations.provider, provider)
+          eq(integrations.provider, provider as IntegrationProvider)
         )
       )
       .limit(1)

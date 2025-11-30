@@ -1,0 +1,377 @@
+# =============================================================================
+# IdaraOS - Deploy to Azure Container Apps
+# =============================================================================
+# Triggered on: Push to main (auto-deploy to dev) or manual dispatch
+# Actions: Deploy to Azure Container Apps with environment-specific config
+# =============================================================================
+
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+
+env:
+  APP_NAME: idaraos
+  LOCATION: uks
+  SEQUENCE: "001"
+
+jobs:
+  # ===========================================================================
+  # Deploy to Development (auto on push to main)
+  # ===========================================================================
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+
+    environment:
+      name: dev
+      url: ${{ steps.deploy.outputs.app_url }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deployment/docker/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:dev-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get ACR credentials
+        id: acr-creds
+        run: |
+          ACR_USERNAME=$(az acr credential show --name ${{ secrets.ACR_NAME }} --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name ${{ secrets.ACR_NAME }} --query "passwords[0].value" -o tsv)
+          echo "::add-mask::$ACR_PASSWORD"
+          echo "username=$ACR_USERNAME" >> $GITHUB_OUTPUT
+          echo "password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Get secrets from Key Vault
+        id: secrets
+        run: |
+          KV_NAME="kv-${{ env.APP_NAME }}-dev-${{ env.SEQUENCE }}"
+          JWT_SECRET=$(az keyvault secret show --vault-name $KV_NAME --name jwt-secret --query value -o tsv)
+          ENCRYPTION_KEY=$(az keyvault secret show --vault-name $KV_NAME --name encryption-key --query value -o tsv)
+          PG_PASSWORD=$(az keyvault secret show --vault-name $KV_NAME --name pg-password --query value -o tsv)
+          echo "::add-mask::$JWT_SECRET"
+          echo "::add-mask::$ENCRYPTION_KEY"
+          echo "::add-mask::$PG_PASSWORD"
+          echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
+          echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
+          echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Container App
+        id: deploy
+        run: |
+          RG="rg-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          APP="${{ env.APP_NAME }}-dev"
+          CAE="cae-${{ env.APP_NAME }}-dev"
+          PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+
+          # Check if app exists
+          if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
+            echo "Updating existing Container App..."
+            az containerapp update \
+              --name $APP \
+              --resource-group $RG \
+              --image $IMAGE \
+              --set-env-vars \
+                "NODE_ENV=production" \
+                "DATABASE_URL=$DATABASE_URL" \
+                "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+          else
+            echo "Creating new Container App..."
+            az containerapp create \
+              --name $APP \
+              --resource-group $RG \
+              --environment $CAE \
+              --image $IMAGE \
+              --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
+              --registry-username ${{ steps.acr-creds.outputs.username }} \
+              --registry-password ${{ steps.acr-creds.outputs.password }} \
+              --target-port 3000 \
+              --ingress external \
+              --cpu 0.5 \
+              --memory 1.0Gi \
+              --min-replicas 1 \
+              --max-replicas 3 \
+              --env-vars \
+                "NODE_ENV=production" \
+                "DATABASE_URL=$DATABASE_URL" \
+                "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+          fi
+
+          # Get app URL
+          FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+          APP_URL="https://$FQDN"
+          echo "app_url=$APP_URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: $APP_URL"
+
+  # ===========================================================================
+  # Deploy to Staging (manual only)
+  # ===========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.app_url }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deployment/docker/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:staging-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get ACR credentials
+        id: acr-creds
+        run: |
+          ACR_USERNAME=$(az acr credential show --name ${{ secrets.ACR_NAME }} --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name ${{ secrets.ACR_NAME }} --query "passwords[0].value" -o tsv)
+          echo "::add-mask::$ACR_PASSWORD"
+          echo "username=$ACR_USERNAME" >> $GITHUB_OUTPUT
+          echo "password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Get secrets from Key Vault
+        id: secrets
+        run: |
+          KV_NAME="kv-${{ env.APP_NAME }}-staging-${{ env.SEQUENCE }}"
+          JWT_SECRET=$(az keyvault secret show --vault-name $KV_NAME --name jwt-secret --query value -o tsv)
+          ENCRYPTION_KEY=$(az keyvault secret show --vault-name $KV_NAME --name encryption-key --query value -o tsv)
+          PG_PASSWORD=$(az keyvault secret show --vault-name $KV_NAME --name pg-password --query value -o tsv)
+          echo "::add-mask::$JWT_SECRET"
+          echo "::add-mask::$ENCRYPTION_KEY"
+          echo "::add-mask::$PG_PASSWORD"
+          echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
+          echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
+          echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Container App
+        id: deploy
+        run: |
+          RG="rg-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          APP="${{ env.APP_NAME }}-staging"
+          CAE="cae-${{ env.APP_NAME }}-staging"
+          PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+
+          if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
+            az containerapp update \
+              --name $APP \
+              --resource-group $RG \
+              --image $IMAGE \
+              --set-env-vars \
+                "NODE_ENV=production" \
+                "DATABASE_URL=$DATABASE_URL" \
+                "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+          else
+            az containerapp create \
+              --name $APP \
+              --resource-group $RG \
+              --environment $CAE \
+              --image $IMAGE \
+              --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
+              --registry-username ${{ steps.acr-creds.outputs.username }} \
+              --registry-password ${{ steps.acr-creds.outputs.password }} \
+              --target-port 3000 \
+              --ingress external \
+              --cpu 0.5 \
+              --memory 1.0Gi \
+              --min-replicas 1 \
+              --max-replicas 5 \
+              --env-vars \
+                "NODE_ENV=production" \
+                "DATABASE_URL=$DATABASE_URL" \
+                "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+          fi
+
+          FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "app_url=https://$FQDN" >> $GITHUB_OUTPUT
+
+  # ===========================================================================
+  # Deploy to Production (manual with approval)
+  # ===========================================================================
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod'
+
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.app_url }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: |
+          az acr login --name ${{ secrets.ACR_NAME }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deployment/docker/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}
+            ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:prod-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Get ACR credentials
+        id: acr-creds
+        run: |
+          ACR_USERNAME=$(az acr credential show --name ${{ secrets.ACR_NAME }} --query username -o tsv)
+          ACR_PASSWORD=$(az acr credential show --name ${{ secrets.ACR_NAME }} --query "passwords[0].value" -o tsv)
+          echo "::add-mask::$ACR_PASSWORD"
+          echo "username=$ACR_USERNAME" >> $GITHUB_OUTPUT
+          echo "password=$ACR_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Get secrets from Key Vault
+        id: secrets
+        run: |
+          KV_NAME="kv-${{ env.APP_NAME }}-prod-${{ env.SEQUENCE }}"
+          JWT_SECRET=$(az keyvault secret show --vault-name $KV_NAME --name jwt-secret --query value -o tsv)
+          ENCRYPTION_KEY=$(az keyvault secret show --vault-name $KV_NAME --name encryption-key --query value -o tsv)
+          PG_PASSWORD=$(az keyvault secret show --vault-name $KV_NAME --name pg-password --query value -o tsv)
+          echo "::add-mask::$JWT_SECRET"
+          echo "::add-mask::$ENCRYPTION_KEY"
+          echo "::add-mask::$PG_PASSWORD"
+          echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
+          echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
+          echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Container App
+        id: deploy
+        run: |
+          RG="rg-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          APP="${{ env.APP_NAME }}-prod"
+          CAE="cae-${{ env.APP_NAME }}-prod"
+          PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+
+          if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
+            az containerapp update \
+              --name $APP \
+              --resource-group $RG \
+              --image $IMAGE \
+              --set-env-vars \
+                "NODE_ENV=production" \
+                "DATABASE_URL=$DATABASE_URL" \
+                "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+          else
+            az containerapp create \
+              --name $APP \
+              --resource-group $RG \
+              --environment $CAE \
+              --image $IMAGE \
+              --registry-server ${{ secrets.ACR_NAME }}.azurecr.io \
+              --registry-username ${{ steps.acr-creds.outputs.username }} \
+              --registry-password ${{ steps.acr-creds.outputs.password }} \
+              --target-port 3000 \
+              --ingress external \
+              --cpu 1.0 \
+              --memory 2.0Gi \
+              --min-replicas 2 \
+              --max-replicas 10 \
+              --env-vars \
+                "NODE_ENV=production" \
+                "DATABASE_URL=$DATABASE_URL" \
+                "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
+          fi
+
+          FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "app_url=https://$FQDN" >> $GITHUB_OUTPUT

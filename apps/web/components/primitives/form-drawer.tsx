@@ -27,12 +27,13 @@ import { Loader2 } from "lucide-react"
 export interface FormFieldDef {
   name: string
   label: string
-  component: "input" | "textarea" | "select" | "switch" | "date" | "date-picker" | "datetime-picker"
+  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date" | "date-picker" | "datetime-picker"
   placeholder?: string
   required?: boolean
   helpText?: string
   type?: string // for input: text, email, password, number, tel, etc.
   options?: Array<{ value: string; label: string }>
+  loadOptions?: (search: string) => Promise<Array<{ value: string; label: string }>>
   disabled?: boolean
 }
 
@@ -40,13 +41,15 @@ export interface FormFieldDef {
  * Field configuration (for config-based format)
  */
 export interface FieldConfig {
-  component: "input" | "textarea" | "select" | "switch" | "date-picker" | "datetime-picker"
+  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date-picker" | "datetime-picker"
   label: string
   placeholder?: string
   required?: boolean
   helpText?: string
   type?: string
   options?: Array<{ value: string; label: string }>
+  loadOptions?: (search: string) => Promise<Array<{ value: string; label: string }>>
+  ref?: string
   disabled?: boolean
   hidden?: boolean
 }
@@ -58,7 +61,7 @@ export type FormConfig = Record<string, FieldConfig>
  * 1. Simple: fields as array of FormFieldDef objects
  * 2. Config-based: fields as string[] with separate config object
  */
-export interface FormDrawerProps {
+export interface FormDrawerProps<T = Record<string, unknown>> {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
@@ -70,7 +73,7 @@ export interface FormDrawerProps {
   schema?: z.ZodType<FieldValues>
   defaultValues?: Record<string, unknown>
   mode?: "create" | "edit"
-  onSubmit: (data: Record<string, unknown>) => Promise<void> | void
+  onSubmit: (data: T) => Promise<void> | void
   submitLabel?: string
   isSubmitting?: boolean
   loading?: boolean // alias for isSubmitting
@@ -79,7 +82,7 @@ export interface FormDrawerProps {
 /**
  * Sheet/Drawer with form for create/edit operations
  */
-export function FormDrawer({
+export function FormDrawer<T = Record<string, unknown>>({
   open,
   onOpenChange,
   title,
@@ -93,7 +96,7 @@ export function FormDrawer({
   submitLabel,
   isSubmitting = false,
   loading = false,
-}: FormDrawerProps) {
+}: FormDrawerProps<T>) {
   const form = useForm({
     resolver: schema ? zodResolver(schema) : undefined,
     defaultValues: defaultValues || {},
@@ -144,7 +147,7 @@ export function FormDrawer({
   }, [open, defaultValues, form])
 
   const handleSubmit = form.handleSubmit(async (data) => {
-    await onSubmit(data)
+    await onSubmit(data as T)
   })
 
   const handleClose = () => {
@@ -210,6 +213,9 @@ function renderFormControl(
   field: { value: unknown; onChange: (value: unknown) => void; onBlur: () => void; name: string; ref: React.Ref<unknown> },
   fieldDef: FormFieldDef
 ): React.ReactNode {
+  // Destructure to exclude ref for components that don't accept it
+  const { ref: _ref, ...fieldProps } = field
+  
   switch (fieldDef.component) {
     case "input":
       return (
@@ -217,8 +223,10 @@ function renderFormControl(
           type={fieldDef.type || "text"}
           placeholder={fieldDef.placeholder}
           disabled={fieldDef.disabled}
-          {...field}
-          value={(field.value as string) || ""}
+          name={fieldProps.name}
+          value={(fieldProps.value as string) || ""}
+          onChange={(e) => fieldProps.onChange(e.target.value)}
+          onBlur={fieldProps.onBlur}
         />
       )
 
@@ -228,8 +236,10 @@ function renderFormControl(
           placeholder={fieldDef.placeholder}
           disabled={fieldDef.disabled}
           rows={4}
-          {...field}
-          value={(field.value as string) || ""}
+          name={fieldProps.name}
+          value={(fieldProps.value as string) || ""}
+          onChange={(e) => fieldProps.onChange(e.target.value)}
+          onBlur={fieldProps.onBlur}
         />
       )
 
@@ -274,8 +284,10 @@ function renderFormControl(
           type="date"
           placeholder={fieldDef.placeholder}
           disabled={fieldDef.disabled}
-          {...field}
-          value={(field.value as string) || ""}
+          name={fieldProps.name}
+          value={(fieldProps.value as string) || ""}
+          onChange={(e) => fieldProps.onChange(e.target.value)}
+          onBlur={fieldProps.onBlur}
         />
       )
 
@@ -285,8 +297,23 @@ function renderFormControl(
           type="datetime-local"
           placeholder={fieldDef.placeholder}
           disabled={fieldDef.disabled}
-          {...field}
-          value={(field.value as string) || ""}
+          name={fieldProps.name}
+          value={(fieldProps.value as string) || ""}
+          onChange={(e) => fieldProps.onChange(e.target.value)}
+          onBlur={fieldProps.onBlur}
+        />
+      )
+
+    case "async-select":
+      // TODO: Implement async select with search
+      return (
+        <Input
+          placeholder={fieldDef.placeholder || "Search..."}
+          disabled={fieldDef.disabled}
+          name={fieldProps.name}
+          value={(fieldProps.value as string) || ""}
+          onChange={(e) => fieldProps.onChange(e.target.value)}
+          onBlur={fieldProps.onBlur}
         />
       )
 
@@ -295,8 +322,10 @@ function renderFormControl(
         <Input
           placeholder={fieldDef.placeholder}
           disabled={fieldDef.disabled}
-          {...field}
-          value={(field.value as string) || ""}
+          name={fieldProps.name}
+          value={(fieldProps.value as string) || ""}
+          onChange={(e) => fieldProps.onChange(e.target.value)}
+          onBlur={fieldProps.onBlur}
         />
       )
   }

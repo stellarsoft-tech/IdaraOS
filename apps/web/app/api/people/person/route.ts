@@ -181,7 +181,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Insert
-    const [record] = await db
+    const result = await db
       .insert(persons)
       .values({
         orgId,
@@ -196,6 +196,7 @@ export async function POST(request: NextRequest) {
         status: "onboarding",
       })
       .returning()
+    const record = result[0]
     
     return NextResponse.json(toApiResponse(record), { status: 201 })
   } catch (error) {
