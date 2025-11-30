@@ -20,6 +20,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -31,6 +32,9 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -63,7 +67,7 @@ export interface TableState {
  * Facet configuration for a column
  */
 export interface FacetConfig {
-  type: "enum" | "boolean" | "text"
+  type: "enum" | "boolean" | "text" | "date" | "number"
   options?: Array<{ label: string; value: string }>
 }
 
@@ -127,7 +131,7 @@ function DataTableColumnHeader<TData, TValue>({
   enableSorting?: boolean
   enableFiltering?: boolean
   data?: TData[]
-  filterType?: "text" | "enum"
+  filterType?: "text" | "enum" | "date" | "number"
 }) {
   const [isHovered, setIsHovered] = React.useState(false)
   const sortedState = column.getIsSorted()
@@ -173,6 +177,18 @@ function DataTableColumnHeader<TData, TValue>({
     new Set(column.getFilterValue() as string[])
   )
   
+  // Initialize dateRange from column filter value
+  const filterValueForDate = column.getFilterValue() as string[] | undefined
+  const [dateRange, setDateRange] = React.useState<{ from?: Date; to?: Date }>(() => {
+    if (filterValueForDate && Array.isArray(filterValueForDate)) {
+      return {
+        from: filterValueForDate[0] ? new Date(filterValueForDate[0]) : undefined,
+        to: filterValueForDate[1] ? new Date(filterValueForDate[1]) : undefined,
+      }
+    }
+    return {}
+  })
+  
   // Debounced text filter
   React.useEffect(() => {
     if (filterType !== "text") return
@@ -181,6 +197,212 @@ function DataTableColumnHeader<TData, TValue>({
     }, 300)
     return () => clearTimeout(timer)
   }, [filterValue, column, filterType])
+  
+  // Render filter based on type
+  const renderFilter = () => {
+    // Date filter
+    if (filterType === "date") {
+      const hasDateFilter = dateRange.from || dateRange.to
+      return (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 w-full justify-start text-left font-normal",
+                hasDateFilter && "border-primary"
+              )}
+            >
+              <Calendar className={cn("mr-2 h-3.5 w-3.5", hasDateFilter && "text-primary")} />
+              <span className="truncate text-xs">
+                {dateRange.from 
+                  ? dateRange.to 
+                    ? `${format(dateRange.from, "MMM d")} - ${format(dateRange.to, "MMM d")}`
+                    : format(dateRange.from, "MMM d, yyyy")
+                  : "Date range..."}
+              </span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              mode="range"
+              selected={{ from: dateRange.from, to: dateRange.to }}
+              onSelect={(range: { from?: Date; to?: Date } | undefined) => {
+                const newRange = { from: range?.from, to: range?.to }
+                setDateRange(newRange)
+                
+                // Set filter value - TanStack Table will use our custom filterFn
+                if (newRange.from && newRange.to) {
+                  // Both dates selected - filter by range
+                  column.setFilterValue([
+                    newRange.from.toISOString().split('T')[0], // Just the date part
+                    newRange.to.toISOString().split('T')[0]
+                  ])
+                } else if (newRange.from) {
+                  // Only start date - filter from that date onwards
+                  column.setFilterValue([newRange.from.toISOString().split('T')[0]])
+                } else {
+                  // No dates - clear filter
+                  column.setFilterValue(undefined)
+                }
+              }}
+              numberOfMonths={2}
+            />
+            {hasDateFilter && (
+              <div className="p-2 border-t">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-full"
+                  onClick={() => {
+                    setDateRange({})
+                    column.setFilterValue(undefined)
+                  }}
+                >
+                  Clear dates
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
+      )
+    }
+    
+    // Number filter (just show disabled placeholder for now)
+    if (filterType === "number") {
+      return (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 w-full justify-start text-left font-normal opacity-50 cursor-not-allowed"
+          disabled
+        >
+          <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+          <span className="truncate text-muted-foreground">N/A</span>
+        </Button>
+      )
+    }
+    
+    // Enum filter
+    if (filterType === "enum" && uniqueValues.length > 0) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                "h-8 w-full justify-start text-left font-normal",
+                isFiltered && "border-primary"
+              )}
+            >
+              <Filter className={cn("mr-2 h-3.5 w-3.5", isFiltered && "text-primary")} />
+              <span className="truncate">
+                {selectedOptions.size > 0
+                  ? `${selectedOptions.size} selected`
+                  : "Filter..."}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[200px]">
+            <div className="p-2">
+              <Input
+                placeholder="Search..."
+                className="h-8"
+                value={filterValue}
+                onChange={(e) => setFilterValue(e.target.value)}
+              />
+            </div>
+            <DropdownMenuSeparator />
+            <div className="max-h-[200px] overflow-auto">
+              {uniqueValues
+                .filter((opt) =>
+                  opt.label.toLowerCase().includes(filterValue.toLowerCase())
+                )
+                .map((option) => {
+                  const isSelected = selectedOptions.has(option.value)
+                  return (
+                    <DropdownMenuCheckboxItem
+                      key={option.value}
+                      checked={isSelected}
+                      onCheckedChange={(checked) => {
+                        const newSelected = new Set(selectedOptions)
+                        if (checked) {
+                          newSelected.add(option.value)
+                        } else {
+                          newSelected.delete(option.value)
+                        }
+                        setSelectedOptions(newSelected)
+                        column.setFilterValue(
+                          newSelected.size > 0 ? Array.from(newSelected) : undefined
+                        )
+                      }}
+                    >
+                      <span className="flex-1">{option.label}</span>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {option.count}
+                      </span>
+                    </DropdownMenuCheckboxItem>
+                  )
+                })}
+            </div>
+            {selectedOptions.size > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="p-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-full"
+                    onClick={() => {
+                      setSelectedOptions(new Set())
+                      column.setFilterValue(undefined)
+                      setFilterValue("")
+                    }}
+                  >
+                    Clear filter
+                  </Button>
+                </div>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )
+    }
+    
+    // Default: Text filter
+    return (
+      <div className="relative">
+        <Filter className={cn(
+          "absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2",
+          isFiltered ? "text-primary" : "text-muted-foreground"
+        )} />
+        <Input
+          placeholder="Filter..."
+          className={cn(
+            "h-8 pl-7 pr-7",
+            isFiltered && "border-primary"
+          )}
+          value={filterValue}
+          onChange={(e) => setFilterValue(e.target.value)}
+        />
+        {isFiltered && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-0 top-0 h-8 w-8 p-0 hover:bg-transparent"
+            onClick={() => {
+              setFilterValue("")
+              column.setFilterValue(undefined)
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+    )
+  }
   
   return (
     <div className="flex flex-col gap-2">
@@ -207,124 +429,10 @@ function DataTableColumnHeader<TData, TValue>({
         </div>
       )}
       
-      {/* Column Filter */}
-      {enableFiltering && column.getCanFilter() && (
+      {/* Column Filter - Always show if filtering enabled */}
+      {enableFiltering && (
         <div className="px-3 pb-2">
-          {filterType === "enum" && uniqueValues.length > 0 ? (
-            // Enum filter with dropdown
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "h-8 w-full justify-start text-left font-normal",
-                    isFiltered && "border-primary"
-                  )}
-                >
-                  <Filter className={cn("mr-2 h-3.5 w-3.5", isFiltered && "text-primary")} />
-                  <span className="truncate">
-                    {selectedOptions.size > 0
-                      ? `${selectedOptions.size} selected`
-                      : "Filter..."}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[200px]">
-                {/* Text search within options */}
-                <div className="p-2">
-                  <Input
-                    placeholder="Search..."
-                    className="h-8"
-                    value={filterValue}
-                    onChange={(e) => setFilterValue(e.target.value)}
-                  />
-                </div>
-                <DropdownMenuSeparator />
-                <div className="max-h-[200px] overflow-auto">
-                  {uniqueValues
-                    .filter((opt) =>
-                      opt.label.toLowerCase().includes(filterValue.toLowerCase())
-                    )
-                    .map((option) => {
-                      const isSelected = selectedOptions.has(option.value)
-                      return (
-                        <DropdownMenuCheckboxItem
-                          key={option.value}
-                          checked={isSelected}
-                          onCheckedChange={(checked) => {
-                            const newSelected = new Set(selectedOptions)
-                            if (checked) {
-                              newSelected.add(option.value)
-                            } else {
-                              newSelected.delete(option.value)
-                            }
-                            setSelectedOptions(newSelected)
-                            column.setFilterValue(
-                              newSelected.size > 0 ? Array.from(newSelected) : undefined
-                            )
-                          }}
-                        >
-                          <span className="flex-1">{option.label}</span>
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            {option.count}
-                          </span>
-                        </DropdownMenuCheckboxItem>
-                      )
-                    })}
-                </div>
-                {selectedOptions.size > 0 && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <div className="p-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-full"
-                        onClick={() => {
-                          setSelectedOptions(new Set())
-                          column.setFilterValue(undefined)
-                          setFilterValue("")
-                        }}
-                      >
-                        Clear filter
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            // Text filter
-            <div className="relative">
-              <Filter className={cn(
-                "absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2",
-                isFiltered ? "text-primary" : "text-muted-foreground"
-              )} />
-              <Input
-                placeholder="Filter..."
-                className={cn(
-                  "h-8 pl-7 pr-7",
-                  isFiltered && "border-primary"
-                )}
-                value={filterValue}
-                onChange={(e) => setFilterValue(e.target.value)}
-              />
-              {isFiltered && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-8 w-8 p-0 hover:bg-transparent"
-                  onClick={() => {
-                    setFilterValue("")
-                    column.setFilterValue(undefined)
-                  }}
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          )}
+          {renderFilter()}
         </div>
       )}
     </div>
@@ -362,13 +470,114 @@ export function DataTable<TData>({
   const columns = React.useMemo(
     (): ColumnDef<TData>[] =>
       initialColumns.map((col): ColumnDef<TData> => {
-        // Determine filter type from facetedFilters config
+        // Determine filter type from facetedFilters config or column properties
         const columnId = col.id || (col as { accessorKey?: string }).accessorKey
+        
+        // Actions column - show header with N/A filter
+        if (columnId === "actions") {
+          return {
+            ...col,
+            enableSorting: false,
+            enableColumnFilter: false,
+            header: () => (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <span className="font-medium">Actions</span>
+                </div>
+                <div className="px-3 pb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-full justify-start text-left font-normal opacity-50 cursor-not-allowed"
+                    disabled
+                  >
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="truncate text-muted-foreground">N/A</span>
+                  </Button>
+                </div>
+              </div>
+            ),
+          } as ColumnDef<TData>
+        }
+        
         const facetConfig = facetedFilters?.[columnId as string]
-        const filterType = facetConfig?.type === "enum" ? "enum" : "text"
+        
+        // Determine filter type
+        let filterType: "text" | "enum" | "date" | "number" = "text"
+        if (facetConfig?.type) {
+          filterType = facetConfig.type as typeof filterType
+        } else if (columnId === "assignedAssets" || columnId?.includes("count") || columnId?.includes("Count")) {
+          filterType = "number"
+        } else if (columnId?.includes("Date") || columnId?.includes("date") || columnId === "startDate" || columnId === "endDate") {
+          filterType = "date"
+        }
         
         return {
           ...col,
+          // Add custom filter function for date columns
+          filterFn: filterType === "date" 
+            ? (row, columnId, filterValue: string[] | undefined) => {
+                if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) {
+                  return true
+                }
+                
+                const cellValue = (row.getValue(columnId) as string | Date | undefined)
+                if (!cellValue) return false
+                
+                // Parse cell date - handle both Date objects and date strings
+                let cellDate: Date
+                if (cellValue instanceof Date) {
+                  cellDate = cellValue
+                } else if (typeof cellValue === "string") {
+                  // Handle ISO strings, YYYY-MM-DD, or other date formats
+                  cellDate = new Date(cellValue)
+                } else {
+                  return false
+                }
+                
+                if (isNaN(cellDate.getTime())) return false
+                
+                // Parse filter dates
+                const fromDateStr = filterValue[0]
+                const toDateStr = filterValue[1]
+                
+                // Normalize dates to start of day for comparison
+                const normalizeDate = (date: Date) => {
+                  const d = new Date(date)
+                  d.setHours(0, 0, 0, 0)
+                  return d
+                }
+                
+                const normalizedCellDate = normalizeDate(cellDate)
+                
+                if (fromDateStr && toDateStr) {
+                  // Range filter: cell date must be between from and to (inclusive)
+                  const fromDate = new Date(fromDateStr)
+                  const toDate = new Date(toDateStr)
+                  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return false
+                  
+                  const normalizedFrom = normalizeDate(fromDate)
+                  const normalizedTo = normalizeDate(toDate)
+                  return normalizedCellDate >= normalizedFrom && normalizedCellDate <= normalizedTo
+                } else if (fromDateStr) {
+                  // Only from date: cell date must be >= from
+                  const fromDate = new Date(fromDateStr)
+                  if (isNaN(fromDate.getTime())) return false
+                  
+                  const normalizedFrom = normalizeDate(fromDate)
+                  return normalizedCellDate >= normalizedFrom
+                } else if (toDateStr) {
+                  // Only to date: cell date must be <= to
+                  const toDate = new Date(toDateStr)
+                  if (isNaN(toDate.getTime())) return false
+                  
+                  const normalizedTo = normalizeDate(toDate)
+                  return normalizedCellDate <= normalizedTo
+                }
+                
+                return true
+              }
+            : undefined,
           header: ({ column }) => {
             const title = typeof col.header === "string" ? col.header : String(columnId || "")
             return (

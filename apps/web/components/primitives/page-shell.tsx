@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { Breadcrumbs } from "@/components/breadcrumbs"
 import { cn } from "@/lib/utils"
 
 /**
@@ -12,28 +11,22 @@ export interface PageShellProps {
   description?: string
   children: React.ReactNode
   action?: React.ReactNode
-  breadcrumbs?: Array<{ label: string; href?: string }>
   className?: string
 }
 
 /**
- * Standard page shell with header, breadcrumbs, and content container
+ * Standard page shell with header and content container
+ * Note: Breadcrumbs are in the global TopBar, not per-page
  */
 export function PageShell({
   title,
   description,
   children,
   action,
-  breadcrumbs,
   className,
 }: PageShellProps) {
   return (
     <div className={cn("space-y-6", className)}>
-      {/* Breadcrumbs */}
-      {breadcrumbs && breadcrumbs.length > 0 && (
-        <Breadcrumbs items={breadcrumbs} />
-      )}
-      
       {/* Page Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">

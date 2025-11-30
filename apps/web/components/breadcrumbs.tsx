@@ -73,7 +73,7 @@ export function Breadcrumbs() {
   })
 
   return (
-    <nav aria-label="breadcrumb" className="flex items-center gap-1 text-sm">
+    <nav aria-label="breadcrumb" className="flex items-center gap-2 text-sm">
       <Link
         href="/"
         className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
@@ -82,8 +82,8 @@ export function Breadcrumbs() {
         <Home className="h-4 w-4" />
       </Link>
       {breadcrumbs.map((crumb) => (
-        <div key={crumb.href} className="flex items-center gap-1">
-          <span className="text-muted-foreground/60 select-none">/</span>
+        <div key={crumb.href} className="flex items-center gap-2">
+          <span className="text-muted-foreground/50 select-none">/</span>
           {crumb.isLast ? (
             <span className="text-foreground font-medium">{crumb.label}</span>
           ) : (

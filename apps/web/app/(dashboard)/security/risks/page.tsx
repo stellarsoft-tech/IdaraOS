@@ -47,10 +47,6 @@ export default function RisksPage() {
     <PageShell
       title="Risk Register"
       description="Identify, assess, and manage security risks across your organization."
-      breadcrumbs={[
-        { label: "Security", href: "/security" },
-        { label: "Risks" },
-      ]}
       action={
         <Protected resource="security.risk" action="write">
           <Button onClick={() => setCreateOpen(true)}>

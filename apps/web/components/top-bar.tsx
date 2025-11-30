@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { Separator } from "@/components/ui/separator"
 import { Breadcrumbs } from "@/components/breadcrumbs"
 
 interface TopBarProps {
@@ -23,8 +24,9 @@ interface TopBarProps {
 export function TopBar({ onChatsyToggle, onCommandOpen }: TopBarProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-4">
         <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="h-6" />
         <Breadcrumbs />
       </div>
 
