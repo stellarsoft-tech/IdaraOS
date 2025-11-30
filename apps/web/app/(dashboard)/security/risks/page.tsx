@@ -10,7 +10,7 @@ import { DataTableAdvanced as DataTable } from "@/components/primitives/data-tab
 import { PageShell } from "@/components/primitives/page-shell"
 import { FormDrawer } from "@/components/primitives/form-drawer"
 import { Button } from "@/components/ui/button"
-import { Protected } from "@/components/rbac/protected"
+import { Protected } from "@/components/primitives/protected"
 
 // Generated from spec
 import { columns } from "@/lib/generated/security/isms/risk/columns"

@@ -26,7 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Protected } from "@/components/rbac/protected"
+import { Protected, AccessDenied } from "@/components/primitives/protected"
+import { useCanAccess } from "@/lib/rbac/context"
 
 // Generated from spec
 import { columns as baseColumns } from "@/lib/generated/people/person/columns"
@@ -41,6 +42,7 @@ const createFields = getFormFields("create")
 const editFields = getFormFields("edit")
 
 export default function DirectoryPage() {
+  const canAccess = useCanAccess("people.directory")
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -134,6 +136,17 @@ export default function DirectoryPage() {
     }
   }
   
+  if (!canAccess) {
+    return (
+      <PageShell title="Directory">
+        <AccessDenied 
+          title="Access Denied" 
+          description="You don't have permission to view the people directory." 
+        />
+      </PageShell>
+    )
+  }
+
   if (error) {
     return (
       <PageShell
@@ -152,7 +165,7 @@ export default function DirectoryPage() {
       title="Directory"
       description="View and manage all employees in your organization."
       action={
-        <Protected resource="people.person" action="write">
+        <Protected module="people.directory" action="create">
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Person
@@ -180,7 +193,7 @@ export default function DirectoryPage() {
         emptyState={
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">No employees found</p>
-            <Protected resource="people.person" action="write">
+            <Protected module="people.directory" action="create">
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add your first employee
