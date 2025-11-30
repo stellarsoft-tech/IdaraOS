@@ -13,23 +13,53 @@ This directory contains deployment configurations for IdaraOS across different p
 
 ## Quick Start
 
-### Local Development with Docker
+### Local Development with Docker (Hot Reload)
+
+For active development with instant file changes and hot reloading:
+
+```bash
+cd deployment/docker
+docker-compose -f docker-compose.dev.yml up
+```
+
+This will:
+1. Start a PostgreSQL database
+2. Run database migrations and seed data (via `db-init` container)
+3. Start the IdaraOS web application in development mode with hot reloading
+
+Access the app at http://localhost:3000
+
+**Features:**
+- ✅ **Hot Reloading** - Changes to source files are reflected immediately
+- ✅ **Volume Mounts** - Your local repository is mounted into the container
+- ✅ **No Rebuilds** - Edit files locally, see changes instantly
+- ✅ **Full Dev Tools** - Access to all development features
+
+**Default Credentials:**
+- Email: `admin@example.com`
+- Password: `Admin123!`
+
+**To stop:**
+```bash
+docker-compose -f docker-compose.dev.yml down
+```
+
+**To reset the database:**
+```bash
+docker-compose -f docker-compose.dev.yml down -v
+docker-compose -f docker-compose.dev.yml up
+```
+
+### Local Development with Docker (Production Build)
+
+For testing production builds locally:
 
 ```bash
 cd deployment/docker
 docker-compose -f docker-compose.local.yml up -d
 ```
 
-This will:
-1. Start a PostgreSQL database
-2. Run database migrations and seed data (via `db-init` container)
-3. Start the IdaraOS web application
-
-Access the app at http://localhost:3000
-
-**Default Credentials (from seed data):**
-- Email: `admin@demo.com`
-- Password: `admin123`
+This builds a production-optimized image and runs it.
 
 **To rebuild after code changes:**
 ```bash
@@ -109,8 +139,11 @@ IdaraOS/
 │
 ├── deployment/
 │   ├── docker/
-│   │   ├── Dockerfile              # Multi-stage production build
-│   │   └── docker-compose.local.yml # Local development stack
+│   │   ├── Dockerfile                  # Multi-stage production build
+│   │   ├── Dockerfile.dev              # Development image with hot reload
+│   │   ├── Dockerfile.init             # Database initialization container
+│   │   ├── docker-compose.local.yml    # Production build for local testing
+│   │   └── docker-compose.dev.yml      # Development with hot reloading
 │   │
 │   ├── azure/
 │   │   ├── scripts/

@@ -8,11 +8,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { users, integrations } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 import { decrypt } from "@/lib/encryption"
-
-// Demo org - same as other routes
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requireOrgId } from "@/lib/api/context"
 
 interface EntraUser {
   id: string
@@ -73,11 +71,19 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get("search") || ""
 
   try {
-    // Get Entra integration config
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
+    
+    // Get Entra integration config for this organization
     const [integration] = await db
       .select()
       .from(integrations)
-      .where(eq(integrations.provider, "entra"))
+      .where(
+        and(
+          eq(integrations.provider, "entra"),
+          eq(integrations.orgId, orgId)
+        )
+      )
       .limit(1)
 
     if (!integration || integration.status !== "connected") {
@@ -111,11 +117,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get all registered user emails to exclude
+    // Get all registered user emails in this organization to exclude
     const registeredUsers = await db
       .select({ email: users.email })
       .from(users)
-      .where(eq(users.orgId, DEMO_ORG_ID))
+      .where(eq(users.orgId, orgId))
 
     const registeredEmails = new Set(
       registeredUsers.map((u) => u.email.toLowerCase())
@@ -169,6 +175,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users: responseUsers })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated", users: [] },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching Entra users:", error)
     return NextResponse.json(
       { error: "Failed to fetch users", users: [] },

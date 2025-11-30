@@ -9,9 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { roles, rolePermissions, permissions, modules, actions } from "@/lib/db/schema"
 import { eq, and, asc } from "drizzle-orm"
-
-// Demo org ID - in production, get from session
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requireOrgId } from "@/lib/api/context"
 
 export async function GET(
   request: NextRequest,
@@ -19,12 +17,13 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const orgId = await requireOrgId(request)
 
     // Get role
     const role = await db.query.roles.findFirst({
       where: and(
         eq(roles.id, id),
-        eq(roles.orgId, DEMO_ORG_ID)
+        eq(roles.orgId, orgId)
       ),
     })
 
@@ -71,6 +70,7 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+    const orgId = await requireOrgId(request)
     const body = await request.json()
     const { name, description, color, permissionIds } = body
 
@@ -78,7 +78,7 @@ export async function PUT(
     const role = await db.query.roles.findFirst({
       where: and(
         eq(roles.id, id),
-        eq(roles.orgId, DEMO_ORG_ID)
+        eq(roles.orgId, orgId)
       ),
     })
 
@@ -135,6 +135,14 @@ export async function PUT(
 
     return NextResponse.json(updatedRole)
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error updating role:", error)
     return NextResponse.json(
       { error: "Failed to update role" },
@@ -149,12 +157,13 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    const orgId = await requireOrgId(request)
 
     // Get role
     const role = await db.query.roles.findFirst({
       where: and(
         eq(roles.id, id),
-        eq(roles.orgId, DEMO_ORG_ID)
+        eq(roles.orgId, orgId)
       ),
     })
 
@@ -177,6 +186,14 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error deleting role:", error)
     return NextResponse.json(
       { error: "Failed to delete role" },

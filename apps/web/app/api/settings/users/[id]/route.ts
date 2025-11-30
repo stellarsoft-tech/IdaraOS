@@ -11,9 +11,7 @@ import { db } from "@/lib/db"
 import { users, userRoleValues, userStatusValues, persons } from "@/lib/db/schema"
 import { z } from "zod"
 import { syncUserToEntra, isEntraSyncEnabled } from "@/lib/auth/entra-sync"
-
-// TODO: Get orgId from authenticated session
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requireOrgId } from "@/lib/api/context"
 
 // Update user schema
 const UpdateUserSchema = z.object({
@@ -52,11 +50,12 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params
+    const orgId = await requireOrgId(request)
 
     const [record] = await db
       .select()
       .from(users)
-      .where(and(eq(users.id, id), eq(users.orgId, DEMO_ORG_ID)))
+      .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .limit(1)
 
     if (!record) {
@@ -65,6 +64,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(toApiResponse(record))
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching user:", error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })
   }
@@ -76,6 +83,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params
+    const orgId = await requireOrgId(request)
     const body = await request.json()
 
     // Validate
@@ -96,7 +104,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         ...data,
         updatedAt: new Date(),
       })
-      .where(and(eq(users.id, id), eq(users.orgId, DEMO_ORG_ID)))
+      .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .returning()
 
     if (!record) {
@@ -156,12 +164,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params
+    const orgId = await requireOrgId(request)
 
     // Get user email before deleting (for Entra sync)
     const [userToDelete] = await db
       .select({ email: users.email })
       .from(users)
-      .where(and(eq(users.id, id), eq(users.orgId, DEMO_ORG_ID)))
+      .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .limit(1)
 
     if (!userToDelete) {
@@ -171,7 +180,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     // Delete from database
     const result = await db
       .delete(users)
-      .where(and(eq(users.id, id), eq(users.orgId, DEMO_ORG_ID)))
+      .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .returning({ id: users.id })
 
     if (result.length === 0) {
@@ -196,6 +205,14 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error deleting user:", error)
     return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
   }

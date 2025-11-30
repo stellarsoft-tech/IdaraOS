@@ -9,29 +9,7 @@ import { eq, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { users, organizations, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
 import { z } from "zod"
-
-// TODO: Get orgId from authenticated session
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
-
-// Ensure demo org exists
-async function ensureOrgExists() {
-  const [existingOrg] = await db
-    .select()
-    .from(organizations)
-    .where(eq(organizations.id, DEMO_ORG_ID))
-    .limit(1)
-
-  if (!existingOrg) {
-    await db.insert(organizations).values({
-      id: DEMO_ORG_ID,
-      name: "My Organization",
-      slug: "my-org",
-      timezone: "UTC",
-      dateFormat: "YYYY-MM-DD",
-      currency: "USD",
-    })
-  }
-}
+import { requireOrgId } from "@/lib/api/context"
 
 // Create user schema
 const CreateUserSchema = z.object({
@@ -83,13 +61,16 @@ function toApiResponse(
 /**
  * GET /api/settings/users
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Get all users
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
+    
+    // Get all users for this organization
     const usersData = await db
       .select()
       .from(users)
-      .where(eq(users.orgId, DEMO_ORG_ID))
+      .where(eq(users.orgId, orgId))
       .orderBy(asc(users.name))
 
     // Get all role assignments for these users
@@ -152,6 +133,14 @@ export async function GET() {
 
     return NextResponse.json(response)
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching users:", error)
     return NextResponse.json(
       { error: "Failed to fetch users" },
@@ -178,14 +167,17 @@ export async function POST(request: NextRequest) {
 
     const data = parseResult.data
 
-    // Ensure org exists
-    await ensureOrgExists()
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
 
-    // Check if email already exists
+    // Check if email already exists in this organization
     const existing = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, data.email))
+      .where(and(
+        eq(users.email, data.email),
+        eq(users.orgId, orgId)
+      ))
       .limit(1)
 
     if (existing.length > 0) {
@@ -199,7 +191,7 @@ export async function POST(request: NextRequest) {
     const [record] = await db
       .insert(users)
       .values({
-        orgId: DEMO_ORG_ID,
+        orgId,
         email: data.email,
         name: data.name,
         role: data.role,
@@ -212,6 +204,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(toApiResponse(record, []), { status: 201 })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error creating user:", error)
     return NextResponse.json(
       { error: "Failed to create user" },

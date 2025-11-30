@@ -1,0 +1,103 @@
+# =============================================================================
+# IdaraOS - Docker Compose for Development (Hot Reload)
+# =============================================================================
+# This file provides a development environment with:
+# - PostgreSQL database
+# - Database migrations and seeding
+# - The IdaraOS web application with hot reloading via volume mounts
+# =============================================================================
+# Usage:
+#   cd deployment/docker
+#   docker-compose -f docker-compose.dev.yml up
+# =============================================================================
+# 
+# Key Features:
+# - Source code is mounted as volumes for instant file changes
+# - Next.js dev server runs inside container with hot reloading
+# - Database is initialized automatically on first run
+# - Changes to code are reflected immediately without rebuilding
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: idaraos-db-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: idaraos
+      POSTGRES_PASSWORD: localdevpassword
+      POSTGRES_DB: idaraos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idaraos -d idaraos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Database Migrations & Seeding (Init Container)
+  # ---------------------------------------------------------------------------
+  db-init:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.init
+    container_name: idaraos-db-init-dev
+    environment:
+      DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
+    depends_on:
+      db:
+        condition: service_healthy
+    # This container exits after running migrations and seeding
+    # Only runs if database is empty (check volume state)
+
+  # ---------------------------------------------------------------------------
+  # IdaraOS Web Application (Development Mode)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/Dockerfile.dev
+    container_name: idaraos-web-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
+      JWT_SECRET: local-dev-jwt-secret-change-in-prod-32chars
+      ENCRYPTION_KEY: local-dev-encryption-key-32chars!
+      # Enable Next.js fast refresh and hot reloading
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      # Mount entire repository for live code changes
+      - ../../:/app
+      # Use named volumes to preserve container's node_modules (don't overwrite with host's)
+      - web_node_modules:/app/node_modules
+      - web_app_node_modules:/app/apps/web/node_modules
+      # Exclude .next build cache (will be regenerated in container)
+      - web_next_cache:/app/apps/web/.next
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    # Keep container running and show logs
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data_dev:
+    driver: local
+  web_node_modules:
+    driver: local
+  web_app_node_modules:
+    driver: local
+  web_next_cache:
+    driver: local

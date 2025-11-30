@@ -9,9 +9,7 @@ import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizations } from "@/lib/db/schema"
 import { z } from "zod"
-
-// TODO: Get orgId from authenticated session
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requireOrgId } from "@/lib/api/context"
 
 // Update schema
 const UpdateOrganizationSchema = z.object({
@@ -32,33 +30,34 @@ const UpdateOrganizationSchema = z.object({
 /**
  * GET /api/settings/organization
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
+    
     const [org] = await db
       .select()
       .from(organizations)
-      .where(eq(organizations.id, DEMO_ORG_ID))
+      .where(eq(organizations.id, orgId))
       .limit(1)
 
     if (!org) {
-      // Create default organization if it doesn't exist
-      const [newOrg] = await db
-        .insert(organizations)
-        .values({
-          id: DEMO_ORG_ID,
-          name: "My Organization",
-          slug: "my-org",
-          timezone: "UTC",
-          dateFormat: "YYYY-MM-DD",
-          currency: "USD",
-        })
-        .returning()
-
-      return NextResponse.json(newOrg)
+      return NextResponse.json(
+        { error: "Organization not found" },
+        { status: 404 }
+      )
     }
 
     return NextResponse.json(org)
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error fetching organization:", error)
     return NextResponse.json(
       { error: "Failed to fetch organization" },
@@ -85,6 +84,9 @@ export async function PUT(request: NextRequest) {
 
     const data = parseResult.data
 
+    // Get orgId from authenticated session
+    const orgId = await requireOrgId(request)
+
     // Update organization
     const [updated] = await db
       .update(organizations)
@@ -92,7 +94,7 @@ export async function PUT(request: NextRequest) {
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(organizations.id, DEMO_ORG_ID))
+      .where(eq(organizations.id, orgId))
       .returning()
 
     if (!updated) {
@@ -104,6 +106,14 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(updated)
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error updating organization:", error)
     return NextResponse.json(
       { error: "Failed to update organization" },

@@ -7,8 +7,8 @@ import { db } from "@/lib/db"
 import { integrations, type IntegrationProvider } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import crypto from "crypto"
+import { requireOrgId } from "@/lib/api/context"
 
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "demo-key-change-in-production-32c"
 
 function encrypt(text: string): string {
@@ -27,13 +27,14 @@ export async function POST(
 ) {
   try {
     const { provider } = await params
+    const orgId = await requireOrgId(request)
 
     const existing = await db
       .select()
       .from(integrations)
       .where(
         and(
-          eq(integrations.orgId, DEMO_ORG_ID),
+          eq(integrations.orgId, orgId),
           eq(integrations.provider, provider as IntegrationProvider)
         )
       )
@@ -62,6 +63,14 @@ export async function POST(
       message: "SCIM token regenerated successfully",
     })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+    
     console.error("Error regenerating token:", error)
     return NextResponse.json(
       { error: "Failed to regenerate token" },
