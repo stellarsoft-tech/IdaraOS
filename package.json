@@ -8,6 +8,7 @@
     "start": "pnpm --filter web start",
     "lint": "pnpm --filter web lint",
     "lint:fix": "pnpm --filter web exec eslint --fix",
+    "typecheck": "pnpm --filter web exec tsc --noEmit",
     "generate": "tsx scripts/generate/index.ts",
     "prepare": "husky"
   },

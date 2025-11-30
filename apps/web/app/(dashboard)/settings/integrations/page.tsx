@@ -116,7 +116,7 @@ export default function IntegrationsPage() {
           duration: 6000,
         })
       } else {
-        toast.error(error instanceof Error ? error.message : "Failed to connect")
+      toast.error(error instanceof Error ? error.message : "Failed to connect")
       }
     }
   }

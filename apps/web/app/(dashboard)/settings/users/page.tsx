@@ -233,16 +233,16 @@ export default function UsersPage() {
           }
           return (
             <TooltipProvider>
-              <div className="flex flex-wrap gap-1">
-                {assignedRoles.map((role) => (
+            <div className="flex flex-wrap gap-1">
+              {assignedRoles.map((role) => (
                   <Tooltip key={role.roleId}>
                     <TooltipTrigger asChild>
                       <Badge className={`${getRoleColorClass(role.roleColor)} ${role.source === "scim" ? "pr-1" : ""}`}>
-                        {role.roleName}
+                  {role.roleName}
                         {role.source === "scim" && (
                           <RefreshCw className="h-2.5 w-2.5 ml-1 opacity-70" />
                         )}
-                      </Badge>
+                </Badge>
                     </TooltipTrigger>
                     {role.source === "scim" && (
                       <TooltipContent>
@@ -250,8 +250,8 @@ export default function UsersPage() {
                       </TooltipContent>
                     )}
                   </Tooltip>
-                ))}
-              </div>
+              ))}
+            </div>
             </TooltipProvider>
           )
         },
@@ -804,49 +804,49 @@ export default function UsersPage() {
                     const isScimAssigned = !!scimRole
                     
                     return (
-                      <div 
-                        key={role.id} 
+                    <div 
+                      key={role.id} 
                         className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
                           isScimAssigned 
                             ? "bg-muted/30 border-blue-200 dark:border-blue-800" 
                             : "hover:bg-muted/50"
                         }`}
-                      >
-                        <Checkbox
-                          id={role.id}
-                          checked={formData.roleIds.includes(role.id)}
-                          onCheckedChange={() => handleRoleToggle(role.id)}
+                    >
+                      <Checkbox
+                        id={role.id}
+                        checked={formData.roleIds.includes(role.id)}
+                        onCheckedChange={() => handleRoleToggle(role.id)}
                           disabled={isScimAssigned}
-                        />
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
+                      />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
                             <Label 
                               htmlFor={role.id} 
                               className={`font-medium ${isScimAssigned ? "text-muted-foreground" : "cursor-pointer"}`}
                             >
-                              {role.name}
-                            </Label>
-                            <Badge className={`${getRoleColorClass(role.color)} text-xs`}>
-                              {role.permissionCount || 0} permissions
-                            </Badge>
-                            {role.isSystem && (
-                              <Badge variant="outline" className="text-xs">System</Badge>
-                            )}
+                            {role.name}
+                          </Label>
+                          <Badge className={`${getRoleColorClass(role.color)} text-xs`}>
+                            {role.permissionCount || 0} permissions
+                          </Badge>
+                          {role.isSystem && (
+                            <Badge variant="outline" className="text-xs">System</Badge>
+                          )}
                             {isScimAssigned && (
                               <Badge variant="outline" className="text-xs gap-1 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400">
                                 <RefreshCw className="h-2.5 w-2.5" />
                                 SCIM
                               </Badge>
                             )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {role.description || "No description"}
-                          </p>
                         </div>
+                        <p className="text-sm text-muted-foreground">
+                          {role.description || "No description"}
+                        </p>
+                      </div>
                         {isScimAssigned && (
                           <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
-                      </div>
+                    </div>
                     )
                   })}
                 </div>

@@ -374,29 +374,29 @@ async function seedRBAC() {
   }
 
   // Assign Owner RBAC role
-  const ownerRole = await db.query.roles.findFirst({
-    where: and(
-      eq(schema.roles.orgId, org.id),
-      eq(schema.roles.slug, "owner")
-    ),
-  })
-
-  if (ownerRole && adminUser) {
-    // Check if already assigned
-    const existingAssignment = await db.query.userRoles.findFirst({
+    const ownerRole = await db.query.roles.findFirst({
       where: and(
-        eq(schema.userRoles.userId, adminUser.id),
-        eq(schema.userRoles.roleId, ownerRole.id)
+        eq(schema.roles.orgId, org.id),
+        eq(schema.roles.slug, "owner")
       ),
     })
 
-    if (!existingAssignment) {
-      await db.insert(schema.userRoles).values({
-        userId: adminUser.id,
-        roleId: ownerRole.id,
+  if (ownerRole && adminUser) {
+      // Check if already assigned
+      const existingAssignment = await db.query.userRoles.findFirst({
+        where: and(
+          eq(schema.userRoles.userId, adminUser.id),
+          eq(schema.userRoles.roleId, ownerRole.id)
+        ),
       })
+
+      if (!existingAssignment) {
+        await db.insert(schema.userRoles).values({
+          userId: adminUser.id,
+          roleId: ownerRole.id,
+        })
       console.log(`  + Assigned Owner RBAC role to admin@example.com`)
-    } else {
+      } else {
       console.log(`  ✓ admin@example.com already has Owner RBAC role`)
     }
   }
