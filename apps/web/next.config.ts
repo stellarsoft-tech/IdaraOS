@@ -4,18 +4,19 @@ import type { NextConfig } from "next";
 // Adjust these based on your security requirements
 const ContentSecurityPolicy = [
   "default-src 'self'",
-  // Scripts: self + unsafe-inline/eval for Next.js hydration
-  "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  // Scripts: self + unsafe-inline/eval for Next.js hydration + Vercel Analytics + Azure AD
+  // Note: 'self' covers _vercel paths, but we also allow Vercel domains explicitly
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://vercel-insights.com https://*.vercel-insights.com https://*.vercel.com https://login.microsoftonline.com https://*.login.microsoftonline.com",
   // Styles: self + unsafe-inline for styled-components/emotion/tailwind
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   // Images: self + data URIs + HTTPS for external images
-  "img-src 'self' data: https:",
-  // Fonts: self + data URIs
-  "font-src 'self' data:",
-  // Connect: self + Microsoft (Azure AD) + HTTPS for API calls
-  "connect-src 'self' https://login.microsoftonline.com https://graph.microsoft.com https:",
+  "img-src 'self' data: https: blob:",
+  // Fonts: self + data URIs + Google Fonts
+  "font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com",
+  // Connect: self + Microsoft (Azure AD) + Vercel Analytics + HTTPS for API calls
+  "connect-src 'self' https://login.microsoftonline.com https://*.login.microsoftonline.com https://graph.microsoft.com https://vercel-insights.com https://*.vercel-insights.com https://*.vercel.com https://vitals.vercel-insights.com https:",
   // Frame: Allow Microsoft login popups
-  "frame-src 'self' https://login.microsoftonline.com",
+  "frame-src 'self' https://login.microsoftonline.com https://*.login.microsoftonline.com",
   // Frame ancestors: Only same origin (prevents clickjacking)
   "frame-ancestors 'self'",
   // Object: Disallow plugins (Flash, Java, etc.)
@@ -23,7 +24,7 @@ const ContentSecurityPolicy = [
   // Base URI: Restrict to self (prevents base tag injection)
   "base-uri 'self'",
   // Form actions: Restrict to self + Microsoft for SSO
-  "form-action 'self' https://login.microsoftonline.com",
+  "form-action 'self' https://login.microsoftonline.com https://*.login.microsoftonline.com",
 ].join("; ");
 
 // Security headers configuration

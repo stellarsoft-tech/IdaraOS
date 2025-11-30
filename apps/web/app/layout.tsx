@@ -21,6 +21,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Only enable Vercel Analytics on Vercel platform
+  // On Azure Container Apps, this would cause 404 errors and CSP violations
+  const isVercel = process.env.VERCEL === "1" || process.env.NEXT_PUBLIC_VERCEL_ENV
+
   return (
     <html lang="en" suppressHydrationWarning className={geist.className}>
       <body className="font-sans antialiased" suppressHydrationWarning>
@@ -28,7 +32,7 @@ export default function RootLayout({
           <QueryProvider>
             <RBACProvider>
               {children}
-              <Analytics />
+              {isVercel && <Analytics />}
               <Toaster />
             </RBACProvider>
           </QueryProvider>
