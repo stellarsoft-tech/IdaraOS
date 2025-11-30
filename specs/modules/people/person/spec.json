@@ -1,0 +1,79 @@
+{
+  "entity": "person",
+  "namespace": "people",
+  "label": "Person",
+  "id": "person_id",
+  "routing": {
+    "list": "/people/directory",
+    "detail": "/people/directory/[person_id]"
+  },
+  "permissions": {
+    "read": ["HR", "Admin", "Owner"],
+    "write": ["HR", "Admin", "Owner"],
+    "scope": "org_id"
+  },
+  "fields": [
+    {
+      "name": "person_id",
+      "type": "uuid",
+      "required": true
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "search": {
+        "fts": true
+      }
+    },
+    {
+      "name": "email",
+      "type": "string",
+      "required": true,
+      "validation": "email",
+      "search": {
+        "fts": true
+      }
+    },
+    {
+      "name": "role",
+      "type": "string",
+      "required": true
+    },
+    {
+      "name": "team",
+      "type": "string",
+      "required": false
+    },
+    {
+      "name": "status",
+      "type": "enum",
+      "values": ["active", "onboarding", "offboarding", "inactive"],
+      "default": "active",
+      "required": true
+    },
+    {
+      "name": "start_date",
+      "type": "date",
+      "required": true
+    },
+    {
+      "name": "assigned_assets",
+      "type": "number",
+      "required": false,
+      "computed": true,
+      "expr": "COUNT(assets.id) WHERE assets.assigned_to = person_id"
+    }
+  ],
+  "table": {
+    "columns": ["name", "email", "role", "team", "status", "start_date", "assigned_assets"],
+    "defaultSort": ["name", "asc"],
+    "filters": ["status", "role", "team"]
+  },
+  "forms": {
+    "create": ["name", "email", "role", "team", "start_date"],
+    "edit": ["name", "email", "role", "team", "status", "start_date"]
+  },
+  "events": ["person.created", "person.updated", "person.deleted"]
+}
+

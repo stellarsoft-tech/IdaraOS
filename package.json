@@ -1,0 +1,17 @@
+{
+  "name": "idara-os",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "start": "pnpm --filter web start",
+    "lint": "pnpm --filter web lint",
+    "generate": "tsx scripts/generate/index.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
+
+
