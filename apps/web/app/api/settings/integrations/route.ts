@@ -50,6 +50,61 @@ const SaveEntraConfigSchema = z.object({
   scimEnabled: z.boolean().default(true),
 })
 
+/**
+ * Validate Azure AD / Entra ID credentials by attempting to get an access token
+ * This ensures the tenant ID, client ID, and client secret are all valid
+ */
+async function validateEntraCredentials(
+  tenantId: string,
+  clientId: string,
+  clientSecret: string
+): Promise<{ valid: boolean; error?: string }> {
+  try {
+    // Attempt to get an access token using client credentials flow
+    const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`
+    
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: "https://graph.microsoft.com/.default",
+        grant_type: "client_credentials",
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      const errorDescription = errorData.error_description || errorData.error || "Invalid credentials"
+      
+      // Parse common Azure AD errors
+      if (errorDescription.includes("AADSTS700016")) {
+        return { valid: false, error: "Invalid Client ID - application not found in the tenant" }
+      }
+      if (errorDescription.includes("AADSTS7000215")) {
+        return { valid: false, error: "Invalid Client Secret - the secret is incorrect or expired" }
+      }
+      if (errorDescription.includes("AADSTS90002") || errorDescription.includes("AADSTS900023")) {
+        return { valid: false, error: "Invalid Tenant ID - tenant not found" }
+      }
+      
+      return { valid: false, error: errorDescription }
+    }
+
+    // Successfully got a token - credentials are valid
+    return { valid: true }
+  } catch (error) {
+    console.error("Error validating Entra credentials:", error)
+    return { 
+      valid: false, 
+      error: "Failed to connect to Microsoft - please check your network connection" 
+    }
+  }
+}
+
 const UpdateEntraConfigSchema = z.object({
   provider: z.literal("entra"),
   ssoEnabled: z.boolean().optional(),
@@ -67,7 +122,7 @@ export async function GET(request: NextRequest) {
     const provider = searchParams.get("provider")
     const orgId = await requireOrgId(request)
 
-    let query = db
+    const query = db
       .select()
       .from(integrations)
       .where(eq(integrations.orgId, orgId))
@@ -175,6 +230,27 @@ export async function POST(request: NextRequest) {
 
       const data = parseResult.data
 
+      // Validate credentials before saving
+      const validation = await validateEntraCredentials(
+        data.tenantId,
+        data.clientId,
+        data.clientSecret
+      )
+
+      if (!validation.valid) {
+        return NextResponse.json(
+          { 
+            error: "Invalid credentials", 
+            details: validation.error,
+            field: validation.error?.includes("Client ID") ? "clientId" 
+                 : validation.error?.includes("Client Secret") ? "clientSecret"
+                 : validation.error?.includes("Tenant") ? "tenantId"
+                 : undefined
+          },
+          { status: 400 }
+        )
+      }
+
       // Check if integration already exists
       const existing = await db
         .select()
@@ -204,6 +280,8 @@ export async function POST(request: NextRequest) {
             scimEnabled: data.scimEnabled,
             scimEndpoint,
             scimTokenEncrypted: encrypt(scimToken),
+            lastError: null, // Clear any previous errors
+            lastErrorAt: null,
             updatedAt: new Date(),
           })
           .where(eq(integrations.id, existing[0].id))
@@ -219,7 +297,7 @@ export async function POST(request: NextRequest) {
           scimEnabled: updated.scimEnabled,
           scimEndpoint: updated.scimEndpoint,
           scimToken, // Return token only on creation/update
-          message: "Integration updated successfully",
+          message: "Integration connected successfully - credentials validated",
         })
       }
 
@@ -251,7 +329,7 @@ export async function POST(request: NextRequest) {
           scimEnabled: created.scimEnabled,
           scimEndpoint: created.scimEndpoint,
           scimToken, // Return token only on creation
-          message: "Integration connected successfully",
+          message: "Integration connected successfully - credentials validated",
         },
         { status: 201 }
       )

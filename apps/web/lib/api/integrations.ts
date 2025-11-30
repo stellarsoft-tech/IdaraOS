@@ -57,6 +57,19 @@ async function fetchEntraIntegration(): Promise<EntraIntegration> {
   return response.json()
 }
 
+// Custom error class to include validation details
+export class IntegrationError extends Error {
+  details?: string
+  field?: string
+  
+  constructor(message: string, details?: string, field?: string) {
+    super(message)
+    this.name = "IntegrationError"
+    this.details = details
+    this.field = field
+  }
+}
+
 async function saveEntraIntegration(data: SaveEntraConfig): Promise<EntraIntegration> {
   const response = await fetch("/api/settings/integrations", {
     method: "POST",
@@ -65,7 +78,11 @@ async function saveEntraIntegration(data: SaveEntraConfig): Promise<EntraIntegra
   })
   if (!response.ok) {
     const error = await response.json()
-    throw new Error(error.error || "Failed to save integration")
+    throw new IntegrationError(
+      error.error || "Failed to save integration",
+      error.details,
+      error.field
+    )
   }
   return response.json()
 }

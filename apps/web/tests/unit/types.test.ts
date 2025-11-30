@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
-import { PersonSchema, CreatePersonSchema } from "../../lib/generated/people/person/types"
-import { riskSchema, createRiskSchema } from "../../lib/generated/security/isms/risk/types"
+import { PersonSchema } from "../../lib/generated/people/person/types"
+import { RiskSchema } from "../../lib/generated/security/isms/risk/types"
 
 describe("Generated Types - Person", () => {
   it("should validate valid person data", () => {
@@ -72,10 +72,11 @@ describe("Generated Types - Risk", () => {
       owner_id: "660e8400-e29b-41d4-a716-446655440001",
       likelihood: "high",
       impact: "high",
+      level: "high",
       status: "open",
     }
     
-    const result = riskSchema.safeParse(validRisk)
+    const result = RiskSchema.safeParse(validRisk)
     expect(result.success).toBe(true)
   })
   
@@ -86,10 +87,11 @@ describe("Generated Types - Risk", () => {
       owner_id: "660e8400-e29b-41d4-a716-446655440001",
       likelihood: "super-high", // Invalid
       impact: "high",
+      level: "high",
       status: "open",
     }
     
-    const result = riskSchema.safeParse(invalidRisk)
+    const result = RiskSchema.safeParse(invalidRisk)
     expect(result.success).toBe(false)
   })
   
@@ -100,10 +102,11 @@ describe("Generated Types - Risk", () => {
       owner_id: "660e8400-e29b-41d4-a716-446655440001",
       likelihood: "high",
       impact: "high",
+      level: "high",
       status: "open",
     }
     
-    const result = riskSchema.safeParse(invalidRisk)
+    const result = RiskSchema.safeParse(invalidRisk)
     expect(result.success).toBe(false)
   })
   
@@ -114,11 +117,12 @@ describe("Generated Types - Risk", () => {
       owner_id: "660e8400-e29b-41d4-a716-446655440001",
       likelihood: "high",
       impact: "high",
+      level: "high",
       status: "open",
       // description is optional
     }
     
-    const result = riskSchema.safeParse(validRisk)
+    const result = RiskSchema.safeParse(validRisk)
     expect(result.success).toBe(true)
   })
 })

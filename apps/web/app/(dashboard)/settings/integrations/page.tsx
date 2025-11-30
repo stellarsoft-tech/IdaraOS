@@ -38,6 +38,7 @@ import {
   useUpdateEntraIntegration,
   useDisconnectEntraIntegration,
   useRegenerateScimToken,
+  IntegrationError,
 } from "@/lib/api/integrations"
 
 // Microsoft Entra ID (Azure AD) Icon
@@ -106,7 +107,15 @@ export default function IntegrationsPage() {
       
       toast.success("Microsoft Entra ID connected successfully")
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to connect")
+      // Show detailed validation error if available
+      if (error instanceof IntegrationError && error.details) {
+        toast.error(error.details, {
+          description: error.field ? `Please check the ${error.field} field` : undefined,
+          duration: 6000,
+        })
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to connect")
+      }
     }
   }
 
