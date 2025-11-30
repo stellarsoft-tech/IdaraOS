@@ -118,7 +118,7 @@ jobs:
           cd apps/web
           export DATABASE_URL
           echo "Running database migrations..."
-          pnpm db:push
+          pnpm drizzle-kit push --force
           echo "✅ Database migrations completed"
 
       - name: Check if database is seeded
@@ -316,7 +316,7 @@ jobs:
           cd apps/web
           export DATABASE_URL
           echo "Running database migrations..."
-          pnpm db:push
+          pnpm drizzle-kit push --force
           echo "✅ Database migrations completed"
 
       - name: Check if database is seeded
@@ -506,7 +506,7 @@ jobs:
           cd apps/web
           export DATABASE_URL
           echo "Running database migrations..."
-          pnpm db:push
+          pnpm drizzle-kit push --force
           echo "✅ Database migrations completed"
 
       - name: Check if database is seeded
