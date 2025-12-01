@@ -113,6 +113,10 @@ const UpdateEntraConfigSchema = z.object({
   // SCIM Group provisioning settings
   scimGroupPrefix: z.string().optional(),
   scimBidirectionalSync: z.boolean().optional(),
+  // People sync settings
+  syncPeopleEnabled: z.boolean().optional(),
+  deletePeopleOnUserDelete: z.boolean().optional(),
+  settings: z.record(z.unknown()).optional(),
 })
 
 /**
@@ -156,6 +160,9 @@ export async function GET(request: NextRequest) {
           hasScimToken: false,
           scimGroupPrefix: null,
           scimBidirectionalSync: false,
+          syncPeopleEnabled: false,
+          deletePeopleOnUserDelete: true,
+          settings: null,
           lastSyncAt: null,
           syncedUserCount: 0,
           syncedGroupCount: 0,
@@ -178,6 +185,10 @@ export async function GET(request: NextRequest) {
         // SCIM Group settings
         scimGroupPrefix: integration.scimGroupPrefix,
         scimBidirectionalSync: integration.scimBidirectionalSync,
+        // People sync settings
+        syncPeopleEnabled: integration.syncPeopleEnabled,
+        deletePeopleOnUserDelete: integration.deletePeopleOnUserDelete,
+        settings: integration.settings,
         lastSyncAt: integration.lastSyncAt?.toISOString(),
         syncedUserCount: parseInt(integration.syncedUserCount || "0"),
         syncedGroupCount: parseInt(integration.syncedGroupCount || "0"),
@@ -422,6 +433,16 @@ export async function PATCH(request: NextRequest) {
       if (data.scimBidirectionalSync !== undefined) {
         updateData.scimBidirectionalSync = data.scimBidirectionalSync
       }
+      // People sync settings
+      if (data.syncPeopleEnabled !== undefined) {
+        updateData.syncPeopleEnabled = data.syncPeopleEnabled
+      }
+      if (data.deletePeopleOnUserDelete !== undefined) {
+        updateData.deletePeopleOnUserDelete = data.deletePeopleOnUserDelete
+      }
+      if (data.settings !== undefined) {
+        updateData.settings = data.settings
+      }
 
       const [updated] = await db
         .update(integrations)
@@ -437,6 +458,9 @@ export async function PATCH(request: NextRequest) {
         scimEnabled: updated.scimEnabled,
         scimGroupPrefix: updated.scimGroupPrefix,
         scimBidirectionalSync: updated.scimBidirectionalSync,
+        syncPeopleEnabled: updated.syncPeopleEnabled,
+        deletePeopleOnUserDelete: updated.deletePeopleOnUserDelete,
+        settings: updated.settings,
         message: "Integration updated",
       })
     }

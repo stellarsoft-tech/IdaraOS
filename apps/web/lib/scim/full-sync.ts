@@ -23,9 +23,36 @@ import {
   scimGroups, 
   userScimGroups, 
   userRoles,
-  roles 
+  roles,
+  persons
 } from "@/lib/db/schema"
-import { getEntraConfig } from "@/lib/auth/entra-config"
+import { getEntraConfig, type EntraConfig } from "@/lib/auth/entra-config"
+
+/**
+ * Property mapping configuration for syncing Entra user properties to People fields
+ */
+export interface PropertyMapping {
+  // Entra property -> People field
+  displayName?: string // maps to name (always)
+  mail?: string // maps to email (always)
+  jobTitle?: string // default: role
+  department?: string // default: team
+  officeLocation?: string // default: location
+  mobilePhone?: string // default: phone
+  employeeHireDate?: string // default: startDate
+  employeeLeaveDateTime?: string // default: endDate
+}
+
+export const DEFAULT_PROPERTY_MAPPING: PropertyMapping = {
+  displayName: "name",
+  mail: "email",
+  jobTitle: "role",
+  department: "team",
+  officeLocation: "location",
+  mobilePhone: "phone",
+  employeeHireDate: "startDate",
+  employeeLeaveDateTime: "endDate",
+}
 
 interface GraphGroup {
   id: string
@@ -41,6 +68,13 @@ interface GraphUser {
   givenName?: string
   surname?: string
   accountEnabled?: boolean
+  // Additional properties for People sync
+  jobTitle?: string
+  department?: string
+  officeLocation?: string
+  mobilePhone?: string
+  employeeHireDate?: string
+  employeeLeaveDateTime?: string
 }
 
 interface SyncResult {
@@ -53,6 +87,9 @@ interface SyncResult {
     usersCreated: number
     usersUpdated: number
     usersDeleted: number
+    peopleCreated: number
+    peopleUpdated: number
+    peopleDeleted: number
     rolesAssigned: number
     rolesRemoved: number
     errors: string[]
@@ -136,8 +173,14 @@ async function fetchEntraGroups(accessToken: string, prefix: string): Promise<Gr
  */
 async function fetchGroupMembers(accessToken: string, groupId: string): Promise<GraphUser[]> {
   try {
+    // Request additional properties for People sync
+    const selectFields = [
+      "id", "displayName", "mail", "userPrincipalName", "givenName", "surname", "accountEnabled",
+      "jobTitle", "department", "officeLocation", "mobilePhone", "employeeHireDate", "employeeLeaveDateTime"
+    ].join(",")
+    
     const response = await fetch(
-      `https://graph.microsoft.com/v1.0/groups/${groupId}/members?$select=id,displayName,mail,userPrincipalName,givenName,surname,accountEnabled`,
+      `https://graph.microsoft.com/v1.0/groups/${groupId}/members?$select=${selectFields}`,
       {
         headers: { Authorization: `Bearer ${accessToken}` },
       }
@@ -259,6 +302,129 @@ async function getOrCreateUser(
     .returning()
 
   return { user: newUser, created: true }
+}
+
+/**
+ * Generate a URL-friendly slug from a name
+ */
+function generateSlug(name: string, email: string): string {
+  const baseSlug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+  
+  // Add part of email to make unique
+  const emailPart = email.split("@")[0].replace(/[^a-z0-9]/g, "").slice(0, 8)
+  return `${baseSlug}-${emailPart}`
+}
+
+/**
+ * Create or update a Person record linked to a User
+ */
+async function getOrCreatePerson(
+  orgId: string,
+  userId: string,
+  entraUser: GraphUser,
+  _config: EntraConfig // Reserved for future property mapping support
+): Promise<{ person: typeof persons.$inferSelect | null; created: boolean; updated: boolean }> {
+  const email = entraUser.mail || entraUser.userPrincipalName
+  const name = entraUser.displayName || email
+
+  // Check if user already has a linked person
+  const [existingUser] = await db
+    .select({ personId: users.personId })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (existingUser?.personId) {
+    // Person already linked - update if needed
+    const [existingPerson] = await db
+      .select()
+      .from(persons)
+      .where(eq(persons.id, existingUser.personId))
+      .limit(1)
+
+    if (existingPerson) {
+      // Update person with latest Entra data
+      const updates: Partial<typeof persons.$inferInsert> = {}
+      
+      if (name !== existingPerson.name) updates.name = name
+      if (email !== existingPerson.email) updates.email = email
+      if (entraUser.jobTitle && entraUser.jobTitle !== existingPerson.role) {
+        updates.role = entraUser.jobTitle
+      }
+      if (entraUser.department && entraUser.department !== existingPerson.team) {
+        updates.team = entraUser.department
+      }
+      if (entraUser.officeLocation && entraUser.officeLocation !== existingPerson.location) {
+        updates.location = entraUser.officeLocation
+      }
+      if (entraUser.mobilePhone && entraUser.mobilePhone !== existingPerson.phone) {
+        updates.phone = entraUser.mobilePhone
+      }
+
+      if (Object.keys(updates).length > 0) {
+        const [updated] = await db
+          .update(persons)
+          .set({ ...updates, updatedAt: new Date() })
+          .where(eq(persons.id, existingPerson.id))
+          .returning()
+        return { person: updated, created: false, updated: true }
+      }
+
+      return { person: existingPerson, created: false, updated: false }
+    }
+  }
+
+  // Try to find person by email (might exist but not linked)
+  const [existingPersonByEmail] = await db
+    .select()
+    .from(persons)
+    .where(and(eq(persons.orgId, orgId), eq(persons.email, email)))
+    .limit(1)
+
+  if (existingPersonByEmail) {
+    // Link existing person to user
+    await db
+      .update(users)
+      .set({ personId: existingPersonByEmail.id, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+
+    console.log(`[Full Sync] Linked existing person ${existingPersonByEmail.name} to user`)
+    return { person: existingPersonByEmail, created: false, updated: false }
+  }
+
+  // Create new person
+  const slug = generateSlug(name, email)
+  const startDate = entraUser.employeeHireDate 
+    ? new Date(entraUser.employeeHireDate).toISOString().split("T")[0]
+    : new Date().toISOString().split("T")[0]
+
+  const [newPerson] = await db
+    .insert(persons)
+    .values({
+      orgId,
+      slug,
+      name,
+      email,
+      role: entraUser.jobTitle || "Employee",
+      team: entraUser.department || null,
+      location: entraUser.officeLocation || null,
+      phone: entraUser.mobilePhone || null,
+      status: "active",
+      startDate,
+    })
+    .returning()
+
+  // Link person to user
+  await db
+    .update(users)
+    .set({ personId: newPerson.id, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+
+  console.log(`[Full Sync] Created and linked person: ${newPerson.name}`)
+  return { person: newPerson, created: true, updated: false }
 }
 
 /**
@@ -410,14 +576,16 @@ async function cleanupStaleGroupMemberships(
 }
 
 /**
- * Clean up groups that no longer match the prefix and remove associated users/roles
+ * Clean up groups that no longer match the prefix and remove associated users/roles/people
  */
 async function cleanupStaleGroups(
   orgId: string,
-  validGroupExternalIds: string[]
-): Promise<{ groupsRemoved: number; usersRemoved: number; rolesRemoved: number }> {
+  validGroupExternalIds: string[],
+  config: EntraConfig
+): Promise<{ groupsRemoved: number; usersRemoved: number; peopleRemoved: number; rolesRemoved: number }> {
   let groupsRemoved = 0
   let usersRemoved = 0
+  let peopleRemoved = 0
   let rolesRemoved = 0
 
   // Find all SCIM groups in our DB that are NOT in the valid list
@@ -430,7 +598,7 @@ async function cleanupStaleGroups(
 
   if (staleGroups.length === 0) {
     console.log(`[Full Sync] No stale groups to clean up`)
-    return { groupsRemoved: 0, usersRemoved: 0, rolesRemoved: 0 }
+    return { groupsRemoved: 0, usersRemoved: 0, peopleRemoved: 0, rolesRemoved: 0 }
   }
 
   console.log(`[Full Sync] Found ${staleGroups.length} stale group(s) to clean up`)
@@ -484,14 +652,22 @@ async function cleanupStaleGroups(
 
             if (user && user.scimProvisioned) {
               // User was provisioned via SCIM/sync and is no longer in any valid group
-              // DELETE the user entirely
               
-              // First remove any remaining roles
+              // Delete linked Person if configured to do so
+              if (config.deletePeopleOnUserDelete && user.personId) {
+                await db
+                  .delete(persons)
+                  .where(eq(persons.id, user.personId))
+                peopleRemoved++
+                console.log(`[Full Sync] DELETED person linked to user ${user.email}`)
+              }
+              
+              // Remove any remaining roles
               await db
                 .delete(userRoles)
                 .where(eq(userRoles.userId, userId))
 
-              // Then delete the user
+              // Delete the user
               await db
                 .delete(users)
                 .where(eq(users.id, userId))
@@ -515,7 +691,7 @@ async function cleanupStaleGroups(
     }
   }
 
-  return { groupsRemoved, usersRemoved, rolesRemoved }
+  return { groupsRemoved, usersRemoved, peopleRemoved, rolesRemoved }
 }
 
 /**
@@ -529,6 +705,9 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     usersCreated: 0,
     usersUpdated: 0,
     usersDeleted: 0,
+    peopleCreated: 0,
+    peopleUpdated: 0,
+    peopleDeleted: 0,
     rolesAssigned: 0,
     rolesRemoved: 0,
     errors: [],
@@ -628,6 +807,23 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
             console.log(`[Full Sync] Created user: ${user.email}`)
           }
 
+          // Create/update Person record if People sync is enabled
+          if (config.syncPeopleEnabled) {
+            try {
+              const { created: personCreated, updated: personUpdated } = await getOrCreatePerson(
+                orgId,
+                user.id,
+                member,
+                config
+              )
+              if (personCreated) stats.peopleCreated++
+              if (personUpdated) stats.peopleUpdated++
+            } catch (personError) {
+              console.error(`[Full Sync] Error creating/updating person for ${user.email}:`, personError)
+              // Don't fail the whole sync for person errors
+            }
+          }
+
           // Sync group membership and role
           const { membershipAdded, roleAssigned } = await syncUserGroupMembership(
             user.id,
@@ -673,9 +869,10 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
   // Clean up groups that no longer match the prefix (or were removed from Entra)
   // This is the key for idempotent sync - removes stale data when prefix changes
   const validGroupExternalIds = entraGroups.map(g => g.id)
-  const cleanupResult = await cleanupStaleGroups(orgId, validGroupExternalIds)
+  const cleanupResult = await cleanupStaleGroups(orgId, validGroupExternalIds, config)
   stats.groupsRemoved = cleanupResult.groupsRemoved
   stats.usersDeleted = cleanupResult.usersRemoved
+  stats.peopleDeleted = cleanupResult.peopleRemoved
   stats.rolesRemoved += cleanupResult.rolesRemoved
 
   // Update integration sync stats
@@ -701,7 +898,10 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     })
     .where(and(eq(integrations.orgId, orgId), eq(integrations.provider, "entra")))
 
-  const message = `Synced ${stats.groupsSynced} groups (removed ${stats.groupsRemoved} stale), created ${stats.usersCreated} users (deleted ${stats.usersDeleted}), assigned ${stats.rolesAssigned} roles, removed ${stats.rolesRemoved} stale assignments`
+  const peopleInfo = config.syncPeopleEnabled 
+    ? `, people: +${stats.peopleCreated}/-${stats.peopleDeleted}`
+    : ""
+  const message = `Synced ${stats.groupsSynced} groups (removed ${stats.groupsRemoved} stale), users: +${stats.usersCreated}/-${stats.usersDeleted}${peopleInfo}, roles: +${stats.rolesAssigned}/-${stats.rolesRemoved}`
   console.log(`[Full Sync] Complete: ${message}`)
 
   return {

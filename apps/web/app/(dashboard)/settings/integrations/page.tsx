@@ -194,6 +194,30 @@ export default function IntegrationsPage() {
     }
   }
 
+  const handleTogglePeopleSync = async (enabled: boolean) => {
+    try {
+      await updateEntra.mutateAsync({
+        provider: "entra",
+        syncPeopleEnabled: enabled,
+      })
+      toast.success(enabled ? "People Directory sync enabled" : "People Directory sync disabled")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update")
+    }
+  }
+
+  const handleToggleDeletePeopleOnUserDelete = async (enabled: boolean) => {
+    try {
+      await updateEntra.mutateAsync({
+        provider: "entra",
+        deletePeopleOnUserDelete: enabled,
+      })
+      toast.success(enabled ? "People will be deleted with users" : "People will be kept when users are deleted")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update")
+    }
+  }
+
   const handleRegenerateToken = async () => {
     try {
       const result = await regenerateToken.mutateAsync()
@@ -216,6 +240,9 @@ export default function IntegrationsPage() {
           if (stats.groupsRemoved > 0) parts.push(`-${stats.groupsRemoved} stale`)
           parts.push(`Users: +${stats.usersCreated}`)
           if (stats.usersDeleted > 0) parts.push(`-${stats.usersDeleted} deleted`)
+          if (stats.peopleCreated > 0 || stats.peopleDeleted > 0) {
+            parts.push(`People: +${stats.peopleCreated}/-${stats.peopleDeleted}`)
+          }
           parts.push(`Roles: +${stats.rolesAssigned}/-${stats.rolesRemoved}`)
           description = parts.join(" • ")
         }
@@ -673,6 +700,86 @@ export default function IntegrationsPage() {
                               This ensures Entra ID remains the source of truth for user data and roles.
                             </AlertDescription>
                           </Alert>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* People Directory Sync */}
+                    <Card>
+                      <CardHeader className="pt-0">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          People Directory Sync
+                        </CardTitle>
+                        <CardDescription>
+                          Automatically create and update People records when syncing users from Entra ID
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-4">
+                        {/* Enable People Sync */}
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <div className="font-medium text-sm">Create People Records</div>
+                            <div className="text-xs text-muted-foreground">
+                              Create entries in the People Directory when syncing users
+                            </div>
+                          </div>
+                          <Switch 
+                            checked={entraConfig?.syncPeopleEnabled || false} 
+                            onCheckedChange={handleTogglePeopleSync}
+                            disabled={!canEdit || updateEntra.isPending}
+                          />
+                        </div>
+
+                        {entraConfig?.syncPeopleEnabled && (
+                          <>
+                            {/* Delete People with Users */}
+                            <div className="flex items-center justify-between">
+                              <div className="space-y-0.5">
+                                <div className="font-medium text-sm">Delete People with Users</div>
+                                <div className="text-xs text-muted-foreground">
+                                  When a user is deleted during sync, also delete their linked Person record
+                                </div>
+                              </div>
+                              <Switch 
+                                checked={entraConfig?.deletePeopleOnUserDelete !== false} 
+                                onCheckedChange={handleToggleDeletePeopleOnUserDelete}
+                                disabled={!canEdit || updateEntra.isPending}
+                              />
+                            </div>
+
+                            <Separator />
+
+                            {/* Property Mapping Info */}
+                            <Card className="bg-muted/50">
+                              <CardHeader className="pb-2 pt-0">
+                                <CardTitle className="text-sm">Property Mapping</CardTitle>
+                              </CardHeader>
+                              <CardContent className="pt-0">
+                                <div className="text-xs text-muted-foreground space-y-2">
+                                  <p>The following Entra ID properties are mapped to People fields:</p>
+                                  <ul className="space-y-1 ml-4 list-disc">
+                                    <li><strong>displayName</strong> → Name</li>
+                                    <li><strong>mail / userPrincipalName</strong> → Email</li>
+                                    <li><strong>jobTitle</strong> → Role/Position</li>
+                                    <li><strong>department</strong> → Team</li>
+                                    <li><strong>officeLocation</strong> → Location</li>
+                                    <li><strong>mobilePhone</strong> → Phone</li>
+                                    <li><strong>employeeHireDate</strong> → Start Date</li>
+                                  </ul>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <Alert variant="default" className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+                              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                              <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
+                                <strong>Important:</strong> When users are deleted during sync (removed from all groups), 
+                                their linked People records will {entraConfig?.deletePeopleOnUserDelete !== false ? "also be deleted" : "be kept"}. 
+                                You can still create and link People manually.
+                              </AlertDescription>
+                            </Alert>
+                          </>
                         )}
                       </CardContent>
                     </Card>

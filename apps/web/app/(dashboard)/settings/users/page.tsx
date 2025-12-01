@@ -511,8 +511,10 @@ export default function UsersPage() {
         let description = ""
         if (stats) {
           const parts = []
-          if (stats.usersCreated > 0) parts.push(`+${stats.usersCreated} created`)
-          if (stats.usersDeleted > 0) parts.push(`-${stats.usersDeleted} deleted`)
+          if (stats.usersCreated > 0) parts.push(`+${stats.usersCreated} users`)
+          if (stats.usersDeleted > 0) parts.push(`-${stats.usersDeleted} users`)
+          if (stats.peopleCreated > 0) parts.push(`+${stats.peopleCreated} people`)
+          if (stats.peopleDeleted > 0) parts.push(`-${stats.peopleDeleted} people`)
           if (stats.rolesAssigned > 0) parts.push(`+${stats.rolesAssigned} roles`)
           if (stats.rolesRemoved > 0) parts.push(`-${stats.rolesRemoved} roles`)
           if (stats.groupsRemoved > 0) parts.push(`${stats.groupsRemoved} stale groups removed`)
