@@ -1,6 +1,12 @@
-# IdaraOS - Organization Management Operating System
+# IdaraOS - Organization Operating System
 
-A modern, design-first operating system for organization management built with Next.js, React, and TypeScript.
+**A unified platform for managing your organization, from startup to enterprise.**
+
+IdaraOS was born from a real need: managing an organization that requires proper security, compliance, and effective people management—without paying a fortune that most startups simply can't afford. When we looked at the open-source landscape for a comprehensive solution, we found nothing. The existing tools were either prohibitively expensive enterprise software or fragmented point solutions that required stitching together dozens of vendors.
+
+So we built IdaraOS: an open-source, extensible platform that brings together HR & people management, asset tracking, finance operations, and a complete security engine (supporting ISO 27001, SOC I, SOC II, and more) with risk registers, controls, audits, and objectives—all in one place. It's designed for individuals and organizations of all scales who want enterprise-grade organization management without the enterprise price tag.
+
+Built with Next.js and modern web technologies using a design-first, API-first approach.
 
 ## Quick Start (Local Development)
 
@@ -13,7 +19,7 @@ A modern, design-first operating system for organization management built with N
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/IdaraOS.git
+git clone https://github.com/stellarsoft-tech/IdaraOS.git
 cd IdaraOS
 
 # Start the development environment
@@ -131,12 +137,12 @@ Workforce management:
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 (App Router), React 19, TypeScript
+- **Framework**: Next.js 15 (App Router)
 - **Database**: PostgreSQL 16 with Drizzle ORM
 - **UI**: Tailwind CSS 4, shadcn/ui (Radix UI primitives)
 - **Forms**: react-hook-form + Zod validation
 - **Tables**: TanStack Table v8 with virtualization
-- **State**: TanStack Query (React Query) for server state
+- **State**: TanStack Query for server state
 - **Auth**: NextAuth.js with Microsoft Entra ID support
 - **Package Manager**: pnpm (workspaces)
 
