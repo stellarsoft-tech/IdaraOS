@@ -197,11 +197,20 @@ export async function POST(request: NextRequest) {
       .limit(1)
 
     if (existing.length > 0) {
-      // User exists - return existing user
-      return NextResponse.json(toScimUser(existing[0]), { status: 200 })
+      // User exists - update scimProvisioned flag if not already set
+      const existingUser = existing[0]
+      if (!existingUser.scimProvisioned) {
+        const [updatedUser] = await db
+          .update(users)
+          .set({ scimProvisioned: true, updatedAt: new Date() })
+          .where(eq(users.id, existingUser.id))
+          .returning()
+        return NextResponse.json(toScimUser(updatedUser), { status: 200 })
+      }
+      return NextResponse.json(toScimUser(existingUser), { status: 200 })
     }
 
-    // Create new user
+    // Create new user - mark as SCIM provisioned
     const [newUser] = await db
       .insert(users)
       .values({
@@ -209,6 +218,7 @@ export async function POST(request: NextRequest) {
         email: userName,
         name: fullName,
         entraId: externalId || null,
+        scimProvisioned: true, // Mark as SCIM-provisioned
         status: active ? "active" : "invited",
         invitedAt: new Date(),
       })

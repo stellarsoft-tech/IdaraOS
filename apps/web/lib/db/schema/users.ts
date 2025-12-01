@@ -29,6 +29,7 @@ export const users = pgTable(
     orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
     personId: uuid("person_id").references(() => persons.id, { onDelete: "set null" }),
     entraId: text("entra_id"), // Microsoft Entra ID object ID (when SSO linked)
+    scimProvisioned: boolean("scim_provisioned").notNull().default(false), // True if user was created via SCIM provisioning
     email: text("email").notNull().unique(),
     passwordHash: text("password_hash"), // null for invited users who haven't set password
     name: text("name").notNull(),

@@ -20,9 +20,14 @@ const securityHeaders: Record<string, string> = {
 
 // Routes that require authentication
 const protectedRoutes = [
-  "/",
+  "/dashboard",
   "/people",
+  "/assets",
   "/security",
+  "/docs",
+  "/finance",
+  "/vendors",
+  "/workflows",
   "/settings",
 ]
 
@@ -90,7 +95,7 @@ export async function middleware(request: NextRequest) {
 
   // Handle auth routes - redirect to dashboard if already authenticated
   if (isAuthRoute && sessionToken) {
-    const response = NextResponse.redirect(new URL("/", request.url))
+    const response = NextResponse.redirect(new URL("/dashboard", request.url))
     return applySecurityHeaders(response)
   }
 

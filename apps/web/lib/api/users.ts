@@ -62,6 +62,7 @@ export interface ApiUser {
   hasEntraLink: boolean
   // SCIM-related flags for role management
   hasScimRoles: boolean // True if user has any SCIM-assigned roles
+  isScimProvisioned: boolean // True if user was created/provisioned via SCIM
 }
 
 // Create/Update types

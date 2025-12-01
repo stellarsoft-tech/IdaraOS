@@ -46,8 +46,22 @@ const RBACContext = React.createContext<RBACContextValue>({
   refreshPermissions: async () => {},
 })
 
-// Pages that don't require authentication
-const PUBLIC_PATHS = ["/login", "/setup", "/forgot-password", "/registration-incomplete"]
+// Pages that don't require authentication (uses startsWith for prefix matching)
+const PUBLIC_PATH_PREFIXES = ["/login", "/setup", "/forgot-password", "/registration-incomplete"]
+
+// Pages that require exact match for public access
+const PUBLIC_EXACT_PATHS = ["/"]
+
+/**
+ * Check if a path is public (doesn't require authentication)
+ */
+function isPathPublic(pathname: string | null): boolean {
+  if (!pathname) return false
+  // Check exact matches first (for root "/")
+  if (PUBLIC_EXACT_PATHS.includes(pathname)) return true
+  // Check prefix matches
+  return PUBLIC_PATH_PREFIXES.some((path) => pathname.startsWith(path))
+}
 
 /**
  * RBAC Provider - wraps app to provide user context, permissions, and auth state
@@ -61,7 +75,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = React.useState<Error | null>(null)
 
   // Check if current path is public
-  const isPublicPath = PUBLIC_PATHS.some((path) => pathname?.startsWith(path))
+  const isPublicPath = isPathPublic(pathname)
 
   // Fetch permissions from database
   const fetchPermissions = React.useCallback(async () => {

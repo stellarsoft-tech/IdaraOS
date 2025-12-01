@@ -23,6 +23,20 @@ RUN pnpm install --frozen-lockfile
 # Copy the application source code
 COPY apps/web ./apps/web
 
+# Create the expect script during build to avoid heredoc issues
+RUN echo '#!/usr/bin/expect -f' > /tmp/drizzle-push.exp && \
+    echo 'set timeout 300' >> /tmp/drizzle-push.exp && \
+    echo 'spawn npx drizzle-kit push --force' >> /tmp/drizzle-push.exp && \
+    echo 'expect {' >> /tmp/drizzle-push.exp && \
+    echo '  "Do you want to truncate" { send "n\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
+    echo '  "Yes, I want to truncate" { send "n\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
+    echo '  "No, add the constraint" { send "\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
+    echo '  -re ".*No.*" { send "\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
+    echo '  eof { exit 0 }' >> /tmp/drizzle-push.exp && \
+    echo '  timeout { exit 1 }' >> /tmp/drizzle-push.exp && \
+    echo '}' >> /tmp/drizzle-push.exp && \
+    chmod +x /tmp/drizzle-push.exp
+
 # Set environment
 ENV NODE_ENV=development
 
@@ -45,20 +59,6 @@ cat drizzle.config.ts; \
 echo ''; \
 echo 'Step 1: Pushing database schema...'; \
 echo '------------------------------------------'; \
-cat > /tmp/drizzle-push.exp << 'EXPSCRIPT'
-#!/usr/bin/expect -f
-set timeout 300
-spawn npx drizzle-kit push --force
-expect {
-  \"Do you want to truncate\" { send \"n\\r\"; exp_continue }
-  \"Yes, I want to truncate\" { send \"n\\r\"; exp_continue }
-  \"No, add the constraint\" { send \"\\r\"; exp_continue }
-  -re \".*No.*\" { send \"\\r\"; exp_continue }
-  eof { exit 0 }
-  timeout { exit 1 }
-}
-EXPSCRIPT
-chmod +x /tmp/drizzle-push.exp; \
 expect /tmp/drizzle-push.exp; \
 echo '✅ Database schema pushed successfully'; \
 echo ''; \

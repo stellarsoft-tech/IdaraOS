@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Home } from "lucide-react"
 
 const routeLabels: Record<string, string> = {
+  dashboard: "Dashboard",
   people: "People & HR",
   directory: "Directory",
   roles: "Roles & Teams",
@@ -54,10 +55,10 @@ export function Breadcrumbs() {
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
 
-  if (segments.length === 0) {
+  if (segments.length === 0 || (segments.length === 1 && segments[0] === "dashboard")) {
     return (
       <nav aria-label="breadcrumb" className="flex items-center">
-        <Link href="/" className="flex items-center text-foreground" aria-label="Home">
+        <Link href="/dashboard" className="flex items-center text-foreground" aria-label="Dashboard">
           <Home className="h-4 w-4" />
         </Link>
       </nav>
@@ -75,9 +76,9 @@ export function Breadcrumbs() {
   return (
     <nav aria-label="breadcrumb" className="flex items-center gap-2 text-sm">
       <Link
-        href="/"
+        href="/dashboard"
         className="flex items-center text-muted-foreground hover:text-foreground transition-colors"
-        aria-label="Home"
+        aria-label="Dashboard"
       >
         <Home className="h-4 w-4" />
       </Link>

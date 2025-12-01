@@ -87,6 +87,7 @@ const userActionsStore = {
     onDelete: (userId: string) => void
     canEdit: boolean
     canDelete: boolean
+    scimBidirectionalSync: boolean
   } | null
 }
 
@@ -193,8 +194,11 @@ export default function UsersPage() {
     setDeleteUserId(userId)
   }, [])
   
+  // Check if SCIM bidirectional sync is enabled
+  const scimBidirectionalSync = entraIntegration?.scimBidirectionalSync ?? false
+
   // Update store for cell access (outside React lifecycle)
-  userActionsStore.handlers = { onEdit: handleEditUser, onDelete: handleDeleteUserClick, canEdit, canDelete }
+  userActionsStore.handlers = { onEdit: handleEditUser, onDelete: handleDeleteUserClick, canEdit, canDelete, scimBidirectionalSync }
 
   // Table columns
   const columns: ColumnDef<ApiUser>[] = useMemo(
@@ -287,7 +291,13 @@ export default function UsersPage() {
                   Entra
                 </Badge>
               )}
-              {!user.hasLinkedPerson && !user.hasEntraLink && (
+              {user.isScimProvisioned && (
+                <Badge className="gap-1 text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border-0">
+                  <RefreshCw className="h-3 w-3" />
+                  SCIM
+                </Badge>
+              )}
+              {!user.hasLinkedPerson && !user.hasEntraLink && !user.isScimProvisioned && (
                 <span className="text-muted-foreground text-xs">—</span>
               )}
             </div>
@@ -311,27 +321,47 @@ export default function UsersPage() {
           const handlers = userActionsStore.handlers
           if (!handlers) return null
           
+          // SCIM-provisioned users are locked when bidirectional sync is disabled
+          const isScimLocked = user.isScimProvisioned && !handlers.scimBidirectionalSync
+          
           return (
+            <TooltipProvider>
             <div className="flex items-center gap-1">
               {handlers.canEdit && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
+                        disabled={isScimLocked}
                   onClick={(e) => {
                     e.stopPropagation()
                     handlers.onEdit(user)
                   }}
                 >
-                  <UserCog className="h-4 w-4" />
+                        {isScimLocked ? <Lock className="h-4 w-4" /> : <UserCog className="h-4 w-4" />}
                   <span className="sr-only">Edit</span>
                 </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isScimLocked && (
+                    <TooltipContent>
+                      <p>SCIM-provisioned users cannot be edited.<br />Update in Microsoft Entra ID instead.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               )}
               {handlers.canDelete && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
+                        disabled={isScimLocked}
                   onClick={(e) => {
                     e.stopPropagation()
                     handlers.onDelete(user.id)
@@ -340,8 +370,17 @@ export default function UsersPage() {
                   <Trash2 className="h-4 w-4" />
                   <span className="sr-only">Delete</span>
                 </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isScimLocked && (
+                    <TooltipContent>
+                      <p>SCIM-provisioned users cannot be deleted.<br />Remove in Microsoft Entra ID instead.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               )}
             </div>
+            </TooltipProvider>
           )
         },
       },
@@ -574,7 +613,7 @@ export default function UsersPage() {
             setSelectedEntraUser(null)
           }
         }}>
-          <SheetContent className="overflow-y-auto flex flex-col">
+          <SheetContent className="overflow-y-auto flex flex-col sm:max-w-lg">
             <SheetHeader>
               <SheetTitle>
                 {sheetMode === "edit" ? "Edit User" : "Add User"}
@@ -589,6 +628,22 @@ export default function UsersPage() {
             </SheetHeader>
 
             <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+              {/* SCIM User Warning - when user is SCIM-provisioned and bidirectional sync is off */}
+              {sheetMode === "edit" && (() => {
+                const editingUser = users.find(u => u.id === editUserId)
+                if (editingUser?.isScimProvisioned && !scimBidirectionalSync) {
+                  return (
+                    <Alert variant="default" className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
+                      <Lock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <AlertDescription className="text-emerald-700 dark:text-emerald-300 text-sm">
+                        This user is provisioned via SCIM and cannot be edited here. To modify this user&apos;s details, update them in Microsoft Entra ID. Changes will sync automatically.
+                      </AlertDescription>
+                    </Alert>
+                  )
+                }
+                return null
+              })()}
+
               {/* Entra User Search (only in create mode when SSO is enabled) */}
               {sheetMode === "create" && isEntraEnabled && (
                 <div className="space-y-3">
@@ -700,6 +755,11 @@ export default function UsersPage() {
               )}
 
               {/* User Details */}
+              {(() => {
+                const editingUser = users.find(u => u.id === editUserId)
+                const isScimLocked = sheetMode === "edit" && editingUser?.isScimProvisioned && !scimBidirectionalSync
+                
+                return (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
@@ -708,7 +768,7 @@ export default function UsersPage() {
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="Enter full name"
-                    disabled={!!selectedEntraUser}
+                        disabled={!!selectedEntraUser || isScimLocked}
                   />
                 </div>
 
@@ -720,7 +780,7 @@ export default function UsersPage() {
                     value={formData.email}
                     onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                     placeholder="user@example.com"
-                    disabled={!!selectedEntraUser}
+                        disabled={!!selectedEntraUser || isScimLocked}
                   />
                 </div>
 
@@ -733,8 +793,9 @@ export default function UsersPage() {
                         ...prev, 
                         status: value as typeof userStatusValues[number] 
                       }))}
+                          disabled={isScimLocked}
                     >
-                      <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full" disabled={isScimLocked}>
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -757,8 +818,9 @@ export default function UsersPage() {
                       ...prev, 
                       personId: value === "none" ? "" : value 
                     }))}
+                        disabled={isScimLocked}
                   >
-                    <SelectTrigger className="w-full">
+                        <SelectTrigger className="w-full" disabled={isScimLocked}>
                       <SelectValue placeholder="Select a person to link..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -778,16 +840,23 @@ export default function UsersPage() {
                   </p>
                 </div>
               </div>
+                )
+              })()}
 
               {/* Role Assignment */}
+              {(() => {
+                const editingUser = users.find(u => u.id === editUserId)
+                const isScimLocked = sheetMode === "edit" && editingUser?.isScimProvisioned && !scimBidirectionalSync
+                
+                return (
               <div className="space-y-4">
                 <Label>Assign Roles</Label>
                 <p className="text-sm text-muted-foreground">
                   Select which roles this user should have. Roles determine what the user can access.
                 </p>
                 
-                {/* SCIM Warning */}
-                {sheetMode === "edit" && editUserRoles.some(r => r.source === "scim") && (
+                {/* SCIM Warning for specific role assignments */}
+                    {sheetMode === "edit" && editUserRoles.some(r => r.source === "scim") && !isScimLocked && (
                   <Alert variant="default" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
                     <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
@@ -802,12 +871,13 @@ export default function UsersPage() {
                     // Check if this role is SCIM-assigned for this user
                     const scimRole = editUserRoles.find(r => r.roleId === role.id && r.source === "scim")
                     const isScimAssigned = !!scimRole
+                        const isRoleDisabled = isScimAssigned || isScimLocked
                     
                     return (
                     <div 
                       key={role.id} 
                         className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                          isScimAssigned 
+                              isRoleDisabled 
                             ? "bg-muted/30 border-blue-200 dark:border-blue-800" 
                             : "hover:bg-muted/50"
                         }`}
@@ -816,13 +886,13 @@ export default function UsersPage() {
                         id={role.id}
                         checked={formData.roleIds.includes(role.id)}
                         onCheckedChange={() => handleRoleToggle(role.id)}
-                          disabled={isScimAssigned}
+                              disabled={isRoleDisabled}
                       />
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
                             <Label 
                               htmlFor={role.id} 
-                              className={`font-medium ${isScimAssigned ? "text-muted-foreground" : "cursor-pointer"}`}
+                                  className={`font-medium ${isRoleDisabled ? "text-muted-foreground" : "cursor-pointer"}`}
                             >
                             {role.name}
                           </Label>
@@ -843,7 +913,7 @@ export default function UsersPage() {
                           {role.description || "No description"}
                         </p>
                       </div>
-                        {isScimAssigned && (
+                            {isRoleDisabled && (
                           <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
                     </div>
@@ -851,15 +921,23 @@ export default function UsersPage() {
                   })}
                 </div>
 
-                {formData.roleIds.length === 0 && (
+                    {formData.roleIds.length === 0 && !isScimLocked && (
                   <p className="text-sm text-amber-600 dark:text-amber-400">
                     ⚠️ User will have no permissions if no roles are assigned.
                   </p>
                 )}
               </div>
+                )
+              })()}
             </div>
 
             <SheetFooter>
+              {(() => {
+                const editingUser = users.find(u => u.id === editUserId)
+                const isScimLocked = sheetMode === "edit" && editingUser?.isScimProvisioned && !scimBidirectionalSync
+                
+                return (
+                  <>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -867,8 +945,9 @@ export default function UsersPage() {
                   setEditUserId(null)
                 }}
               >
-                Cancel
+                      {isScimLocked ? "Close" : "Cancel"}
               </Button>
+                    {!isScimLocked && (
               <Button 
                 onClick={sheetMode === "edit" ? handleUpdateUser : handleCreateUser}
                 disabled={
@@ -884,6 +963,10 @@ export default function UsersPage() {
                 )}
                 {sheetMode === "edit" ? "Update User" : "Add User"}
               </Button>
+                    )}
+                  </>
+                )
+              })()}
             </SheetFooter>
           </SheetContent>
         </Sheet>

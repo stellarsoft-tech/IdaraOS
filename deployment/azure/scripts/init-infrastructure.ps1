@@ -45,15 +45,15 @@
         -EnvironmentName "dev" `
         -Location "uks" `
         -Sequence "001" `
-        -Owner "admin@company.com"
+        -Owner "hamza.abdullah@stellarsoft.tech"
 
     .EXAMPLE
     # With PIM enabled
     ./init-infrastructure.ps1 `
-        -EnvironmentName "prod" `
+        -EnvironmentName "dev" `
         -Location "uks" `
         -Sequence "001" `
-        -Owner "admin@company.com" `
+        -Owner "hamza.abdullah@stellarsoft.tech" `
         -EnablePim
 #>
 [CmdletBinding()]
@@ -762,18 +762,42 @@ if ($EnablePim) {
     Write-Host "PIM RBAC Groups" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host ""
+    Write-Host "Creating PIM-enabled security groups for Just-In-Time access..." -ForegroundColor Yellow
+    Write-Host "Groups will be created: ${AppName}_${envCode}_Reader, ${AppName}_${envCode}_Contributor, ${AppName}_${envCode}_Admin" -ForegroundColor Gray
+    Write-Host ""
+    
+    # Get environment code for display
+    $envCode = switch ($EnvironmentName.ToLower()) {
+        "dev" { "Dev" }
+        "staging" { "Staging" }
+        "prod" { "Prod" }
+        default { $EnvironmentName }
+    }
     
     $pimScript = Join-Path $PSScriptRoot "create-pim-rbac-groups.ps1"
     if (Test-Path $pimScript) {
-        & $pimScript `
-            -EnvironmentName $EnvironmentName `
-            -SubscriptionId $subscriptionId `
-            -AppName $AppName
+        if (-not $ValidateOnly) {
+            & $pimScript `
+                -EnvironmentName $EnvironmentName `
+                -SubscriptionId $subscriptionId `
+                -AppName $AppName
+        }
+        else {
+            Write-Host "Would create PIM RBAC groups (validation mode)" -ForegroundColor Yellow
+            Write-Host "  - ${AppName}_${envCode}_Reader (Reader role)" -ForegroundColor Gray
+            Write-Host "  - ${AppName}_${envCode}_Contributor (Contributor role)" -ForegroundColor Gray
+            Write-Host "  - ${AppName}_${envCode}_Admin (Owner role)" -ForegroundColor Gray
+        }
     }
     else {
         Write-Host "PIM script not found at: $pimScript" -ForegroundColor Yellow
         Write-Host "Skipping PIM RBAC groups creation" -ForegroundColor Yellow
     }
+    Write-Host ""
+}
+else {
+    Write-Host ""
+    Write-Host "PIM RBAC groups creation skipped (use -EnablePim to enable)" -ForegroundColor Gray
     Write-Host ""
 }
 
@@ -815,4 +839,9 @@ Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "  1. Configure GitHub OIDC for deployment (see README)" -ForegroundColor Gray
 Write-Host "  2. Run database migrations: pnpm db:migrate" -ForegroundColor Gray
 Write-Host "  3. Deploy application using GitHub Actions" -ForegroundColor Gray
+if ($EnablePim) {
+    Write-Host "  4. Configure PIM eligibility in Azure Portal:" -ForegroundColor Gray
+    Write-Host "     - Privileged Identity Management > Azure resources > Discover resources" -ForegroundColor Gray
+    Write-Host "     - Convert active assignments to eligible for Just-In-Time access" -ForegroundColor Gray
+}
 Write-Host ""
