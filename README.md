@@ -1,210 +1,222 @@
-# IdaraOS - AI-First Spec-Driven Development System
+# IdaraOS - Modern Organizational Operating System
 
-A modern, spec-driven operating system for organizational management with automated code generation from JSON specifications.
+A modern, design-first operating system for organizational management built with Next.js, React, and TypeScript.
 
-## 🚀 Quick Start
+## Quick Start (Local Development)
+
+### Prerequisites
+
+- Docker Desktop installed and running
+- Git
+
+### Option 1: Development Mode (Hot Reload)
 
 ```bash
-# Install dependencies
+# Clone the repository
+git clone https://github.com/your-org/IdaraOS.git
+cd IdaraOS
+
+# Start the development environment
+cd deployment/docker
+docker-compose -f docker-compose.dev.yml up
+```
+
+Access the application:
+- **HTTPS**: https://localhost (recommended for Entra SSO)
+- **Direct**: http://localhost:3000
+
+Changes to source code are reflected immediately without rebuilding.
+
+### Option 2: Local Production Build
+
+```bash
+cd deployment/docker
+docker-compose -f docker-compose.local.yml up -d
+```
+
+This builds and runs the production version locally for testing.
+
+### What's Included
+
+The Docker environment provides:
+- PostgreSQL 16 database
+- Automatic database migrations and seeding
+- Caddy reverse proxy with automatic HTTPS
+- Next.js application (dev or production mode)
+
+---
+
+## Project Structure
+
+```
+IdaraOS/
+├── apps/web/                 # Next.js application
+│   ├── app/                  # App Router pages
+│   │   └── (dashboard)/      # Dashboard routes
+│   │       ├── settings/     # Settings module
+│   │       └── people/       # People & HR module
+│   ├── components/           # React components
+│   │   ├── primitives/       # Reusable primitives (DataTable, FormBuilder, etc.)
+│   │   └── ui/               # shadcn/ui components
+│   └── lib/                  # Utilities, API hooks, RBAC
+│       ├── api/              # React Query hooks and API clients
+│       ├── db/               # Database schema (Drizzle ORM)
+│       └── rbac/             # Role-based access control
+├── docs/                     # Documentation
+│   ├── modules/              # Module architecture documents
+│   │   ├── settings/         # Settings module design
+│   │   └── people/           # People & HR module design
+│   ├── prompts/              # Cursor AI prompts
+│   ├── CONTRIBUTING.md       # Development workflow
+│   └── DECISIONS.md          # Technical decisions
+├── deployment/               # Deployment configurations
+│   └── docker/               # Docker compose files
+├── migrations/               # Database migrations
+└── scripts/                  # Build and utility scripts
+```
+
+---
+
+## Development Philosophy
+
+### Design-First, Iterative Development
+
+IdaraOS follows a design-first approach where each module is planned and documented before implementation:
+
+1. **Design**: Create architecture documents with Mermaid diagrams showing module structure, permissions, and user flows
+2. **Build**: Implement the module following the design, using established patterns and primitives
+3. **Evolve**: Iterate on the architecture as new functionalities and permissions are added
+
+### Module Architecture Documents
+
+Each module has an `architecture.md` file in `docs/modules/<module-name>/` containing:
+
+- **Module Overview**: High-level diagram of sub-modules and their relationships
+- **Permissions**: What roles can perform which actions
+- **User Flows**: Sequence diagrams showing key user interactions
+- **API Endpoints**: Backend routes and their purposes
+
+### What Goes Into a Module
+
+When building a new module, you'll typically create:
+
+- **Database Schema**: Tables defined in `lib/db/schema.ts` using Drizzle ORM
+- **API Routes**: Next.js API routes in `app/api/`
+- **React Query Hooks**: Data fetching and mutations in `lib/api/`
+- **Page Components**: Dashboard pages in `app/(dashboard)/`
+- **RBAC Permissions**: Module and action definitions in `lib/rbac/`
+
+---
+
+## Core Modules
+
+### Settings
+
+Organizational configuration and administration:
+- Organization profile and preferences
+- Users & access management
+- Roles & permissions
+- Integrations (Microsoft Entra ID SSO/SCIM)
+- Audit log
+
+### People & HR
+
+Workforce management:
+- People directory
+- Person profiles
+- Onboarding workflows
+- Time off management
+
+---
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router), React 19, TypeScript
+- **Database**: PostgreSQL 16 with Drizzle ORM
+- **UI**: Tailwind CSS 4, shadcn/ui (Radix UI primitives)
+- **Forms**: react-hook-form + Zod validation
+- **Tables**: TanStack Table v8 with virtualization
+- **State**: TanStack Query (React Query) for server state
+- **Auth**: NextAuth.js with Microsoft Entra ID support
+- **Package Manager**: pnpm (workspaces)
+
+---
+
+## Key Primitives
+
+### DataTable
+
+Full-featured data table with:
+- Server-side pagination, sorting, filtering
+- Column visibility, reordering, resizing
+- Row selection with bulk actions
+- Faceted filters with status chips
+- CSV export
+- Loading skeletons, empty states
+
+### FormBuilder / FormDrawer
+
+Schema-driven forms with:
+- Zod validation integration
+- All field types (text, select, date, boolean, etc.)
+- Create/edit/readonly modes
+- Drawer-based forms for CRUD operations
+
+### PageShell
+
+Consistent page layout with:
+- Title and description
+- Action buttons
+- Breadcrumb navigation
+
+### Protected
+
+RBAC-aware component wrapper:
+- Hide/show based on permissions
+- Module and action-level control
+
+---
+
+## Documentation
+
+- **[CONTRIBUTING.md](docs/CONTRIBUTING.md)**: Development workflow and coding standards
+- **[DECISIONS.md](docs/DECISIONS.md)**: Technical decisions and rationale
+- **[QUICK_START.md](QUICK_START.md)**: Detailed setup guide
+- **[Module Docs](docs/modules/)**: Architecture documents for each module
+
+---
+
+## Development Commands
+
+```bash
+# Install dependencies (if running outside Docker)
 pnpm install
 
 # Run development server
 pnpm dev
 
-# Generate code from spec
-pnpm generate specs/modules/people/person/spec.json
+# Run linting
+pnpm lint
+
+# Run type checking
+pnpm typecheck
+
+# Run tests
+pnpm test
 ```
 
-## 📁 Project Structure
+---
 
-```
-IdaraOS/
-├── apps/web/              # Next.js application
-│   ├── app/               # App Router pages
-│   ├── components/        # React components
-│   │   └── primitives/    # Reusable primitives (DataTable, FormBuilder, etc.)
-│   └── lib/               # Utilities and generated code
-│       └── generated/     # Auto-generated from specs
-├── specs/                 # Module specifications (JSON)
-│   └── modules/           # Organized by domain
-├── scripts/               # Code generators
-│   └── generate/          # Type-safe generators
-└── docs/                  # Documentation
-    ├── DECISIONS.md       # Technical decisions (frozen)
-    ├── CONTRIBUTING.md    # Development workflow
-    └── prompts/           # Cursor AI prompts (8 systematic prompts)
-```
-
-## 🎯 Core Concepts
-
-### Spec-Driven Development
-
-Every module starts with a `spec.json` file that serves as the single source of truth:
-
-```json
-{
-  "entity": "person",
-  "namespace": "people",
-  "fields": [...],
-  "table": {...},
-  "forms": {...},
-  "permissions": {...}
-}
-```
-
-### Code Generation
-
-From a spec, the system generates:
-
-1. **Types** (`types.ts`): Zod schemas + TypeScript types
-2. **Columns** (`columns.tsx`): TanStack Table column definitions
-3. **Forms** (`form-config.ts`): Form field configurations
-
-### Primitives
-
-Feature-complete, reusable components:
-
-- **DataTable**: Server-side pagination, filters, sorting, virtualization, CSV export
-- **FormBuilder**: Schema-driven forms with validation
-- **PageShell**: Standard page layout with breadcrumbs
-- **ResourceLayout**: Tab-based resource views
-- **FormDrawer**: Create/edit drawer with FormBuilder
-
-## 🛠️ Development Workflow
-
-### 1. Create a Spec
-
-```bash
-# Create spec file
-specs/modules/[area]/[module]/spec.json
-```
-
-### 2. Generate Code
-
-```bash
-pnpm generate specs/modules/[area]/[module]/spec.json
-```
-
-This creates:
-- `apps/web/lib/generated/[module]/types.ts`
-- `apps/web/lib/generated/[module]/columns.tsx`
-- `apps/web/lib/generated/[module]/form-config.ts`
-
-### 3. Create Pages
-
-Use generated artifacts with primitives:
-
-```typescript
-import { DataTable } from "@/components/primitives/data-table"
-import { columns } from "@/lib/generated/[module]/columns"
-
-export default function ListPage() {
-  return (
-    <DataTable
-      columns={columns}
-      data={data}
-      serverMode
-      totalCount={total}
-      state={tableState}
-      onStateChange={setTableState}
-    />
-  )
-}
-```
-
-### 4. Use AI Prompts
-
-Cursor prompts guide development:
-
-1. `docs/prompts/01-architect.md` - Plan implementation
-2. `docs/prompts/02-generate-types.md` - Generate types
-3. `docs/prompts/03-generate-sql.md` - Generate database schema
-4. `docs/prompts/04-generate-columns.md` - Generate table columns
-5. `docs/prompts/05-generate-form.md` - Generate form config
-6. `docs/prompts/06-generate-routes.md` - Scaffold pages
-7. `docs/prompts/07-generate-tests.md` - Generate E2E tests
-8. `docs/prompts/08-critique.md` - AI self-review
-
-## 📚 Documentation
-
-- **[DECISIONS.md](docs/DECISIONS.md)**: Frozen technical decisions
-- **[CONTRIBUTING.md](docs/CONTRIBUTING.md)**: Module creation workflow
-- **[specs/README.md](specs/README.md)**: Spec schema documentation
-- **[scripts/README.md](scripts/README.md)**: Generator usage guide
-
-## 🔑 Key Features
-
-### DataTable v2
-- ✅ Server-side pagination, sorting, filtering
-- ✅ Column visibility, reordering, resizing
-- ✅ Row selection with bulk actions
-- ✅ Virtualization for 10k+ rows
-- ✅ CSV export
-- ✅ Faceted filters with chips
-- ✅ Loading skeletons, empty states
-
-### FormBuilder
-- ✅ Schema-driven (Zod + react-hook-form)
-- ✅ All field types (text, select, date, boolean, etc.)
-- ✅ Async select for references
-- ✅ Create/edit/readonly modes
-- ✅ Validation with helpful error messages
-
-### Code Generators
-- ✅ TypeScript + Zod schemas
-- ✅ TanStack Table columns with renderers
-- ✅ Form configurations with component mappings
-- ✅ Type-safe throughout
-
-## 🎨 Tech Stack
-
-- **Frontend**: Next.js 15 (App Router), React 19, TypeScript
-- **UI**: Tailwind CSS 4, shadcn/ui (Radix UI)
-- **Forms**: react-hook-form + Zod
-- **Tables**: TanStack Table v8 + TanStack Virtual
-- **Package Manager**: pnpm (workspaces)
-
-## 📦 Monorepo Structure
-
-- `apps/web` - Main Next.js application
-- `specs` - Module specifications
-- `scripts` - Code generators
-
-## 🚧 Current Status
-
-**Completed:**
-- ✅ Monorepo setup with pnpm workspaces
-- ✅ Spec schema with Zod validator
-- ✅ 4 code generators (types, columns, forms, CLI)
-- ✅ DataTable v2 with all features
-- ✅ FormBuilder component
-- ✅ Layout primitives (PageShell, ResourceLayout, FormDrawer)
-- ✅ 8 systematic Cursor prompts
-- ✅ Essential documentation (no bloat)
-- ✅ 2 reference specs (person, risk)
-
-**Next Steps:**
-- 🔄 Test generators with example specs
-- 🔄 Setup MDX for business content
-- 🔄 Refactor example modules using generators
-- 🔄 Add testing infrastructure (Vitest + Playwright)
-
-## 💡 Philosophy
-
-1. **Spec-first**: JSON spec is the single source of truth
-2. **Generate, don't write**: Let AI and generators handle boilerplate
-3. **Minimal docs**: Code and specs are documentation
-4. **AI-assisted**: Systematic prompts guide development
-5. **No lock-in**: Standard tools, replaceable components
-
-## 🤝 Contributing
+## Contributing
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for the complete development workflow.
 
-## 📝 License
+---
+
+## License
 
 [Your License Here]
 
 ---
 
-**Built with ❤️ for developers who value speed, consistency, and AI-first workflows.**
+**Built for developers who value clarity, consistency, and modern tooling.**
