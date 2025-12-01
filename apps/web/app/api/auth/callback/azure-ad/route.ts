@@ -60,11 +60,11 @@ export async function GET(request: NextRequest) {
   }
 
   // Parse return URL from state
-  let returnTo = "/"
+  let returnTo = "/dashboard" // Default to dashboard after login
   if (state) {
     try {
       const stateData = JSON.parse(Buffer.from(state, "base64").toString())
-      returnTo = stateData.returnTo || "/"
+      returnTo = stateData.returnTo || "/dashboard"
     } catch {
       // Invalid state, use default
     }

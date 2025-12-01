@@ -97,8 +97,11 @@ export default function LoginPage() {
         return
       }
 
+      // Get return URL from query params, default to dashboard
+      const returnTo = new URLSearchParams(window.location.search).get("returnTo") || "/dashboard"
+      
       // Redirect to dashboard on success
-      router.push("/")
+      router.push(returnTo)
       router.refresh()
     } catch {
       setError("An error occurred. Please try again.")
@@ -112,8 +115,11 @@ export default function LoginPage() {
     setError("")
     setUrlError("")
 
+    // Get return URL from query params, default to dashboard
+    const returnTo = new URLSearchParams(window.location.search).get("returnTo") || "/dashboard"
+
     // Redirect to our SSO login endpoint which handles the OAuth flow
-    window.location.href = "/api/auth/login/azure-ad"
+    window.location.href = `/api/auth/login/azure-ad?returnTo=${encodeURIComponent(returnTo)}`
   }
 
   const ssoAvailable = ssoConfig?.ssoAvailable === true

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const redirectUri = `${appUrl}/api/auth/callback/azure-ad`
   
   // Get return URL from query params
-  const returnTo = request.nextUrl.searchParams.get("returnTo") || "/"
+  const returnTo = request.nextUrl.searchParams.get("returnTo") || "/dashboard"
   
   // Encode return URL in state parameter
   const state = Buffer.from(JSON.stringify({ returnTo })).toString("base64")
