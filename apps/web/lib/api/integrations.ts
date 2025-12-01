@@ -3,6 +3,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { usersKeys } from "./users"
 
 // Query keys
 export const integrationsKeys = {
@@ -244,7 +245,14 @@ export function useTriggerSync() {
   return useMutation({
     mutationFn: triggerSync,
     onSuccess: () => {
+      // Invalidate integrations query to update sync stats
       queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
+      // Invalidate users list to refresh the table after sync
+      queryClient.invalidateQueries({ queryKey: usersKeys.lists() })
+      // Invalidate roles in case role assignments changed
+      queryClient.invalidateQueries({ queryKey: ["roles"] })
+      // Invalidate people in case people records were created/updated/deleted
+      queryClient.invalidateQueries({ queryKey: ["people"] })
     },
   })
 }
