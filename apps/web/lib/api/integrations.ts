@@ -125,6 +125,25 @@ async function regenerateScimToken(): Promise<{ scimToken: string }> {
   return response.json()
 }
 
+export interface SyncResult {
+  success: boolean
+  syncedUserCount: number
+  syncedGroupCount: number
+  lastSyncAt: string
+  message: string
+}
+
+async function triggerSync(): Promise<SyncResult> {
+  const response = await fetch("/api/settings/integrations/entra/sync", {
+    method: "POST",
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "Failed to sync")
+  }
+  return response.json()
+}
+
 // React Query hooks
 
 /**
@@ -188,6 +207,20 @@ export function useRegenerateScimToken() {
 
   return useMutation({
     mutationFn: regenerateScimToken,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
+    },
+  })
+}
+
+/**
+ * Trigger manual sync
+ */
+export function useTriggerSync() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: triggerSync,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: integrationsKeys.provider("entra") })
     },
