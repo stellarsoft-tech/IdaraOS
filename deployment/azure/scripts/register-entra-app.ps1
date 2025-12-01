@@ -61,6 +61,74 @@ Param(
 $ErrorActionPreference = "Stop"
 
 # =============================================================================
+# Helper Functions
+# =============================================================================
+
+<#
+    .SYNOPSIS
+    Get existing API permissions for an app registration
+#>
+function Get-ExistingPermissions {
+    param(
+        [string]$AppId,
+        [string]$ResourceId
+    )
+    
+    try {
+        $app = az ad app show --id $AppId --query "requiredResourceAccess[?resourceAppId=='$ResourceId']" 2>&1 | ConvertFrom-Json -ErrorAction SilentlyContinue
+        
+        if ($app -and $app.Count -gt 0) {
+            $permissions = @()
+            foreach ($resourceAccess in $app[0].resourceAccess) {
+                $permissions += $resourceAccess.id
+            }
+            return $permissions
+        }
+        return @()
+    }
+    catch {
+        return @()
+    }
+}
+
+<#
+    .SYNOPSIS
+    Check if a permission already exists and add it if missing
+#>
+function Add-PermissionIfMissing {
+    param(
+        [string]$AppId,
+        [string]$ResourceId,
+        [string]$PermissionId,
+        [string]$PermissionType,  # "Scope" or "Role"
+        [string]$PermissionName
+    )
+    
+    $existingPermissions = Get-ExistingPermissions -AppId $AppId -ResourceId $ResourceId
+    
+    if ($existingPermissions -contains $PermissionId) {
+        Write-Host "    ✓ $PermissionName already exists (skipping)" -ForegroundColor Green
+        return $false
+    }
+    else {
+        az ad app permission add `
+            --id $AppId `
+            --api $ResourceId `
+            --api-permissions "$PermissionId=$PermissionType" `
+            --output none 2>$null
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "    + Added $PermissionName" -ForegroundColor Yellow
+            return $true
+        }
+        else {
+            Write-Host "    ✗ Failed to add $PermissionName" -ForegroundColor Red
+            return $false
+        }
+    }
+}
+
+# =============================================================================
 # Check Prerequisites
 # =============================================================================
 
@@ -166,6 +234,71 @@ if ($existingApp -and $existingApp.appId) {
         --output none
     
     Write-Host "Redirect URIs updated" -ForegroundColor Green
+    Write-Host ""
+    
+    # =============================================================================
+    # Update API Permissions (for existing app) - Idempotent
+    # =============================================================================
+    
+    Write-Host "Checking existing API permissions..." -ForegroundColor Yellow
+    $graphResourceId = "00000003-0000-0000-c000-000000000000"
+    
+    # Check what permissions already exist
+    $existingPermissions = Get-ExistingPermissions -AppId $appId -ResourceId $graphResourceId
+    
+    if ($existingPermissions.Count -gt 0) {
+        Write-Host "  Found $($existingPermissions.Count) existing permission(s)" -ForegroundColor Gray
+    }
+    else {
+        Write-Host "  No existing permissions found" -ForegroundColor Gray
+    }
+    Write-Host ""
+    
+    $addPermissions = Read-Host "Ensure SCIM sync permissions are configured? (Y/n)"
+    if ($addPermissions -ne 'n' -and $addPermissions -ne 'N') {
+        Write-Host "Ensuring API permissions are configured (idempotent)..." -ForegroundColor Yellow
+        Write-Host ""
+        
+        # Delegated Permissions (for SSO)
+        Write-Host "  Delegated Permissions (SSO):" -ForegroundColor Cyan
+        $userReadPermission = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"
+        Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadPermission -PermissionType "Scope" -PermissionName "User.Read (Delegated)"
+        
+        $userReadBasicAll = "b340eb25-3456-403f-be2f-af7a0d370277"
+        Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadBasicAll -PermissionType "Scope" -PermissionName "User.ReadBasic.All (Delegated)"
+        
+        Write-Host ""
+        
+        # Application Permissions (for SCIM sync)
+        Write-Host "  Application Permissions (SCIM Sync):" -ForegroundColor Cyan
+        $groupReadAll = "5b567255-7703-4780-807c-7be8301ae99b"
+        Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $groupReadAll -PermissionType "Role" -PermissionName "Group.Read.All (Application)"
+        
+        $groupMemberReadAll = "98830695-27a2-44f7-8c18-0c3ebc9698f6"
+        Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $groupMemberReadAll -PermissionType "Role" -PermissionName "GroupMember.Read.All (Application)"
+        
+        $userReadAll = "df021288-bdef-4463-88db-98f22de89214"
+        Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadAll -PermissionType "Role" -PermissionName "User.Read.All (Application)"
+        
+        $userReadWriteAll = "741f803b-c850-494e-b5df-cde7c675a1ca"
+        Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadWriteAll -PermissionType "Role" -PermissionName "User.ReadWrite.All (Application)"
+        
+        Write-Host ""
+        Write-Host "⚠️  IMPORTANT: Admin consent is required for application permissions!" -ForegroundColor Yellow
+        Write-Host "   Run: az ad app permission admin-consent --id $appId" -ForegroundColor Cyan
+        Write-Host ""
+        
+        $grantConsent = Read-Host "Grant admin consent now? (Y/n)"
+        if ($grantConsent -ne 'n' -and $grantConsent -ne 'N') {
+            Write-Host "Granting admin consent..." -ForegroundColor Yellow
+            az ad app permission admin-consent --id $appId
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "Admin consent granted successfully" -ForegroundColor Green
+            } else {
+                Write-Host "Failed to grant admin consent. You may need to do this manually in Azure Portal." -ForegroundColor Red
+            }
+        }
+    }
 }
 else {
     # =============================================================================
@@ -193,35 +326,54 @@ else {
     Write-Host ""
     
     # =============================================================================
-    # Configure API Permissions
+    # Configure API Permissions (Idempotent)
     # =============================================================================
     
-    Write-Host "Configuring API permissions..." -ForegroundColor Yellow
+    Write-Host "Configuring API permissions (idempotent)..." -ForegroundColor Yellow
     
-    # Microsoft Graph permissions
-    # User.Read (delegated) - Sign in and read user profile
+    # Microsoft Graph Resource ID
     $graphResourceId = "00000003-0000-0000-c000-000000000000"
-    $userReadPermission = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"  # User.Read
     
-    az ad app permission add `
-        --id $appId `
-        --api $graphResourceId `
-        --api-permissions "$userReadPermission=Scope" `
-        --output none
+    # -----------------------------------------------------------------------------
+    # Delegated Permissions (for SSO login)
+    # -----------------------------------------------------------------------------
+    Write-Host "  Delegated Permissions (SSO):" -ForegroundColor Cyan
     
-    Write-Host "  Added User.Read permission" -ForegroundColor Gray
+    # User.Read (delegated) - Sign in and read user profile
+    $userReadPermission = "e1fe6dd8-ba31-4d61-89e7-88639da4683d"
+    Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadPermission -PermissionType "Scope" -PermissionName "User.Read (Delegated)"
     
-    # Optional: Add additional Graph permissions for user sync
     # User.ReadBasic.All (delegated) - Read all users' basic profiles
     $userReadBasicAll = "b340eb25-3456-403f-be2f-af7a0d370277"
+    Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadBasicAll -PermissionType "Scope" -PermissionName "User.ReadBasic.All (Delegated)"
     
-    az ad app permission add `
-        --id $appId `
-        --api $graphResourceId `
-        --api-permissions "$userReadBasicAll=Scope" `
-        --output none
+    Write-Host ""
     
-    Write-Host "  Added User.ReadBasic.All permission" -ForegroundColor Gray
+    # -----------------------------------------------------------------------------
+    # Application Permissions (for SCIM sync - server-to-server)
+    # -----------------------------------------------------------------------------
+    Write-Host "  Application Permissions (SCIM Sync):" -ForegroundColor Cyan
+    
+    # Group.Read.All (Application) - Read all groups
+    $groupReadAll = "5b567255-7703-4780-807c-7be8301ae99b"
+    Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $groupReadAll -PermissionType "Role" -PermissionName "Group.Read.All (Application)"
+    
+    # GroupMember.Read.All (Application) - Read all group memberships
+    $groupMemberReadAll = "98830695-27a2-44f7-8c18-0c3ebc9698f6"
+    Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $groupMemberReadAll -PermissionType "Role" -PermissionName "GroupMember.Read.All (Application)"
+    
+    # User.Read.All (Application) - Read all users' full profiles
+    $userReadAll = "df021288-bdef-4463-88db-98f22de89214"
+    Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadAll -PermissionType "Role" -PermissionName "User.Read.All (Application)"
+    
+    # User.ReadWrite.All (Application) - For bidirectional sync (write back to Entra)
+    $userReadWriteAll = "741f803b-c850-494e-b5df-cde7c675a1ca"
+    Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadWriteAll -PermissionType "Role" -PermissionName "User.ReadWrite.All (Application)"
+    
+    Write-Host ""
+    Write-Host "⚠️  IMPORTANT: Admin consent is required for application permissions!" -ForegroundColor Yellow
+    Write-Host "   Run the following command after script completes:" -ForegroundColor Yellow
+    Write-Host "   az ad app permission admin-consent --id $appId" -ForegroundColor Cyan
     Write-Host ""
     
     # =============================================================================
@@ -299,9 +451,24 @@ if ($clientSecret) {
 }
 Write-Host ""
 
+Write-Host "API Permissions Configured:" -ForegroundColor Cyan
+Write-Host "  Delegated (SSO):" -ForegroundColor Gray
+Write-Host "    - User.Read              (Sign in and read user profile)" -ForegroundColor Gray
+Write-Host "    - User.ReadBasic.All     (Read basic profiles)" -ForegroundColor Gray
+Write-Host "  Application (SCIM Sync):" -ForegroundColor Yellow
+Write-Host "    - Group.Read.All         (Read all groups)" -ForegroundColor Gray
+Write-Host "    - GroupMember.Read.All   (Read group memberships)" -ForegroundColor Gray
+Write-Host "    - User.Read.All          (Read all user profiles)" -ForegroundColor Gray
+Write-Host "    - User.ReadWrite.All     (Bidirectional sync - write back)" -ForegroundColor Gray
+Write-Host ""
+
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "  1. Copy the environment variables above to your .env.local file" -ForegroundColor Gray
-Write-Host "  2. Grant admin consent for API permissions in Azure Portal (if required)" -ForegroundColor Gray
+Write-Host "  2. Grant admin consent for API permissions:" -ForegroundColor Yellow
+Write-Host "     az ad app permission admin-consent --id $appId" -ForegroundColor Cyan
+Write-Host "     OR via Azure Portal:" -ForegroundColor Gray
 Write-Host "     https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$appId" -ForegroundColor Gray
 Write-Host "  3. Start the application with HTTPS: docker-compose -f docker-compose.dev.yml up" -ForegroundColor Gray
+Write-Host ""
+Write-Host "⚠️  Admin consent is REQUIRED for SCIM sync to work!" -ForegroundColor Red
 Write-Host ""

@@ -507,9 +507,18 @@ export default function UsersPage() {
     try {
       const result = await triggerSync.mutateAsync()
       if (result.success) {
-        toast.success(result.message, {
-          description: `Created ${result.stats?.usersCreated || 0} users, assigned ${result.stats?.rolesAssigned || 0} roles`,
-        })
+        const stats = result.stats
+        let description = ""
+        if (stats) {
+          const parts = []
+          if (stats.usersCreated > 0) parts.push(`+${stats.usersCreated} created`)
+          if (stats.usersDeprovisioned > 0) parts.push(`-${stats.usersDeprovisioned} deprovisioned`)
+          if (stats.rolesAssigned > 0) parts.push(`+${stats.rolesAssigned} roles`)
+          if (stats.rolesRemoved > 0) parts.push(`-${stats.rolesRemoved} roles`)
+          if (stats.groupsRemoved > 0) parts.push(`${stats.groupsRemoved} stale groups removed`)
+          description = parts.join(", ") || "No changes"
+        }
+        toast.success(result.message, { description })
       } else {
         toast.warning(result.message, {
           description: result.stats?.errors?.length 

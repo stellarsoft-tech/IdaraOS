@@ -49,8 +49,10 @@ interface SyncResult {
   stats: {
     groupsFound: number
     groupsSynced: number
+    groupsRemoved: number
     usersCreated: number
     usersUpdated: number
+    usersDeprovisioned: number
     rolesAssigned: number
     rolesRemoved: number
     errors: string[]
@@ -395,14 +397,126 @@ async function cleanupStaleGroupMemberships(
 }
 
 /**
+ * Clean up groups that no longer match the prefix and remove associated users/roles
+ */
+async function cleanupStaleGroups(
+  orgId: string,
+  validGroupExternalIds: string[]
+): Promise<{ groupsRemoved: number; usersRemoved: number; rolesRemoved: number }> {
+  let groupsRemoved = 0
+  let usersRemoved = 0
+  let rolesRemoved = 0
+
+  // Find all SCIM groups in our DB that are NOT in the valid list
+  const allDbGroups = await db
+    .select()
+    .from(scimGroups)
+    .where(eq(scimGroups.orgId, orgId))
+
+  const staleGroups = allDbGroups.filter(g => g.externalId && !validGroupExternalIds.includes(g.externalId))
+
+  if (staleGroups.length === 0) {
+    console.log(`[Full Sync] No stale groups to clean up`)
+    return { groupsRemoved: 0, usersRemoved: 0, rolesRemoved: 0 }
+  }
+
+  console.log(`[Full Sync] Found ${staleGroups.length} stale group(s) to clean up`)
+
+  for (const staleGroup of staleGroups) {
+    try {
+      console.log(`[Full Sync] Cleaning up stale group: ${staleGroup.displayName} (${staleGroup.externalId})`)
+
+      // Get all users in this stale group
+      const memberships = await db
+        .select({ userId: userScimGroups.userId })
+        .from(userScimGroups)
+        .where(eq(userScimGroups.scimGroupId, staleGroup.id))
+
+      const userIdsInStaleGroup = memberships.map(m => m.userId)
+
+      if (userIdsInStaleGroup.length > 0) {
+        // Remove all memberships for this group
+        await db
+          .delete(userScimGroups)
+          .where(eq(userScimGroups.scimGroupId, staleGroup.id))
+
+        // Remove all SCIM-assigned roles from this group
+        const deleteResult = await db
+          .delete(userRoles)
+          .where(
+            and(
+              eq(userRoles.scimGroupId, staleGroup.id),
+              eq(userRoles.source, "scim")
+            )
+          )
+          .returning()
+
+        rolesRemoved += deleteResult.length
+        console.log(`[Full Sync] Removed ${userIdsInStaleGroup.length} memberships and ${deleteResult.length} roles from stale group ${staleGroup.displayName}`)
+
+        // Check if any of these users are now orphaned (no longer in any SCIM group)
+        for (const userId of userIdsInStaleGroup) {
+          const remainingMemberships = await db
+            .select({ count: count() })
+            .from(userScimGroups)
+            .where(eq(userScimGroups.userId, userId))
+
+          if (remainingMemberships[0]?.count === 0) {
+            // User is no longer in any SCIM group - check if they have any SCIM roles left
+            const remainingScimRoles = await db
+              .select({ count: count() })
+              .from(userRoles)
+              .where(
+                and(
+                  eq(userRoles.userId, userId),
+                  eq(userRoles.source, "scim")
+                )
+              )
+
+            if (remainingScimRoles[0]?.count === 0) {
+              // User was only provisioned via this stale group - mark as no longer SCIM provisioned
+              // but keep the user (they might have manual roles or other access)
+              await db
+                .update(users)
+                .set({ 
+                  scimProvisioned: false,
+                  updatedAt: new Date()
+                })
+                .where(eq(users.id, userId))
+
+              usersRemoved++
+              console.log(`[Full Sync] User ${userId} is no longer SCIM-provisioned (removed from all SCIM groups)`)
+            }
+          }
+        }
+      }
+
+      // Delete the stale group from our DB
+      await db
+        .delete(scimGroups)
+        .where(eq(scimGroups.id, staleGroup.id))
+
+      groupsRemoved++
+      console.log(`[Full Sync] Deleted stale group: ${staleGroup.displayName}`)
+    } catch (error) {
+      console.error(`[Full Sync] Error cleaning up stale group ${staleGroup.displayName}:`, error)
+    }
+  }
+
+  return { groupsRemoved, usersRemoved, rolesRemoved }
+}
+
+/**
  * Main full sync function
  */
 export async function performFullSync(orgId: string): Promise<SyncResult> {
   const stats: SyncResult["stats"] = {
     groupsFound: 0,
     groupsSynced: 0,
+    groupsRemoved: 0,
     usersCreated: 0,
     usersUpdated: 0,
+    usersDeprovisioned: 0,
     rolesAssigned: 0,
     rolesRemoved: 0,
     errors: [],
@@ -532,6 +646,14 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     }
   }
 
+  // Clean up groups that no longer match the prefix (or were removed from Entra)
+  // This is the key for idempotent sync - removes stale data when prefix changes
+  const validGroupExternalIds = entraGroups.map(g => g.id)
+  const cleanupResult = await cleanupStaleGroups(orgId, validGroupExternalIds)
+  stats.groupsRemoved = cleanupResult.groupsRemoved
+  stats.usersDeprovisioned = cleanupResult.usersRemoved
+  stats.rolesRemoved += cleanupResult.rolesRemoved
+
   // Update integration sync stats
   const [userCountResult] = await db
     .select({ count: count() })
@@ -555,7 +677,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     })
     .where(and(eq(integrations.orgId, orgId), eq(integrations.provider, "entra")))
 
-  const message = `Synced ${stats.groupsSynced} groups, created ${stats.usersCreated} users, assigned ${stats.rolesAssigned} roles, removed ${stats.rolesRemoved} stale assignments`
+  const message = `Synced ${stats.groupsSynced} groups (removed ${stats.groupsRemoved} stale), created ${stats.usersCreated} users (deprovisioned ${stats.usersDeprovisioned}), assigned ${stats.rolesAssigned} roles, removed ${stats.rolesRemoved} stale assignments`
   console.log(`[Full Sync] Complete: ${message}`)
 
   return {
