@@ -108,7 +108,21 @@ export async function GET(
 
 /**
  * PATCH /api/scim/v2/Groups/{id} - Update group (add/remove members)
- * This is the main endpoint Azure AD uses for group membership changes
+ * 
+ * This is the main endpoint Azure AD uses for group membership changes.
+ * When a user is added to or removed from a group in Entra ID, Azure AD
+ * automatically sends a PATCH request to this endpoint, which:
+ * 
+ * 1. Updates the group membership in userScimGroups
+ * 2. Assigns/removes roles based on the group's mapped role
+ * 3. Handles multiple groups correctly - users can have multiple roles
+ *    from multiple groups, and removing from one group only removes
+ *    that group's role assignment
+ * 
+ * Example flow:
+ * - User is in "IdaraOS-User" group → gets "user" role
+ * - User is added to "IdaraOS-Admin" group → gets "admin" role (now has both)
+ * - User is removed from "IdaraOS-User" group → loses "user" role (still has "admin")
  */
 export async function PATCH(
   request: NextRequest,
@@ -180,7 +194,9 @@ export async function PATCH(
             // Assign role if group is mapped
             if (group.mappedRoleId) {
               await assignScimRole(userId, group.mappedRoleId, group.id)
-              console.log(`[SCIM Groups] Assigned role ${group.mappedRoleId} to user ${user.email} via group ${group.displayName}`)
+              console.log(`[SCIM Groups] ✅ Added user ${user.email} to group "${group.displayName}" → assigned role ${group.mappedRoleId}`)
+            } else {
+              console.log(`[SCIM Groups] ⚠️ Added user ${user.email} to group "${group.displayName}" but group has no mapped role`)
             }
           }
         } else if (op === "remove") {
@@ -203,7 +219,7 @@ export async function PATCH(
 
             // Remove SCIM-assigned role from this group
             await removeScimRole(userId, group.id)
-            console.log(`[SCIM Groups] Removed user ${userId} from group ${group.displayName}`)
+            console.log(`[SCIM Groups] ❌ Removed user ${userId} from group "${group.displayName}" → removed role assignment from this group`)
           } else if (Array.isArray(value)) {
             // Remove multiple members
             for (const member of value) {
@@ -219,7 +235,7 @@ export async function PATCH(
                 )
 
               await removeScimRole(userId, group.id)
-              console.log(`[SCIM Groups] Removed user ${userId} from group ${group.displayName}`)
+              console.log(`[SCIM Groups] ❌ Removed user ${userId} from group "${group.displayName}" → removed role assignment from this group`)
             }
           }
         } else if (op === "replace") {
