@@ -2,7 +2,7 @@
 
 **A unified platform for managing your organization, from startup to enterprise.**
 
-![IdaraOS Dashboard](assets/dashbaord.png)
+![IdaraOS Dashboard](assets/dashboard-light.png)
 
 IdaraOS was born from a real need: managing an organization that requires proper security, compliance, and effective people management - without paying a fortune that most startups simply can't afford. When we looked at the open-source landscape for a comprehensive solution, we found nothing. The existing tools were either prohibitively expensive enterprise software or fragmented point solutions that required stitching together dozens of vendors.
 
