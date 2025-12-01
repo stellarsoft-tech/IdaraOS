@@ -38,6 +38,7 @@ import {
   useUpdateEntraIntegration,
   useDisconnectEntraIntegration,
   useRegenerateScimToken,
+  useTriggerSync,
   IntegrationError,
 } from "@/lib/api/integrations"
 
@@ -62,6 +63,7 @@ export default function IntegrationsPage() {
   const updateEntra = useUpdateEntraIntegration()
   const disconnectEntra = useDisconnectEntraIntegration()
   const regenerateToken = useRegenerateScimToken()
+  const triggerSync = useTriggerSync()
   
   const [showSecrets, setShowSecrets] = useState(false)
   const [scimToken, setScimToken] = useState<string | null>(null)
@@ -202,6 +204,15 @@ export default function IntegrationsPage() {
     }
   }
 
+  const handleSync = async () => {
+    try {
+      const result = await triggerSync.mutateAsync()
+      toast.success(result.message)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync")
+    }
+  }
+
   if (!canAccess) {
     return (
       <PageShell title="Integrations">
@@ -280,79 +291,85 @@ export default function IntegrationsPage() {
                   <TabsTrigger value="scim">SCIM Provisioning</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="overview" className="space-y-6">
-                  {/* Stats Grid */}
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <Card>
-                      <CardHeader className="pb-2 pt-0">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          Synced Users
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="text-2xl font-bold">{entraConfig?.syncedUserCount || 0}</div>
-                      </CardContent>
+                <TabsContent value="overview" className="space-y-4">
+                  {/* Stats Grid - Compact */}
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <Card className="p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                          <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Synced Users</div>
+                          <div className="text-lg font-semibold">{entraConfig?.syncedUserCount || 0}</div>
+                        </div>
+                      </div>
                     </Card>
-                    <Card>
-                      <CardHeader className="pb-2 pt-0">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <Shield className="h-4 w-4" />
-                          Groups
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="text-2xl font-bold">{entraConfig?.syncedGroupCount || 0}</div>
-                      </CardContent>
+                    <Card className="p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                          <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Groups</div>
+                          <div className="text-lg font-semibold">{entraConfig?.syncedGroupCount || 0}</div>
+                        </div>
+                      </div>
                     </Card>
-                    <Card>
-                      <CardHeader className="pb-2 pt-0">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <Zap className="h-4 w-4" />
-                          SSO
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <StatusBadge variant={entraConfig?.ssoEnabled ? "success" : "default"}>
-                          {entraConfig?.ssoEnabled ? "Enabled" : "Disabled"}
-                        </StatusBadge>
-                      </CardContent>
+                    <Card className="p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                          <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">SSO</div>
+                          <StatusBadge variant={entraConfig?.ssoEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
+                            {entraConfig?.ssoEnabled ? "Enabled" : "Disabled"}
+                          </StatusBadge>
+                        </div>
+                      </div>
                     </Card>
-                    <Card>
-                      <CardHeader className="pb-2 pt-0">
-                        <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                          <RefreshCw className="h-4 w-4" />
-                          SCIM Sync
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <StatusBadge variant={entraConfig?.scimEnabled ? "success" : "default"}>
-                          {entraConfig?.scimEnabled ? "Active" : "Inactive"}
-                        </StatusBadge>
-                      </CardContent>
+                    <Card className="p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                          <RefreshCw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">SCIM Sync</div>
+                          <StatusBadge variant={entraConfig?.scimEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
+                            {entraConfig?.scimEnabled ? "Active" : "Inactive"}
+                          </StatusBadge>
+                        </div>
+                      </div>
                     </Card>
                   </div>
 
                   {/* Last Sync Info */}
-                  <Card>
-                    <CardHeader className="pt-0">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-base">Sync Status</CardTitle>
-                          <CardDescription>
-                            {entraConfig?.lastSyncAt 
-                              ? `Last synced: ${new Date(entraConfig.lastSyncAt).toLocaleString()}`
-                              : "No sync performed yet"}
-                          </CardDescription>
+                  <Card className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium text-sm">Sync Status</div>
+                        <div className="text-xs text-muted-foreground">
+                          {entraConfig?.lastSyncAt 
+                            ? `Last synced: ${new Date(entraConfig.lastSyncAt).toLocaleString()}`
+                            : "No sync performed yet"}
                         </div>
-                        <Protected module="settings.integrations" action="edit">
-                          <Button disabled>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Sync Now
-                          </Button>
-                        </Protected>
                       </div>
-                    </CardHeader>
+                      <Protected module="settings.integrations" action="edit">
+                        <Button 
+                          size="sm"
+                          onClick={handleSync}
+                          disabled={triggerSync.isPending || (!entraConfig?.ssoEnabled && !entraConfig?.scimEnabled)}
+                        >
+                          {triggerSync.isPending ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                          )}
+                          Sync Now
+                        </Button>
+                      </Protected>
+                    </div>
                   </Card>
 
                   {/* Quick Actions */}
