@@ -57,6 +57,7 @@ function toApiResponse(
     hasEntraLink: !!record.entraId,
     // SCIM flags
     hasScimRoles: userRolesData.some(r => r.source === "scim"),
+    isScimProvisioned: record.scimProvisioned ?? false,
   }
 }
 

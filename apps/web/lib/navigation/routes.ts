@@ -17,7 +17,7 @@ export interface RouteConfig {
 export const routes: Record<string, RouteConfig> = {
   // Dashboard
   dashboard: {
-    path: "/",
+    path: "/dashboard",
     label: "Dashboard",
   },
   

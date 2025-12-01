@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { users, userRoleValues, userStatusValues, persons } from "@/lib/db/schema"
+import { users, userRoleValues, userStatusValues, persons, integrations } from "@/lib/db/schema"
 import { z } from "zod"
 import { syncUserToEntra, isEntraSyncEnabled } from "@/lib/auth/entra-sync"
 import { requireOrgId } from "@/lib/api/context"
@@ -42,6 +42,19 @@ function toApiResponse(record: typeof users.$inferSelect) {
 
 interface RouteContext {
   params: Promise<{ id: string }>
+}
+
+/**
+ * Check if SCIM bidirectional sync is enabled
+ */
+async function isBidirectionalSyncEnabled(orgId: string): Promise<boolean> {
+  const [config] = await db
+    .select({ scimBidirectionalSync: integrations.scimBidirectionalSync })
+    .from(integrations)
+    .where(and(eq(integrations.orgId, orgId), eq(integrations.provider, "entra")))
+    .limit(1)
+  
+  return config?.scimBidirectionalSync ?? false
 }
 
 /**
@@ -96,6 +109,28 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     const data = parseResult.data
+
+    // Check if user is SCIM-provisioned
+    const [existingUser] = await db
+      .select({ scimProvisioned: users.scimProvisioned })
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.orgId, orgId)))
+      .limit(1)
+
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // If user is SCIM-provisioned, check if bidirectional sync is enabled
+    if (existingUser.scimProvisioned) {
+      const bidirectionalEnabled = await isBidirectionalSyncEnabled(orgId)
+      if (!bidirectionalEnabled) {
+        return NextResponse.json(
+          { error: "Cannot modify SCIM-provisioned users when bidirectional sync is disabled. Update the user in Microsoft Entra ID instead." },
+          { status: 403 }
+        )
+      }
+    }
 
     // Update user in database
     const [record] = await db
@@ -166,15 +201,26 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id } = await context.params
     const orgId = await requireOrgId(request)
 
-    // Get user email before deleting (for Entra sync)
+    // Get user details before deleting (for validation and Entra sync)
     const [userToDelete] = await db
-      .select({ email: users.email })
+      .select({ email: users.email, scimProvisioned: users.scimProvisioned })
       .from(users)
       .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .limit(1)
 
     if (!userToDelete) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // If user is SCIM-provisioned, check if bidirectional sync is enabled
+    if (userToDelete.scimProvisioned) {
+      const bidirectionalEnabled = await isBidirectionalSyncEnabled(orgId)
+      if (!bidirectionalEnabled) {
+        return NextResponse.json(
+          { error: "Cannot delete SCIM-provisioned users when bidirectional sync is disabled. Remove the user in Microsoft Entra ID instead." },
+          { status: 403 }
+        )
+      }
     }
 
     // Delete from database

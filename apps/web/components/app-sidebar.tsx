@@ -58,7 +58,7 @@ interface NavItem {
 const navigationData: NavItem[] = [
   {
     title: "Dashboard",
-    url: "/",
+    url: "/dashboard",
     icon: LayoutDashboard,
     // Dashboard is always visible
   },
@@ -171,7 +171,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const appName = org?.appName || "IdaraOS"
 
   const isActive = (url: string) => {
-    if (url === "/") return pathname === "/"
+    if (url === "/dashboard") return pathname === "/dashboard"
     return pathname.startsWith(url)
   }
 
@@ -218,7 +218,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/">
+              <Link href="/dashboard">
                 <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Building2 className="size-4" />
                 </div>
