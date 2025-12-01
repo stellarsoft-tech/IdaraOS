@@ -25,6 +25,9 @@ export interface EntraIntegration {
   hasScimToken?: boolean
   scimGroupPrefix: string | null // Prefix to match group names to roles (e.g., "IdaraOS-")
   scimBidirectionalSync: boolean // If true, role changes in UI sync back to Entra groups
+  syncPeopleEnabled: boolean // If true, creates Person records in People Directory during sync
+  deletePeopleOnUserDelete: boolean // If true, deletes Person when their linked User is deleted
+  settings?: Record<string, unknown> | null // Property mappings and other settings
   lastSyncAt: string | null
   syncedUserCount: number
   syncedGroupCount: number
@@ -50,6 +53,9 @@ export interface UpdateEntraConfig {
   scimEnabled?: boolean
   scimGroupPrefix?: string
   scimBidirectionalSync?: boolean
+  syncPeopleEnabled?: boolean
+  deletePeopleOnUserDelete?: boolean
+  settings?: Record<string, unknown>
 }
 
 // API functions
@@ -132,6 +138,9 @@ export interface SyncStats {
   usersCreated: number
   usersUpdated: number
   usersDeleted: number
+  peopleCreated: number
+  peopleUpdated: number
+  peopleDeleted: number
   rolesAssigned: number
   rolesRemoved: number
   errors: string[]

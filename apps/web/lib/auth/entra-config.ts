@@ -21,6 +21,9 @@ export interface EntraConfig {
   scimTokenEncrypted: string | null
   scimGroupPrefix: string | null
   scimBidirectionalSync: boolean
+  syncPeopleEnabled: boolean
+  deletePeopleOnUserDelete: boolean
+  settings: Record<string, unknown> | null
   status: string
 }
 
@@ -79,6 +82,9 @@ export async function getEntraConfig(): Promise<EntraConfig | null> {
       scimTokenEncrypted: integration.scimTokenEncrypted,
       scimGroupPrefix: integration.scimGroupPrefix,
       scimBidirectionalSync: integration.scimBidirectionalSync,
+      syncPeopleEnabled: integration.syncPeopleEnabled,
+      deletePeopleOnUserDelete: integration.deletePeopleOnUserDelete,
+      settings: integration.settings as Record<string, unknown> | null,
       status: integration.status,
     }
   } catch (error) {

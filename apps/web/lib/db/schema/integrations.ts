@@ -45,6 +45,12 @@ export const integrations = pgTable("core_integrations", {
   // Allow bidirectional sync (app can update Entra groups)
   scimBidirectionalSync: boolean("scim_bidirectional_sync").notNull().default(false),
   
+  // People Directory sync settings
+  // When enabled, creates Person records in the People Directory when syncing users
+  syncPeopleEnabled: boolean("sync_people_enabled").notNull().default(false),
+  // When enabled, deletes Person records when their linked User is deleted
+  deletePeopleOnUserDelete: boolean("delete_people_on_user_delete").notNull().default(true),
+  
   // SSO configuration
   ssoEnabled: boolean("sso_enabled").notNull().default(false),
   passwordAuthDisabled: boolean("password_auth_disabled").notNull().default(false),
