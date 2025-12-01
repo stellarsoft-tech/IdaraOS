@@ -125,12 +125,23 @@ async function regenerateScimToken(): Promise<{ scimToken: string }> {
   return response.json()
 }
 
+export interface SyncStats {
+  groupsFound: number
+  groupsSynced: number
+  usersCreated: number
+  usersUpdated: number
+  rolesAssigned: number
+  rolesRemoved: number
+  errors: string[]
+}
+
 export interface SyncResult {
   success: boolean
   syncedUserCount: number
   syncedGroupCount: number
   lastSyncAt: string
   message: string
+  stats?: SyncStats
 }
 
 async function triggerSync(): Promise<SyncResult> {

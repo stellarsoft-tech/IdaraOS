@@ -1,6 +1,7 @@
 /**
  * SCIM Sync API Endpoint
- * Triggers a sync and updates the counts
+ * POST - Triggers a full sync from Entra ID
+ * GET - Get the current sync status and counts
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -8,10 +9,11 @@ import { db } from "@/lib/db"
 import { integrations, users, scimGroups } from "@/lib/db/schema"
 import { eq, and, count } from "drizzle-orm"
 import { requireOrgId } from "@/lib/api/context"
+import { performFullSync } from "@/lib/scim/full-sync"
 
 /**
  * POST /api/settings/integrations/entra/sync
- * Triggers a manual sync and updates the counts
+ * Triggers a full sync from Entra ID
  */
 export async function POST(request: NextRequest) {
   try {
@@ -36,44 +38,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Count SCIM-provisioned users
+    if (!integration.scimEnabled) {
+      return NextResponse.json(
+        { error: "SCIM is not enabled" },
+        { status: 400 }
+      )
+    }
+
+    // Perform full sync
+    const result = await performFullSync(orgId)
+
+    if (!result.success && result.stats.groupsSynced === 0) {
+      return NextResponse.json(
+        { 
+          error: result.message,
+          stats: result.stats,
+        },
+        { status: 500 }
+      )
+    }
+
+    // Get updated counts
     const [userCountResult] = await db
       .select({ count: count() })
       .from(users)
-      .where(
-        and(
-          eq(users.orgId, orgId),
-          eq(users.scimProvisioned, true)
-        )
-      )
+      .where(and(eq(users.orgId, orgId), eq(users.scimProvisioned, true)))
 
-    // Count SCIM groups
     const [groupCountResult] = await db
       .select({ count: count() })
       .from(scimGroups)
       .where(eq(scimGroups.orgId, orgId))
 
-    const syncedUserCount = userCountResult?.count || 0
-    const syncedGroupCount = groupCountResult?.count || 0
-
-    // Update the integration with the new counts
-    const [updated] = await db
-      .update(integrations)
-      .set({
-        syncedUserCount: syncedUserCount.toString(),
-        syncedGroupCount: syncedGroupCount.toString(),
-        lastSyncAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(integrations.id, integration.id))
-      .returning()
-
     return NextResponse.json({
-      success: true,
-      syncedUserCount,
-      syncedGroupCount,
-      lastSyncAt: updated.lastSyncAt?.toISOString(),
-      message: `Synced ${syncedUserCount} users and ${syncedGroupCount} groups`,
+      success: result.success,
+      syncedUserCount: userCountResult?.count || 0,
+      syncedGroupCount: groupCountResult?.count || 0,
+      lastSyncAt: new Date().toISOString(),
+      message: result.message,
+      stats: result.stats,
     })
   } catch (error) {
     // Handle authentication errors
@@ -141,6 +143,8 @@ export async function GET(request: NextRequest) {
       syncedUserCount: userCountResult?.count || 0,
       syncedGroupCount: groupCountResult?.count || 0,
       lastSyncAt: integration.lastSyncAt?.toISOString() || null,
+      lastError: integration.lastError,
+      lastErrorAt: integration.lastErrorAt?.toISOString() || null,
     })
   } catch (error) {
     // Handle authentication errors

@@ -73,7 +73,7 @@ import {
   useUserRoles,
   useUpdateUserRoles,
 } from "@/lib/api/rbac"
-import { useEntraIntegration, useSearchEntraUsers, type EntraUser } from "@/lib/api/integrations"
+import { useEntraIntegration, useSearchEntraUsers, useTriggerSync, type EntraUser } from "@/lib/api/integrations"
 import { usePeopleList } from "@/lib/api/people"
 import { userStatusValues } from "@/lib/db/schema"
 import { toast } from "sonner"
@@ -127,6 +127,7 @@ export default function UsersPage() {
   const updateUser = useUpdateUser()
   const deleteUser = useDeleteUser()
   const updateUserRoles = useUpdateUserRoles()
+  const triggerSync = useTriggerSync()
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [sheetMode, setSheetMode] = useState<"create" | "edit">("create")
@@ -501,6 +502,29 @@ export default function UsersPage() {
     }
   }
 
+  // Sync from Entra ID handler
+  const handleSyncFromEntra = async () => {
+    try {
+      const result = await triggerSync.mutateAsync()
+      if (result.success) {
+        toast.success(result.message, {
+          description: `Created ${result.stats?.usersCreated || 0} users, assigned ${result.stats?.rolesAssigned || 0} roles`,
+        })
+      } else {
+        toast.warning(result.message, {
+          description: result.stats?.errors?.length 
+            ? `${result.stats.errors.length} errors occurred`
+            : undefined,
+        })
+      }
+    } catch {
+      toast.error("Failed to sync from Entra ID")
+    }
+  }
+
+  // Check if Entra sync is available
+  const isEntraSyncEnabled = entraIntegration?.status === "connected" && entraIntegration?.scimEnabled
+
   if (!canAccess) {
     return (
       <PageShell title="Users & Access">
@@ -517,12 +541,40 @@ export default function UsersPage() {
       title="Users & Access"
       description="Manage user accounts and their role assignments."
       action={
-        <Protected module="settings.users" action="create">
-          <Button onClick={handleOpenCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add User
-          </Button>
-        </Protected>
+        <div className="flex items-center gap-2">
+          {/* Sync from Entra ID button - only show if Entra is connected and SCIM is enabled */}
+          {isEntraSyncEnabled && (
+            <Protected module="settings.integrations" action="edit">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      onClick={handleSyncFromEntra}
+                      disabled={triggerSync.isPending}
+                    >
+                      {triggerSync.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                      )}
+                      Sync from Entra
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Sync users and groups from Microsoft Entra ID</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </Protected>
+          )}
+          <Protected module="settings.users" action="create">
+            <Button onClick={handleOpenCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add User
+            </Button>
+          </Protected>
+        </div>
       }
     >
       <div className="space-y-6">
@@ -981,6 +1033,18 @@ export default function UsersPage() {
                 The user will lose access to the system immediately.
               </AlertDialogDescription>
             </AlertDialogHeader>
+            
+            {/* Warning when bidirectional sync is enabled */}
+            {scimBidirectionalSync && (
+              <Alert variant="default" className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+                <Shield className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
+                  <strong>Entra ID Sync:</strong> This user will also be <strong>disabled</strong> in Microsoft Entra ID. 
+                  They will not be removed from their Entra ID groups, but their account will be deactivated.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction

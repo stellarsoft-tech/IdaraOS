@@ -19,6 +19,8 @@ export interface EntraConfig {
   passwordAuthDisabled: boolean
   scimEnabled: boolean
   scimTokenEncrypted: string | null
+  scimGroupPrefix: string | null
+  scimBidirectionalSync: boolean
   status: string
 }
 
@@ -75,6 +77,8 @@ export async function getEntraConfig(): Promise<EntraConfig | null> {
       passwordAuthDisabled: integration.passwordAuthDisabled,
       scimEnabled: integration.scimEnabled,
       scimTokenEncrypted: integration.scimTokenEncrypted,
+      scimGroupPrefix: integration.scimGroupPrefix,
+      scimBidirectionalSync: integration.scimBidirectionalSync,
       status: integration.status,
     }
   } catch (error) {
