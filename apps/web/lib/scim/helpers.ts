@@ -6,7 +6,7 @@
 import { NextRequest } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { integrations, roles, scimGroups, userRoles } from "@/lib/db/schema"
+import { integrations, roles, scimGroups, userRoles, userScimGroups } from "@/lib/db/schema"
 import { decrypt } from "@/lib/encryption"
 
 // Demo org ID - same as other routes
@@ -219,4 +219,48 @@ export async function getDefaultRole(): Promise<typeof roles.$inferSelect | null
     .limit(1)
 
   return userRole || null
+}
+
+/**
+ * Recalculate all SCIM-assigned roles for a user based on their current group memberships
+ * This ensures roles are in sync with group memberships, useful for:
+ * - Fixing sync inconsistencies
+ * - Ensuring roles match current group memberships after manual changes
+ * 
+ * This function:
+ * 1. Gets all groups the user is currently a member of
+ * 2. Removes all SCIM-assigned roles for this user
+ * 3. Re-assigns roles based on current group memberships
+ */
+export async function recalculateUserScimRoles(userId: string): Promise<void> {
+  // Get all groups the user is currently a member of
+  const userGroups = await db
+    .select({
+      groupId: scimGroups.id,
+      roleId: scimGroups.mappedRoleId,
+      displayName: scimGroups.displayName,
+    })
+    .from(userScimGroups)
+    .innerJoin(scimGroups, eq(userScimGroups.scimGroupId, scimGroups.id))
+    .where(eq(userScimGroups.userId, userId))
+
+  // Remove all existing SCIM-assigned roles for this user
+  await db
+    .delete(userRoles)
+    .where(
+      and(
+        eq(userRoles.userId, userId),
+        eq(userRoles.source, "scim")
+      )
+    )
+
+  // Re-assign roles based on current group memberships
+  for (const group of userGroups) {
+    if (group.roleId) {
+      await assignScimRole(userId, group.roleId, group.groupId)
+      console.log(`[SCIM Sync] Re-assigned role ${group.roleId} to user ${userId} via group ${group.displayName}`)
+    }
+  }
+
+  console.log(`[SCIM Sync] Recalculated roles for user ${userId}: ${userGroups.length} groups processed`)
 }
