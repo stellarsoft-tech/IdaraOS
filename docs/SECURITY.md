@@ -1,167 +1,205 @@
-# GitHub Actions Security Analysis
+# Security Best Practices
 
-## Current Security Posture
+IdaraOS is built with security as a core principle. This document outlines the security practices we've implemented and our roadmap for future enhancements.
 
-### ✅ What's Secure
+## Implemented Security Features
 
-1. **OIDC Authentication**: Using federated credentials instead of long-lived secrets
-2. **Manual Deployments**: Deploy workflow requires manual trigger (`workflow_dispatch`)
-3. **Minimal Permissions**: Workflows use least privilege (`id-token: write`, `contents: read`)
-4. **Environment Protection**: Using GitHub Environments for dev/staging/prod
+### Authentication & Authorization
 
-### ⚠️ Security Concerns
+#### Microsoft Entra ID Integration
+- **Single Sign-On (SSO)**: Secure authentication via Microsoft Entra ID (Azure AD)
+- **OIDC Protocol**: Industry-standard OpenID Connect for identity verification
+- **No Password Storage**: User credentials never touch our servers - all authentication is delegated to the identity provider
 
-1. **CI Runs on All PRs**: Your `ci.yml` runs automatically on PRs from forks
-2. **Broad OIDC Subjects**: Federated credentials allow any workflow from main/PRs
-3. **No Branch Protection**: Need to verify branch protection rules are enabled
-4. **Public Repository Risk**: Anyone can fork and create PRs
+#### SCIM Provisioning
+- **Automated User Lifecycle**: Users are automatically created, updated, and deactivated based on Entra ID
+- **Group-Based Role Assignment**: Roles are synced from Entra ID groups, ensuring centralized access control
+- **Just-In-Time Provisioning**: Users are provisioned on first access, reducing attack surface
 
-## Recommended Security Hardening
+#### Role-Based Access Control (RBAC)
+- **Granular Permissions**: Fine-grained permission model with module + action combinations
+- **Permission Checking**: Both client-side and server-side enforcement
+- **Protected Components**: UI elements are hidden based on user permissions
+- **Role Hierarchy**: Owner > Admin > HR/Manager > User cascading permissions
 
-### 1. Restrict OIDC Subjects to Specific Workflows
+### Data Protection
 
-**Current Issue**: Your federated credentials allow ANY workflow to authenticate.
+#### Encryption
+- **Encryption at Rest**: Sensitive data (API tokens, secrets) encrypted in the database
+- **Encryption in Transit**: HTTPS enforced for all communications
+- **Key Management**: Separate encryption keys for different data types
 
-**Solution**: Restrict OIDC subjects to specific workflow files:
+#### Database Security
+- **Parameterized Queries**: All database queries use parameterization to prevent SQL injection
+- **Organization Scoping**: Multi-tenant isolation ensures data is scoped to organizations
+- **Drizzle ORM**: Type-safe database access prevents common injection vulnerabilities
 
-```powershell
-# Update setup-github-oidc.ps1 federated credentials
-$credentials = @(
-    @{
-        Name = "github-deploy-workflow"
-        Subject = "repo:${GitHubOrg}/${GitHubRepo}:workflow:deploy-azure.yml:ref:refs/heads/main"
-        Description = "GitHub Actions - Deploy workflow only"
-    },
-    @{
-        Name = "github-ci-workflow"
-        Subject = "repo:${GitHubOrg}/${GitHubRepo}:workflow:ci.yml:ref:refs/heads/main"
-        Description = "GitHub Actions - CI workflow only"
-    },
-    @{
-        Name = "github-env-dev"
-        Subject = "repo:${GitHubOrg}/${GitHubRepo}:environment:dev"
-        Description = "GitHub Actions - dev environment"
-    },
-    @{
-        Name = "github-env-staging"
-        Subject = "repo:${GitHubOrg}/${GitHubRepo}:environment:staging"
-        Description = "GitHub Actions - staging environment"
-    },
-    @{
-        Name = "github-env-production"
-        Subject = "repo:${GitHubOrg}/${GitHubRepo}:environment:production"
-        Description = "GitHub Actions - production environment"
-    }
-    # REMOVE: github-pull-request credential (too broad)
-)
+### Infrastructure Security
+
+#### HTTPS Everywhere
+- **Automatic HTTPS**: Caddy provides automatic TLS certificate management
+- **HSTS Headers**: HTTP Strict Transport Security enforced
+- **Secure Cookies**: Session cookies marked as Secure and HttpOnly
+
+#### Container Security
+- **Alpine Base Images**: Minimal attack surface with Alpine Linux containers
+- **Non-Root Users**: Containers run as non-privileged users
+- **Read-Only Filesystems**: Production containers use read-only filesystems where possible
+
+### CI/CD Security
+
+#### GitHub Actions
+- **OIDC Authentication**: No long-lived secrets - using federated credentials for Azure
+- **Environment Protection**: Production deployments require manual approval
+- **Minimal Permissions**: Workflows use least-privilege permissions
+
+#### Branch Protection
+- **Required Reviews**: Pull requests require approval before merging
+- **Status Checks**: CI must pass before merge is allowed
+- **Signed Commits**: Support for commit signature verification
+
+### Application Security
+
+#### Input Validation
+- **Zod Schemas**: All inputs validated with Zod schemas on both client and server
+- **Type Safety**: TypeScript strict mode prevents many runtime errors
+- **Sanitization**: User inputs sanitized before display to prevent XSS
+
+#### API Security
+- **JWT Tokens**: Stateless authentication with short-lived JWTs
+- **CSRF Protection**: NextAuth.js provides built-in CSRF protection
+- **Rate Limiting**: API endpoints protected against abuse (planned)
+
+---
+
+## Security Roadmap
+
+### Near-Term (Next Quarter)
+
+#### Enhanced Audit Logging
+- [ ] Comprehensive audit trail for all user actions
+- [ ] Tamper-evident log storage
+- [ ] Log export for SIEM integration
+- [ ] Real-time alerting for suspicious activity
+
+#### API Rate Limiting
+- [ ] Per-user and per-IP rate limits
+- [ ] Configurable thresholds per endpoint
+- [ ] Graceful degradation under load
+
+#### Session Management
+- [ ] Concurrent session limits
+- [ ] Session timeout configuration
+- [ ] Remote session termination
+
+### Medium-Term (Next 6 Months)
+
+#### Advanced Authentication
+- [ ] Multi-Factor Authentication (MFA) enforcement
+- [ ] Conditional Access policies
+- [ ] Device trust verification
+- [ ] Passwordless authentication options
+
+#### Data Loss Prevention
+- [ ] Sensitive data detection
+- [ ] Export restrictions based on role
+- [ ] Watermarking for downloaded files
+
+#### Compliance Features
+- [ ] GDPR data export (Right to Data Portability)
+- [ ] Data retention policies
+- [ ] Privacy settings per user
+
+### Long-Term (Next Year)
+
+#### Security Operations
+- [ ] Security dashboard with metrics
+- [ ] Automated vulnerability scanning
+- [ ] Penetration testing program
+- [ ] Bug bounty program
+
+#### Advanced Threat Protection
+- [ ] Anomaly detection for user behavior
+- [ ] IP reputation checking
+- [ ] Geo-blocking capabilities
+- [ ] Account lockout policies
+
+---
+
+## Security Best Practices for Deployment
+
+### Environment Configuration
+
+```bash
+# Required security environment variables
+JWT_SECRET=<32+ character random string>
+ENCRYPTION_KEY=<32+ character random string>
+NEXTAUTH_SECRET=<32+ character random string>
+
+# Use strong, unique values for each environment
+# Never reuse secrets between environments
+# Rotate secrets periodically (recommended: every 90 days)
 ```
 
-### 2. Enable Branch Protection Rules
+### Production Checklist
 
-**Required Settings**:
+- [ ] HTTPS enabled with valid certificate
+- [ ] Database connections use SSL
+- [ ] Environment variables set via secure secrets management
+- [ ] Log level set appropriately (no debug in production)
+- [ ] Error messages don't expose sensitive details
+- [ ] CORS configured for specific origins only
+- [ ] CSP headers configured appropriately
 
-1. Go to: **Settings → Branches → Branch protection rules → Add rule**
-2. Branch name pattern: `main`
-3. Enable:
-   - ✅ Require a pull request before merging
-   - ✅ Require approvals (at least 1)
-   - ✅ Require status checks to pass before merging
-   - ✅ Require branches to be up to date before merging
-   - ✅ Do not allow bypassing the above settings
-   - ✅ Restrict pushes that create files larger than 100MB
-   - ✅ Block force pushes
-   - ✅ Block deletions
+### Regular Security Tasks
 
-### 3. Restrict CI Workflow to Trusted PRs Only
+| Task | Frequency |
+|------|-----------|
+| Dependency updates | Weekly |
+| Secret rotation | Quarterly |
+| Access reviews | Quarterly |
+| Security testing | Before releases |
+| Backup verification | Monthly |
+| Incident response drill | Annually |
 
-**Update `.github/workflows/ci.yml`**:
+---
 
-```yaml
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-    # Only run on PRs from the same repository (not forks)
-    types: [opened, synchronize, reopened]
+## Reporting Security Issues
 
-jobs:
-  lint:
-    # Skip CI for PRs from forks (they can't access secrets anyway)
-    if: github.event.pull_request.head.repo.full_name == github.repository
-```
+If you discover a security vulnerability in IdaraOS, please report it responsibly:
 
-### 4. Add Environment Protection Rules
+1. **Do not** open a public GitHub issue
+2. Email security concerns to your organization's security team
+3. Include detailed steps to reproduce the issue
+4. Allow reasonable time for a fix before disclosure
 
-**For each environment (dev/staging/prod)**:
+---
 
-1. Go to: **Settings → Environments**
-2. Click on environment (dev/staging/prod)
-3. Enable:
-   - ✅ Required reviewers (add yourself/team)
-   - ✅ Wait timer (optional, e.g., 5 minutes for prod)
-   - ✅ Deployment branches: Only allow `main` branch
+## Security Dependencies
 
-### 5. Restrict Workflow Permissions at Repository Level
+IdaraOS leverages well-maintained, security-focused libraries:
 
-**Settings → Actions → General → Workflow permissions**:
+| Component | Library | Security Features |
+|-----------|---------|-------------------|
+| Authentication | NextAuth.js | CSRF, secure cookies, JWT |
+| Validation | Zod | Type-safe input validation |
+| Database | Drizzle ORM | Parameterized queries |
+| UI | Radix UI | Accessible, XSS-safe |
+| Crypto | Node.js crypto | Native, audited crypto |
 
-- ✅ Select: **Read repository contents and packages permissions**
-- ✅ Uncheck: **Allow GitHub Actions to create and approve pull requests**
-- ✅ Add: **Read and write permissions** only for specific workflows that need it
+---
 
-### 6. Pin Action Versions
+## Compliance Considerations
 
-**Current**: Using `@v4`, `@v2` (mutable tags)
+IdaraOS is designed to support compliance with:
 
-**Recommended**: Pin to commit SHAs:
+- **SOC 2**: Audit logging, access controls, encryption
+- **GDPR**: Data portability, consent management, privacy controls
+- **ISO 27001**: Information security management practices
+- **HIPAA**: (With additional configuration) PHI protection capabilities
 
-```yaml
-- uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0fd  # v4
-- uses: azure/login@b0c2864b8b5c8e3b3e3b3e3b3e3b3e3b3e3b3e3b  # v2
-```
+*Note: Compliance certification requires proper configuration and organizational controls beyond the software itself.*
 
-### 7. Add Workflow Approval for Production
+---
 
-**For production environment**:
-
-1. Go to: **Settings → Environments → production**
-2. Add **Required reviewers** (yourself + team)
-3. This requires manual approval before production deployments
-
-## Security Checklist
-
-- [ ] Update OIDC federated credentials to restrict to specific workflows
-- [ ] Enable branch protection rules for `main`
-- [ ] Restrict CI workflow to same-repo PRs only
-- [ ] Configure environment protection rules (reviewers, branches)
-- [ ] Pin action versions to commit SHAs
-- [ ] Review and restrict repository-level workflow permissions
-- [ ] Add required reviewers for production environment
-- [ ] Enable "Require approval for all outside collaborators" in Actions settings
-
-## Testing Security
-
-1. **Test Fork PR**: Fork your repo, create a PR, verify CI runs but can't access Azure secrets
-2. **Test Manual Deploy**: Verify only authorized users can trigger deployments
-3. **Test Environment Protection**: Verify production requires approval
-
-## Current Risk Assessment
-
-| Risk | Severity | Mitigation |
-|------|----------|------------|
-| Fork PRs triggering CI | Low | CI can't access Azure secrets (OIDC requires main branch) |
-| Unauthorized deployments | Low | Manual trigger + environment protection |
-| Malicious code in PRs | Medium | Branch protection + required reviews |
-| Supply chain attacks | Medium | Pin action versions to SHAs |
-| Credential exposure | Low | Using OIDC (no long-lived secrets) |
-
-## Conclusion
-
-**Your current setup is reasonably secure** for a public repository, but implementing the recommendations above will significantly harden it. The most critical improvements are:
-
-1. **Branch protection rules** (prevents unauthorized code merges)
-2. **Environment protection** (requires approval for production)
-3. **Restricted OIDC subjects** (prevents unauthorized workflow runs)
-
-With these in place, you can safely keep the repository public while maintaining control over deployments to your private Azure tenant.
+**Security is a continuous journey, not a destination. We're committed to maintaining and improving the security posture of IdaraOS.**
