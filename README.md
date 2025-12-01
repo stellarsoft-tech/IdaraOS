@@ -2,9 +2,13 @@
 
 **A unified platform for managing your organization, from startup to enterprise.**
 
-IdaraOS was born from a real need: managing an organization that requires proper security, compliance, and effective people management—without paying a fortune that most startups simply can't afford. When we looked at the open-source landscape for a comprehensive solution, we found nothing. The existing tools were either prohibitively expensive enterprise software or fragmented point solutions that required stitching together dozens of vendors.
+![IdaraOS Dashboard](assets/dashbaord.png)
 
-So we built IdaraOS: an open-source, extensible platform that brings together HR & people management, asset tracking, finance operations, and a complete security engine (supporting ISO 27001, SOC I, SOC II, and more) with risk registers, controls, audits, and objectives—all in one place. It's designed for individuals and organizations of all scales who want enterprise-grade organization management without the enterprise price tag.
+IdaraOS was born from a real need: managing an organization that requires proper security, compliance, and effective people management - without paying a fortune that most startups simply can't afford. When we looked at the open-source landscape for a comprehensive solution, we found nothing. The existing tools were either prohibitively expensive enterprise software or fragmented point solutions that required stitching together dozens of vendors.
+
+So we built IdaraOS: an open-source, extensible platform that brings together HR & people management, asset tracking, finance operations, and a complete security engine (supporting ISO 27001, SOC I, SOC II, and more) with risk registers, controls, audits, and objectives - all in one place. It's designed for individuals and organizations of all scales who want enterprise-grade organization management without the enterprise price tag.
+
+> **Note**: IdaraOS is currently under active development. Not all features described are fully implemented yet. We're building in public and welcome contributions.
 
 Built with Next.js and modern web technologies using a design-first, API-first approach.
 
