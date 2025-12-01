@@ -128,8 +128,10 @@ async function regenerateScimToken(): Promise<{ scimToken: string }> {
 export interface SyncStats {
   groupsFound: number
   groupsSynced: number
+  groupsRemoved: number
   usersCreated: number
   usersUpdated: number
+  usersDeprovisioned: number
   rolesAssigned: number
   rolesRemoved: number
   errors: string[]

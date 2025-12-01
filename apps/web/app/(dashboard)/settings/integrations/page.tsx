@@ -208,11 +208,18 @@ export default function IntegrationsPage() {
     try {
       const result = await triggerSync.mutateAsync()
       if (result.success) {
-        toast.success(result.message, {
-          description: result.stats 
-            ? `Groups: ${result.stats.groupsSynced}/${result.stats.groupsFound} • Users: +${result.stats.usersCreated} • Roles: +${result.stats.rolesAssigned}/-${result.stats.rolesRemoved}`
-            : undefined,
-        })
+        const stats = result.stats
+        let description = ""
+        if (stats) {
+          const parts = []
+          parts.push(`Groups: ${stats.groupsSynced}/${stats.groupsFound}`)
+          if (stats.groupsRemoved > 0) parts.push(`-${stats.groupsRemoved} stale`)
+          parts.push(`Users: +${stats.usersCreated}`)
+          if (stats.usersDeprovisioned > 0) parts.push(`-${stats.usersDeprovisioned} deprovisioned`)
+          parts.push(`Roles: +${stats.rolesAssigned}/-${stats.rolesRemoved}`)
+          description = parts.join(" • ")
+        }
+        toast.success(result.message, { description: description || undefined })
       } else {
         toast.warning(result.message, {
           description: result.stats?.errors?.length 
