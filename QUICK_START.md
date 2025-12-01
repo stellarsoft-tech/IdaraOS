@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get IdaraOS running locally in minutes using Docker.
+Get IdaraOS - Organization Management Operating System - running locally in minutes using Docker.
 
 ## Prerequisites
 

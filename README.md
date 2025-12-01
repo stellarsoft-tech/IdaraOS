@@ -1,6 +1,6 @@
-# IdaraOS - Modern Organizational Operating System
+# IdaraOS - Organization Management Operating System
 
-A modern, design-first operating system for organizational management built with Next.js, React, and TypeScript.
+A modern, design-first operating system for organization management built with Next.js, React, and TypeScript.
 
 ## Quick Start (Local Development)
 
@@ -215,7 +215,20 @@ See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for the complete development workflo
 
 ## License
 
-[Your License Here]
+This software is licensed under the [PolyForm Internal Use License 1.0.0](LICENSE).
+
+**You may:**
+- Use IdaraOS for your organization's internal business operations
+- Modify and customize the software for your internal needs
+- Create derivative works for internal use
+
+**You may not:**
+- Redistribute the source code commercially
+- Sell or sublicense the software
+- Offer the software as a service to third parties
+- Fork for commercial purposes
+
+See the [LICENSE](LICENSE) file for the complete terms.
 
 ---
 
