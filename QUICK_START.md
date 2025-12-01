@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get IdaraOS - Organization Management Operating System - running locally in minutes using Docker.
+Get IdaraOS - Organization Operating System - running locally in minutes using Docker.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ Get IdaraOS - Organization Management Operating System - running locally in minu
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/IdaraOS.git
+git clone https://github.com/stellarsoft-tech/IdaraOS.git
 cd IdaraOS
 ```
 
