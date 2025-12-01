@@ -207,7 +207,19 @@ export default function IntegrationsPage() {
   const handleSync = async () => {
     try {
       const result = await triggerSync.mutateAsync()
-      toast.success(result.message)
+      if (result.success) {
+        toast.success(result.message, {
+          description: result.stats 
+            ? `Groups: ${result.stats.groupsSynced}/${result.stats.groupsFound} • Users: +${result.stats.usersCreated} • Roles: +${result.stats.rolesAssigned}/-${result.stats.rolesRemoved}`
+            : undefined,
+        })
+      } else {
+        toast.warning(result.message, {
+          description: result.stats?.errors?.length 
+            ? `${result.stats.errors.length} errors occurred during sync`
+            : undefined,
+        })
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to sync")
     }
@@ -587,7 +599,7 @@ export default function IntegrationsPage() {
                           <div>
                             <div className="font-medium text-sm">Bidirectional Sync</div>
                             <div className="text-xs text-muted-foreground">
-                              Allow role changes in the UI to sync back to Entra ID groups
+                              Allow changes in the application to sync back to Entra ID
                             </div>
                           </div>
                           <Switch 
@@ -597,12 +609,61 @@ export default function IntegrationsPage() {
                           />
                         </div>
                         
+                        {/* Sync Direction Explanation */}
+                        <Card className="bg-muted/50">
+                          <CardHeader className="pb-3 pt-0">
+                            <CardTitle className="text-sm">Sync Directions</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0 space-y-4">
+                            {/* Entra ID → Application */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                <div className="font-medium text-sm">Entra ID → Application</div>
+                                <Badge variant="outline" className="text-xs">Always Active</Badge>
+                              </div>
+                              <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
+                                <li>Users created/updated in Entra ID are synced to the application</li>
+                                <li>Group memberships sync to application roles (based on group prefix)</li>
+                                <li>User status changes (active/inactive) sync to the application</li>
+                                <li>User name changes sync to the application</li>
+                              </ul>
+                            </div>
+
+                            <Separator />
+
+                            {/* Application → Entra ID */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <RefreshCw className={`h-4 w-4 ${entraConfig?.scimBidirectionalSync ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`} />
+                                <div className="font-medium text-sm">Application → Entra ID</div>
+                                <Badge variant={entraConfig?.scimBidirectionalSync ? "default" : "outline"} className="text-xs">
+                                  {entraConfig?.scimBidirectionalSync ? "Enabled" : "Disabled"}
+                                </Badge>
+                              </div>
+                              {entraConfig?.scimBidirectionalSync ? (
+                                <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
+                                  <li><strong>Name changes:</strong> Updates displayName, givenName, and surname in Entra ID</li>
+                                  <li><strong>Status changes:</strong> Updates accountEnabled (active/inactive) in Entra ID</li>
+                                  <li><strong>User deletion:</strong> Disables the user account in Entra ID (accountEnabled = false)</li>
+                                  <li><strong>Note:</strong> Email changes and role changes do not sync to Entra ID</li>
+                                </ul>
+                              ) : (
+                                <div className="text-xs text-muted-foreground ml-6">
+                                  When disabled, SCIM-provisioned users are read-only in the application. 
+                                  All changes must be made in Microsoft Entra ID and will sync to the application automatically.
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                        
                         {!entraConfig?.scimBidirectionalSync && (
                           <Alert variant="default" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
                             <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                              When disabled, SCIM-assigned roles cannot be modified in the Users settings. 
-                              This ensures Entra ID remains the source of truth for user roles.
+                              When disabled, SCIM-provisioned users cannot be edited or deleted in the Users settings. 
+                              This ensures Entra ID remains the source of truth for user data and roles.
                             </AlertDescription>
                           </Alert>
                         )}
