@@ -131,7 +131,7 @@ export interface SyncStats {
   groupsRemoved: number
   usersCreated: number
   usersUpdated: number
-  usersDeprovisioned: number
+  usersDeleted: number
   rolesAssigned: number
   rolesRemoved: number
   errors: string[]

@@ -512,7 +512,7 @@ export default function UsersPage() {
         if (stats) {
           const parts = []
           if (stats.usersCreated > 0) parts.push(`+${stats.usersCreated} created`)
-          if (stats.usersDeprovisioned > 0) parts.push(`-${stats.usersDeprovisioned} deprovisioned`)
+          if (stats.usersDeleted > 0) parts.push(`-${stats.usersDeleted} deleted`)
           if (stats.rolesAssigned > 0) parts.push(`+${stats.rolesAssigned} roles`)
           if (stats.rolesRemoved > 0) parts.push(`-${stats.rolesRemoved} roles`)
           if (stats.groupsRemoved > 0) parts.push(`${stats.groupsRemoved} stale groups removed`)

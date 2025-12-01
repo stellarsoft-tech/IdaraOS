@@ -52,7 +52,7 @@ interface SyncResult {
     groupsRemoved: number
     usersCreated: number
     usersUpdated: number
-    usersDeprovisioned: number
+    usersDeleted: number
     rolesAssigned: number
     rolesRemoved: number
     errors: string[]
@@ -158,6 +158,19 @@ async function fetchGroupMembers(accessToken: string, groupId: string): Promise<
     console.error(`[Full Sync] Error fetching members for group ${groupId}:`, error)
     return []
   }
+}
+
+/**
+ * Get the default role for the organization
+ */
+async function getDefaultRole(orgId: string): Promise<typeof roles.$inferSelect | null> {
+  const [defaultRole] = await db
+    .select()
+    .from(roles)
+    .where(and(eq(roles.orgId, orgId), eq(roles.isDefault, true)))
+    .limit(1)
+  
+  return defaultRole || null
 }
 
 /**
@@ -462,30 +475,29 @@ async function cleanupStaleGroups(
             .where(eq(userScimGroups.userId, userId))
 
           if (remainingMemberships[0]?.count === 0) {
-            // User is no longer in any SCIM group - check if they have any SCIM roles left
-            const remainingScimRoles = await db
-              .select({ count: count() })
-              .from(userRoles)
-              .where(
-                and(
-                  eq(userRoles.userId, userId),
-                  eq(userRoles.source, "scim")
-                )
-              )
+            // User is no longer in any SCIM group - check if they were SCIM provisioned
+            const [user] = await db
+              .select()
+              .from(users)
+              .where(eq(users.id, userId))
+              .limit(1)
 
-            if (remainingScimRoles[0]?.count === 0) {
-              // User was only provisioned via this stale group - mark as no longer SCIM provisioned
-              // but keep the user (they might have manual roles or other access)
+            if (user && user.scimProvisioned) {
+              // User was provisioned via SCIM/sync and is no longer in any valid group
+              // DELETE the user entirely
+              
+              // First remove any remaining roles
               await db
-                .update(users)
-                .set({ 
-                  scimProvisioned: false,
-                  updatedAt: new Date()
-                })
+                .delete(userRoles)
+                .where(eq(userRoles.userId, userId))
+
+              // Then delete the user
+              await db
+                .delete(users)
                 .where(eq(users.id, userId))
 
               usersRemoved++
-              console.log(`[Full Sync] User ${userId} is no longer SCIM-provisioned (removed from all SCIM groups)`)
+              console.log(`[Full Sync] DELETED user ${user.email} (no longer in any valid SCIM group)`)
             }
           }
         }
@@ -516,7 +528,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     groupsRemoved: 0,
     usersCreated: 0,
     usersUpdated: 0,
-    usersDeprovisioned: 0,
+    usersDeleted: 0,
     rolesAssigned: 0,
     rolesRemoved: 0,
     errors: [],
@@ -555,6 +567,14 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
 
   const prefix = config.scimGroupPrefix || ""
 
+  // Get the default role for users in groups without a role mapping
+  const defaultRole = await getDefaultRole(orgId)
+  if (defaultRole) {
+    console.log(`[Full Sync] Default role: ${defaultRole.name} (${defaultRole.slug})`)
+  } else {
+    console.log(`[Full Sync] Warning: No default role configured`)
+  }
+
   // Fetch groups from Entra ID
   console.log(`[Full Sync] Fetching groups with prefix: "${prefix}"`)
   const entraGroups = await fetchEntraGroups(accessToken, prefix)
@@ -574,13 +594,17 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     try {
       console.log(`[Full Sync] Processing group: ${entraGroup.displayName}`)
 
-      // Map group to role
-      const mappedRole = await mapGroupToRole(entraGroup.displayName, orgId, prefix || null)
+      // Map group to role - use default role if no mapping found
+      let mappedRole = await mapGroupToRole(entraGroup.displayName, orgId, prefix || null)
       
-      if (!mappedRole && prefix) {
-        // Skip groups that don't map to a role when prefix is set
-        console.log(`[Full Sync] Skipping group "${entraGroup.displayName}" - no matching role found`)
-        continue
+      if (!mappedRole) {
+        // Use default role for groups without a specific role mapping
+        mappedRole = defaultRole
+        if (mappedRole) {
+          console.log(`[Full Sync] Group "${entraGroup.displayName}" has no role mapping - using default role: ${mappedRole.name}`)
+        } else {
+          console.log(`[Full Sync] Group "${entraGroup.displayName}" has no role mapping and no default role - users will have no roles`)
+        }
       }
 
       // Get or create the group in our DB
@@ -651,7 +675,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
   const validGroupExternalIds = entraGroups.map(g => g.id)
   const cleanupResult = await cleanupStaleGroups(orgId, validGroupExternalIds)
   stats.groupsRemoved = cleanupResult.groupsRemoved
-  stats.usersDeprovisioned = cleanupResult.usersRemoved
+  stats.usersDeleted = cleanupResult.usersRemoved
   stats.rolesRemoved += cleanupResult.rolesRemoved
 
   // Update integration sync stats
@@ -677,7 +701,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     })
     .where(and(eq(integrations.orgId, orgId), eq(integrations.provider, "entra")))
 
-  const message = `Synced ${stats.groupsSynced} groups (removed ${stats.groupsRemoved} stale), created ${stats.usersCreated} users (deprovisioned ${stats.usersDeprovisioned}), assigned ${stats.rolesAssigned} roles, removed ${stats.rolesRemoved} stale assignments`
+  const message = `Synced ${stats.groupsSynced} groups (removed ${stats.groupsRemoved} stale), created ${stats.usersCreated} users (deleted ${stats.usersDeleted}), assigned ${stats.rolesAssigned} roles, removed ${stats.rolesRemoved} stale assignments`
   console.log(`[Full Sync] Complete: ${message}`)
 
   return {

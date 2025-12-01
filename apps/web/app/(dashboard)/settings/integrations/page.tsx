@@ -215,7 +215,7 @@ export default function IntegrationsPage() {
           parts.push(`Groups: ${stats.groupsSynced}/${stats.groupsFound}`)
           if (stats.groupsRemoved > 0) parts.push(`-${stats.groupsRemoved} stale`)
           parts.push(`Users: +${stats.usersCreated}`)
-          if (stats.usersDeprovisioned > 0) parts.push(`-${stats.usersDeprovisioned} deprovisioned`)
+          if (stats.usersDeleted > 0) parts.push(`-${stats.usersDeleted} deleted`)
           parts.push(`Roles: +${stats.rolesAssigned}/-${stats.rolesRemoved}`)
           description = parts.join(" • ")
         }
