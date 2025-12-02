@@ -233,12 +233,23 @@ jobs:
           IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
+          # Use custom domain if configured, otherwise use Azure FQDN
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN }}"
+          
           # Check if app exists
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             echo "Updating existing Container App..."
-            # Get current FQDN for APP_URL
+            # Get current FQDN for fallback
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+              echo "Using custom domain: $APP_URL"
+            else
+              APP_URL="https://$FQDN"
+              echo "Using Azure FQDN: $APP_URL"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -274,7 +285,13 @@ jobs:
             
             # Get FQDN after creation
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+            else
+              APP_URL="https://$FQDN"
+            fi
             
             # Update with APP_URL (needs second update after we know the FQDN)
             az containerapp update \
@@ -489,9 +506,20 @@ jobs:
           IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
+          # Use custom domain if configured, otherwise use Azure FQDN
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN }}"
+
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+              echo "Using custom domain: $APP_URL"
+            else
+              APP_URL="https://$FQDN"
+              echo "Using Azure FQDN: $APP_URL"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -525,7 +553,13 @@ jobs:
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+            else
+              APP_URL="https://$FQDN"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -737,9 +771,20 @@ jobs:
           IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
+          # Use custom domain if configured, otherwise use Azure FQDN
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN }}"
+
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+              echo "Using custom domain: $APP_URL"
+            else
+              APP_URL="https://$FQDN"
+              echo "Using Azure FQDN: $APP_URL"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -773,7 +818,13 @@ jobs:
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+            else
+              APP_URL="https://$FQDN"
+            fi
             
             az containerapp update \
               --name $APP \

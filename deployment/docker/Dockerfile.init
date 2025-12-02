@@ -49,25 +49,23 @@ echo ''; \
 echo 'Step 1: Running database migrations...'; \
 echo '------------------------------------------'; \
 \
-# Check if database has tables but no migration tracking (was created with db:push) \
-NEEDS_BASELINE=$(node -e \" \
+# Check if database has existing tables (was created with db:push) \
+# If tables exist, always run baseline to ensure migrations are tracked correctly \
+HAS_TABLES=$(node -e \" \
   const { Pool } = require('pg'); \
   const pool = new Pool({ connectionString: process.env.DATABASE_URL }); \
   (async () => { \
     try { \
-      const tables = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\\\"); \
-      const migrations = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '__drizzle_migrations') as has_migrations\\\"); \
-      const needsBaseline = tables.rows[0].has_tables && !migrations.rows[0].has_migrations; \
-      console.log(needsBaseline ? 'true' : 'false'); \
+      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\\\"); \
+      console.log(result.rows[0].has_tables ? 'true' : 'false'); \
     } catch (e) { console.log('false'); } \
     finally { await pool.end(); } \
   })(); \
 \" 2>/dev/null || echo 'false'); \
-echo \"Needs baseline: $NEEDS_BASELINE\"; \
+echo \"Has existing tables: $HAS_TABLES\"; \
 \
-if [ \"$NEEDS_BASELINE\" = \"true\" ]; then \
-  echo 'Database has existing tables but no migration tracking.'; \
-  echo 'Running baseline to mark initial migration as applied...'; \
+if [ \"$HAS_TABLES\" = \"true\" ]; then \
+  echo 'Existing database detected - ensuring all migrations are baselined...'; \
   pnpm db:baseline 2>&1 || echo 'Baseline completed with warnings'; \
 fi; \
 \
