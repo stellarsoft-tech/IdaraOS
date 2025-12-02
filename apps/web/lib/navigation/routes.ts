@@ -46,6 +46,12 @@ export const routes: Record<string, RouteConfig> = {
     label: "Time Off",
     parent: "people",
   },
+  "people.settings": {
+    path: "/people/settings",
+    label: "Settings",
+    parent: "people",
+    description: "Configure People & HR module settings",
+  },
   
   // Security
   security: {

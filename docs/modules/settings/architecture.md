@@ -12,7 +12,7 @@ graph TB
         ORG[Organization Profile]
         USERS[Users & Access]
         ROLES[Roles & Permissions]
-        INT[Integrations]
+        INT[Integrations Hub]
         AUDIT[Audit Log]
         API[API Keys]
         BRAND[Branding]
@@ -24,7 +24,78 @@ graph TB
     INT --> |syncs| ROLES
     USERS --> |actions logged to| AUDIT
     ROLES --> |actions logged to| AUDIT
+    
+    subgraph "External Modules"
+        PEOPLE[People & HR]
+        ASSETS[Assets]
+    end
+    
+    INT -.-> |provides connection| PEOPLE
+    INT -.-> |provides connection| ASSETS
 ```
+
+## Integration Architecture
+
+The Settings module owns the **identity provider connection** (Entra ID credentials, SSO config) and **user provisioning**. It is intentionally **people-agnostic** - it doesn't know about the People module.
+
+```mermaid
+graph TB
+    subgraph "Settings: Integrations (People-Agnostic)"
+        CONN[Entra ID Connection<br/>Tenant, Client ID, Secret]
+        SSO[SSO Configuration]
+        SCIM[SCIM Endpoint]
+        USER_SYNC[User Sync Config<br/>Group Prefix, Role Mapping]
+    end
+    
+    subgraph "Users & Roles"
+        USERS[(Users Table)]
+        ROLES[(User Roles)]
+    end
+    
+    CONN --> SSO
+    CONN --> SCIM
+    CONN --> USER_SYNC
+    USER_SYNC --> USERS
+    USER_SYNC --> ROLES
+```
+
+### Module Responsibilities
+
+| This Module Handles | Other Modules Handle |
+|---------------------|---------------------|
+| ✅ Entra connection credentials | People sync config (People > Settings) |
+| ✅ SSO/authentication | Asset sync config (Assets > Settings) |
+| ✅ User provisioning | Module-specific group patterns |
+| ✅ Group → Role mapping | Module-specific field mapping |
+| ✅ SCIM endpoint | Module-specific sync triggers |
+
+### Connection Sharing
+
+Other modules can **borrow** the Entra connection for their own sync needs:
+
+```mermaid
+graph LR
+    subgraph "Settings Module"
+        CONN[Entra Connection]
+    end
+    
+    subgraph "People Module"
+        PEOPLE_SYNC[People Sync<br/>Uses connection if<br/>Mode B enabled]
+    end
+    
+    subgraph "Assets Module"
+        ASSET_SYNC[Asset Sync<br/>Future]
+    end
+    
+    CONN -.->|shared credentials| PEOPLE_SYNC
+    CONN -.->|shared credentials| ASSET_SYNC
+```
+
+The connection (tenant ID, client ID, secret) is shared, but each module has its own:
+- Group pattern/prefix
+- Field mapping
+- Sync behavior settings
+- Sync trigger
 
 ## Sub-Modules
 
@@ -69,10 +140,28 @@ Connect third-party services for SSO and provisioning.
 - Microsoft Entra ID (Azure AD) integration
   - SSO configuration (tenant ID, client ID, client secret)
   - SCIM provisioning for automatic user sync
+  - Group prefix for role mapping (e.g., `IdaraOS-*`)
   - Group-to-role mapping
   - Bidirectional sync support
 - Integration status monitoring
-- Manual sync trigger
+- Manual sync trigger for users
+
+**People-Agnostic Design:**
+
+This module is intentionally decoupled from the People module. It handles:
+- ✅ User account provisioning
+- ✅ Role assignment via groups
+- ✅ SSO authentication
+- ❌ People/Employee sync (managed in People > Settings)
+
+If People sync is configured independently in People > Settings (Mode B), this module shows a notice:
+
+```
+⚠️ People sync is managed independently in People > Settings.
+   User sync here only affects user accounts, not employee records.
+```
+
+See [People Module Architecture](../people/architecture.md) for People sync configuration.
 
 ### Audit Log (`/settings/audit-log`)
 

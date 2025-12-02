@@ -77,6 +77,12 @@ export interface FormDrawerProps<T = Record<string, unknown>> {
   submitLabel?: string
   isSubmitting?: boolean
   loading?: boolean // alias for isSubmitting
+  // Disable specific fields (array of field names)
+  disabledFields?: string[]
+  // Disable all fields (e.g., for synced records)
+  readOnly?: boolean
+  // Info banner to show above form
+  infoBanner?: React.ReactNode
 }
 
 /**
@@ -96,6 +102,9 @@ export function FormDrawer<T = Record<string, unknown>>({
   submitLabel,
   isSubmitting = false,
   loading = false,
+  disabledFields = [],
+  readOnly = false,
+  infoBanner,
 }: FormDrawerProps<T>) {
   const form = useForm({
     resolver: schema ? zodResolver(schema) : undefined,
@@ -122,6 +131,8 @@ export function FormDrawer<T = Record<string, unknown>>({
         })
         .map((fieldName) => {
           const fieldConfig = config[fieldName]
+          // Apply readOnly or check disabledFields array
+          const isDisabled = readOnly || disabledFields.includes(fieldName) || fieldConfig.disabled
           return {
             name: fieldName,
             label: fieldConfig.label,
@@ -131,13 +142,16 @@ export function FormDrawer<T = Record<string, unknown>>({
             helpText: fieldConfig.helpText,
             type: fieldConfig.type,
             options: fieldConfig.options,
-            disabled: fieldConfig.disabled,
+            disabled: isDisabled,
           } as FormFieldDef
         })
     }
-    // Already in FormFieldDef[] format
-    return fields as FormFieldDef[]
-  }, [fields, config])
+    // Already in FormFieldDef[] format - apply readOnly or disabledFields
+    return (fields as FormFieldDef[]).map(field => ({
+      ...field,
+      disabled: readOnly || disabledFields.includes(field.name) || field.disabled,
+    }))
+  }, [fields, config, readOnly, disabledFields])
 
   // Reset form when drawer opens with new default values
   React.useEffect(() => {
@@ -157,50 +171,59 @@ export function FormDrawer<T = Record<string, unknown>>({
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="sm:max-w-[540px] w-full p-0 flex flex-col">
-        <SheetHeader className="px-6 pt-6 pb-4">
+      <SheetContent className="sm:max-w-[540px] w-full p-0 flex flex-col h-full">
+        <SheetHeader className="px-6 pt-6 pb-4 shrink-0">
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
 
-        <ScrollArea className="flex-1 px-6">
-          <Form {...form}>
-            <form onSubmit={handleSubmit} className="space-y-4 pb-6">
-              {normalizedFields.map((fieldDef) => (
-                <FormField
-                  key={fieldDef.name}
-                  control={form.control}
-                  name={fieldDef.name}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {fieldDef.label}
-                        {fieldDef.required && <span className="text-destructive ml-1">*</span>}
-                      </FormLabel>
-                      <FormControl>
-                        {renderFormControl(field, fieldDef)}
-                      </FormControl>
-                      {fieldDef.helpText && (
-                        <FormDescription>{fieldDef.helpText}</FormDescription>
+        <div className="flex-1 overflow-hidden">
+          <ScrollArea className="h-full">
+            <div className="px-6 pb-6">
+              {infoBanner && (
+                <div className="mb-4">
+                  {infoBanner}
+                </div>
+              )}
+              <Form {...form}>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {normalizedFields.map((fieldDef) => (
+                    <FormField
+                      key={fieldDef.name}
+                      control={form.control}
+                      name={fieldDef.name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {fieldDef.label}
+                            {fieldDef.required && <span className="text-destructive ml-1">*</span>}
+                          </FormLabel>
+                          <FormControl>
+                            {renderFormControl(field, fieldDef)}
+                          </FormControl>
+                          {fieldDef.helpText && (
+                            <FormDescription>{fieldDef.helpText}</FormDescription>
+                          )}
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
+                    />
+                  ))}
 
-              <div className="flex items-center gap-2 pt-4">
-                <Button type="submit" disabled={submitting}>
-                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {submitLabel || defaultSubmitLabel}
-                </Button>
-                <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </ScrollArea>
+                  <div className="flex items-center gap-2 pt-4 pb-2">
+                    <Button type="submit" disabled={submitting}>
+                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {submitLabel || defaultSubmitLabel}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          </ScrollArea>
+        </div>
       </SheetContent>
     </Sheet>
   )

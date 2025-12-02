@@ -6,9 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq } from "drizzle-orm"
+import { eq, and, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { persons } from "@/lib/db/schema"
+import { persons, users } from "@/lib/db/schema"
 import { UpdatePersonSchema } from "@/lib/generated/people/person/types"
 
 // UUID regex
@@ -27,7 +27,43 @@ function slugify(name: string): string {
     .replaceAll(/^-+|-+$/g, "")
 }
 
-function toApiResponse(record: typeof persons.$inferSelect) {
+// Linked user info type
+interface LinkedUserInfo {
+  id: string
+  name: string
+  email: string
+  status: string
+  hasEntraLink: boolean
+}
+
+// Sync info type
+interface SyncInfo {
+  source: "manual" | "sync"
+  entraId: string | null
+  entraGroupId: string | null
+  entraGroupName: string | null
+  lastSyncedAt: string | null
+  syncEnabled: boolean
+}
+
+// Transform DB record to API response
+function toApiResponse(
+  record: typeof persons.$inferSelect,
+  linkedUser?: LinkedUserInfo | null
+) {
+  // Determine if person has Entra link (either through linked user or direct sync)
+  const hasEntraLink = !!record.entraId || linkedUser?.hasEntraLink || false
+  
+  // Build sync info
+  const syncInfo: SyncInfo = {
+    source: record.source as "manual" | "sync",
+    entraId: record.entraId ?? null,
+    entraGroupId: record.entraGroupId ?? null,
+    entraGroupName: record.entraGroupName ?? null,
+    lastSyncedAt: record.lastSyncedAt?.toISOString() ?? null,
+    syncEnabled: record.syncEnabled ?? false,
+  }
+  
   return {
     id: record.id,
     slug: record.slug,
@@ -44,6 +80,14 @@ function toApiResponse(record: typeof persons.$inferSelect) {
     avatar: record.avatar ?? undefined,
     bio: record.bio ?? undefined,
     assignedAssets: 0,
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
+    // Linked user info
+    linkedUser: linkedUser || null,
+    hasLinkedUser: !!linkedUser,
+    hasEntraLink,
+    // Sync tracking
+    ...syncInfo,
   }
 }
 
@@ -68,7 +112,31 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Person not found" }, { status: 404 })
     }
     
-    return NextResponse.json(toApiResponse(record))
+    // Fetch linked user if exists
+    let linkedUser: LinkedUserInfo | null = null
+    const [user] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        status: users.status,
+        entraId: users.entraId,
+      })
+      .from(users)
+      .where(eq(users.personId, record.id))
+      .limit(1)
+    
+    if (user) {
+      linkedUser = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        hasEntraLink: !!user.entraId,
+      }
+    }
+    
+    return NextResponse.json(toApiResponse(record, linkedUser))
   } catch (error) {
     console.error("Error fetching person:", error)
     return NextResponse.json({ error: "Failed to fetch person" }, { status: 500 })
@@ -105,26 +173,74 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     
     const data = parseResult.data
     
+    // Fields that are managed by sync and should not be updated when syncEnabled
+    const syncManagedFields = ["name", "email", "role", "team", "location", "phone", "startDate"]
+    
     // Build update object
     const updateData: Partial<typeof persons.$inferInsert> = {}
     
-    if (data.name !== undefined) {
-      updateData.name = data.name
-      updateData.slug = slugify(data.name)
+    // If sync is enabled, only allow updating non-sync-managed fields
+    if (existing.syncEnabled) {
+      // Only allow updating: status, endDate, bio, avatar
+      if (data.status !== undefined) updateData.status = data.status
+      if (data.endDate !== undefined) updateData.endDate = data.endDate || null
+      if (data.bio !== undefined) updateData.bio = data.bio || null
+      
+      // Warn if trying to update sync-managed fields
+      const attemptedSyncFields = syncManagedFields.filter(
+        field => (data as any)[field] !== undefined
+      )
+      if (attemptedSyncFields.length > 0) {
+        console.warn(
+          `[People API] Ignoring sync-managed fields for ${existing.email}: ${attemptedSyncFields.join(", ")}`
+        )
+      }
+    } else {
+      // Not synced - allow all updates
+      if (data.name !== undefined) {
+        updateData.name = data.name
+        updateData.slug = slugify(data.name)
+      }
+      if (data.email !== undefined) updateData.email = data.email
+      if (data.role !== undefined) updateData.role = data.role
+      if (data.team !== undefined) updateData.team = data.team || null
+      if (data.status !== undefined) updateData.status = data.status
+      if (data.startDate !== undefined) updateData.startDate = data.startDate
+      if (data.endDate !== undefined) updateData.endDate = data.endDate || null
+      if (data.phone !== undefined) updateData.phone = data.phone || null
+      if (data.location !== undefined) updateData.location = data.location || null
+      if (data.bio !== undefined) updateData.bio = data.bio || null
     }
-    if (data.email !== undefined) updateData.email = data.email
-    if (data.role !== undefined) updateData.role = data.role
-    if (data.team !== undefined) updateData.team = data.team || null
-    if (data.status !== undefined) updateData.status = data.status
-    if (data.startDate !== undefined) updateData.startDate = data.startDate
-    if (data.endDate !== undefined) updateData.endDate = data.endDate || null
-    if (data.phone !== undefined) updateData.phone = data.phone || null
-    if (data.location !== undefined) updateData.location = data.location || null
-    if (data.bio !== undefined) updateData.bio = data.bio || null
+    
+    // Fetch linked user before update
+    let linkedUser: LinkedUserInfo | null = null
+    const [user] = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        status: users.status,
+        entraId: users.entraId,
+      })
+      .from(users)
+      .where(eq(users.personId, existing.id))
+      .limit(1)
+    
+    if (user) {
+      linkedUser = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        status: user.status,
+        hasEntraLink: !!user.entraId,
+      }
+    }
     
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(toApiResponse(existing))
+      return NextResponse.json(toApiResponse(existing, linkedUser))
     }
+    
+    updateData.updatedAt = new Date()
     
     const [record] = await db
       .update(persons)
@@ -132,7 +248,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .where(eq(persons.id, existing.id))
       .returning()
     
-    return NextResponse.json(toApiResponse(record))
+    return NextResponse.json(toApiResponse(record, linkedUser))
   } catch (error) {
     console.error("Error updating person:", error)
     return NextResponse.json({ error: "Failed to update person" }, { status: 500 })

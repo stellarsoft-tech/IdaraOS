@@ -30,11 +30,34 @@ interface LinkedUserInfo {
   hasEntraLink: boolean
 }
 
+// Sync info type
+interface SyncInfo {
+  source: "manual" | "sync"
+  entraId: string | null
+  entraGroupId: string | null
+  entraGroupName: string | null
+  lastSyncedAt: string | null
+  syncEnabled: boolean
+}
+
 // Transform DB record to API response
 function toApiResponse(
   record: typeof persons.$inferSelect,
   linkedUser?: LinkedUserInfo | null
 ) {
+  // Determine if person has Entra link (either through linked user or direct sync)
+  const hasEntraLink = !!record.entraId || linkedUser?.hasEntraLink || false
+  
+  // Build sync info
+  const syncInfo: SyncInfo = {
+    source: record.source as "manual" | "sync",
+    entraId: record.entraId ?? null,
+    entraGroupId: record.entraGroupId ?? null,
+    entraGroupName: record.entraGroupName ?? null,
+    lastSyncedAt: record.lastSyncedAt?.toISOString() ?? null,
+    syncEnabled: record.syncEnabled ?? false,
+  }
+  
   return {
     id: record.id,
     slug: record.slug,
@@ -51,10 +74,14 @@ function toApiResponse(
     avatar: record.avatar ?? undefined,
     bio: record.bio ?? undefined,
     assignedAssets: 0, // TODO: Compute from assets table
+    createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
     // Linked user info
     linkedUser: linkedUser || null,
     hasLinkedUser: !!linkedUser,
-    hasEntraLink: linkedUser?.hasEntraLink || false,
+    hasEntraLink,
+    // Sync tracking
+    ...syncInfo,
   }
 }
 

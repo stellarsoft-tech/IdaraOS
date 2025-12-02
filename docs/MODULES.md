@@ -55,8 +55,10 @@ IdaraOS is organized into modules that handle different aspects of organizationa
 - Organization Profile - Company settings and preferences
 - Users & Access - User management and role assignment
 - Roles & Permissions - Custom roles with permission matrix
-- Integrations - Microsoft Entra ID SSO and SCIM
+- Integrations Hub - Entra ID connection, SSO, SCIM, user sync
 - Audit Log - System activity tracking
+
+**Note:** The Integrations Hub owns the Entra ID **connection** (credentials, SSO), while individual modules (People, Assets) own their **sync configurations**.
 
 **Architecture:** [docs/modules/settings/architecture.md](modules/settings/architecture.md)
 
@@ -70,6 +72,7 @@ IdaraOS is organized into modules that handle different aspects of organizationa
 - Person Detail - Individual profiles
 - Onboarding - New hire workflows (placeholder)
 - Time Off - Leave management (placeholder)
+- Sync Settings - Entra group sync for employees (planned)
 
 **Architecture:** [docs/modules/people/architecture.md](modules/people/architecture.md)
 
@@ -108,23 +111,62 @@ Each module should have documentation in `docs/modules/<module>/architecture.md`
 
 ```
 Settings
-├── Users (foundation for all auth)
-└── Roles (foundation for RBAC)
+├── Users & Access (foundation for auth)
+├── Roles & Permissions (foundation for RBAC)
+└── Integrations Hub (Entra connection, SSO)
 
 People & HR
 ├── Settings.Users (linked accounts)
-└── Settings.Integrations (Entra sync)
+├── Settings.Integrations (borrows Entra connection)
+└── People Sync Settings (module-specific sync config)
+
+Assets (Future)
+├── People & HR (assignment to people)
+├── Settings.Integrations (borrows Entra connection)
+└── Asset Sync Settings (device groups, etc.)
 
 Future modules → People & HR (references people as owners/assignees)
 ```
+
+### Integration Pattern: Connection vs Configuration
+
+```mermaid
+graph TB
+    subgraph "Settings Module"
+        INT[Integrations Hub]
+        CONN[Entra Connection<br/>Tenant, Client ID, Secret]
+        SSO[SSO Config]
+        SCIM[SCIM Endpoint]
+        USER_SYNC[User Sync Config<br/>Groups for Roles]
+    end
+    
+    subgraph "People Module"
+        PEOPLE_SYNC[People Sync Settings<br/>Groups for Employees]
+    end
+    
+    subgraph "Assets Module"
+        ASSET_SYNC[Asset Sync Settings<br/>Device Groups]
+    end
+    
+    INT --> CONN
+    CONN --> SSO
+    CONN --> SCIM
+    CONN --> USER_SYNC
+    CONN -.-> |shared| PEOPLE_SYNC
+    CONN -.-> |shared| ASSET_SYNC
+```
+
+**Key Principle:** 
+- **Centralized**: Identity provider connection (one Entra app, one set of credentials)
+- **Distributed**: Sync configuration (each module decides what/how to sync)
 
 ### Build Order
 
 When implementing new modules:
 
-1. **First:** Settings (users, roles, permissions)
-2. **Second:** People & HR (employee data)
-3. **Then:** Any other module (they reference people)
+1. **First:** Settings (users, roles, permissions, integrations hub)
+2. **Second:** People & HR (employee data, people sync settings)
+3. **Then:** Any other module (they reference people, may have own sync settings)
 
 ---
 

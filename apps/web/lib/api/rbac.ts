@@ -76,7 +76,7 @@ export interface UserRole {
   roleDescription: string | null
   isSystem: boolean
   assignedAt: string
-  source: "manual" | "scim"
+  source: "manual" | "sync"
   scimGroupId: string | null
 }
 

@@ -27,7 +27,7 @@ export interface AssignedRole {
   roleId: string
   roleName: string
   roleColor: string | null
-  source?: "manual" | "scim"
+  source?: "manual" | "sync"
   scimGroupId?: string | null
 }
 
@@ -61,7 +61,7 @@ export interface ApiUser {
   hasLinkedPerson: boolean
   hasEntraLink: boolean
   // SCIM-related flags for role management
-  hasScimRoles: boolean // True if user has any SCIM-assigned roles
+  hasScimRoles: boolean // True if user has any sync-assigned roles
   isScimProvisioned: boolean // True if user was created/provisioned via SCIM
 }
 
