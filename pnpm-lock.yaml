@@ -275,16 +275,6 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  specs:
-    dependencies:
-      zod:
-        specifier: ^3.25.76
-        version: 3.25.76
-    devDependencies:
-      typescript:
-        specifier: ^5
-        version: 5.9.3
-
 packages:
 
   '@acemir/cssom@0.9.24':

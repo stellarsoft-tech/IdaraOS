@@ -35,3 +35,4 @@ export {
 } from "./rbac"
 export * from "./integrations"
 export * from "./scim"
+export * from "./people-settings"

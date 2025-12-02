@@ -15,6 +15,7 @@ graph TB
         ONBOARD[Onboarding]
         TIMEOFF[Time Off]
         ROLES[HR Roles]
+        SYNC[Sync Settings]
     end
     
     OVERVIEW --> DIR
@@ -22,14 +23,128 @@ graph TB
     DETAIL --> |linked to| USERS[Settings: Users]
     ONBOARD --> DIR
     TIMEOFF --> DIR
+    SYNC --> |configures| DIR
     
-    subgraph "External References"
+    subgraph "Settings Module"
         USERS
+        INT[Integrations Hub]
+    end
+    
+    subgraph "External"
         ENTRA[Entra ID]
     end
     
-    ENTRA --> |provisions| DIR
-    ENTRA --> |provisions| USERS
+    INT --> |connection| ENTRA
+    INT -.-> |shared connection| SYNC
+    ENTRA --> |User groups| USERS
+    ENTRA --> |Employee groups| DIR
+```
+
+## Integration Architecture
+
+### Two Sync Modes
+
+The People module supports two mutually exclusive sync modes:
+
+```mermaid
+graph TB
+    subgraph "Settings > Integrations"
+        ENTRA[Entra Connection]
+        USER_SYNC[User Sync Config]
+    end
+    
+    subgraph "People > Settings"
+        MODE{Sync Mode?}
+        MODE_A[Mode A: Linked]
+        MODE_B[Mode B: Independent]
+    end
+    
+    subgraph "Data Flow"
+        USERS[(Users Table)]
+        PEOPLE[(People Table)]
+    end
+    
+    ENTRA --> USER_SYNC
+    ENTRA --> MODE
+    
+    MODE -->|Linked| MODE_A
+    MODE -->|Independent| MODE_B
+    
+    USER_SYNC --> USERS
+    MODE_A --> |via user sync| PEOPLE
+    MODE_B --> |separate sync| PEOPLE
+    USERS -.-> |optional link| PEOPLE
+```
+
+### Mode Comparison
+
+| Aspect | Mode A: Linked | Mode B: Independent |
+|--------|---------------|---------------------|
+| People created from | User sync | Separate group sync |
+| Can have users without people | No | Yes |
+| Can have people without users | No | Yes |
+| Group configuration | In Settings | In People > Settings |
+| Use case | Simple: all users = employees | Complex: separate populations |
+
+### Mode A: Linked to User Sync (Default)
+
+```mermaid
+sequenceDiagram
+    participant Settings as Settings > Integrations
+    participant Entra as Entra ID
+    participant Users as Users Table
+    participant People as People Table
+    
+    Settings->>Entra: Sync user groups
+    Entra-->>Settings: User data
+    Settings->>Users: Create/update users
+    Settings->>People: Create/update people (linked)
+    Note over Users,People: 1:1 relationship
+```
+
+### Mode B: Independent People Sync
+
+```mermaid
+sequenceDiagram
+    participant Settings as Settings > Integrations
+    participant PeopleSettings as People > Settings
+    participant Entra as Entra ID
+    participant Users as Users Table
+    participant People as People Table
+    
+    Note over Settings,People: User Sync (independent)
+    Settings->>Entra: Sync user groups (IdaraOS-*)
+    Entra-->>Settings: User data
+    Settings->>Users: Create/update users
+    
+    Note over Settings,People: People Sync (independent)
+    PeopleSettings->>Entra: Sync employee groups (All-Employees)
+    Entra-->>PeopleSettings: Employee data
+    PeopleSettings->>People: Create/update people
+    
+    Note over Users,People: Optional manual linking
+```
+
+### Mutual Exclusivity
+
+When Mode B is enabled in People > Settings:
+- The "Sync People with Users" toggle in Settings > Integrations is **disabled**
+- A message appears: "People sync is managed in People > Settings"
+- The user must go to People > Settings to configure or disable
+
+```mermaid
+graph LR
+    subgraph "Settings > Integrations"
+        TOGGLE[Sync People with Users]
+        MSG[⚠️ Managed in People > Settings]
+    end
+    
+    subgraph "People > Settings"
+        MODE_B[Independent Sync: Enabled]
+    end
+    
+    MODE_B -->|disables| TOGGLE
+    MODE_B -->|shows| MSG
 ```
 
 ## Sub-Modules
@@ -64,14 +179,28 @@ Central employee listing with full CRUD capabilities.
 
 ### Person Detail (`/people/directory/[slug]`)
 
-Individual employee profile view.
+Individual employee profile view with comprehensive integration information.
 
 **Features:**
-- Profile information display
-- Edit capability
-- Link to user account
-- Status indicators
-- Entra ID badge if synced
+- Profile card with avatar, contact info, status badge
+- Employment details (ID, department, role, location, dates)
+- Bio section
+- Linked user account display with status
+- Edit/Delete capabilities with RBAC
+
+**Tabs:**
+- **Overview**: Employment details, bio, linked user card, quick stats
+- **Integrations**: Entra ID sync status, source group, last sync time, linked user system access
+- **Documents**: Document management (planned)
+- **Activity**: Activity timeline with sync events, updates, creation
+
+**Entra Integration Section:**
+- Sync status indicator (synced vs manual)
+- Source Entra group name
+- Last sync timestamp
+- Sync enabled toggle status
+- Warning about manual changes being overwritten
+- Linked user system access status
 
 ### Onboarding (`/people/onboarding`) - Placeholder
 
@@ -103,6 +232,64 @@ HR-specific role management.
 - Reporting structures
 - Compensation bands
 
+### Settings (`/people/settings`) - Planned
+
+Module-level settings for People & HR, including Entra sync configuration.
+
+**Sections:**
+
+#### General Settings
+- Default status for new employees
+- Required fields configuration
+- Archive vs delete behavior
+
+#### Entra Sync Settings (shown only if Entra is connected in Settings > Integrations)
+
+Two mutually exclusive modes:
+
+**Mode A: Linked to User Sync** (default)
+- People records are created/updated when users are synced
+- Inherits from Settings > Integrations user sync
+- Simple 1:1 relationship between users and people
+
+**Mode B: Independent People Sync**
+- Separate Entra group pattern specifically for People
+- Can sync employees who are NOT system users
+- People and Users are independent data sets
+- Disables "create people from users" in core module
+
+```mermaid
+graph TB
+    subgraph "Mode A: Linked to User Sync"
+        USERS1[User Sync] --> |creates| PEOPLE1[People Records]
+    end
+    
+    subgraph "Mode B: Independent People Sync"
+        USERS2[User Sync] --> |users only| USER_TABLE[Users Table]
+        PEOPLE_SYNC[People Sync] --> |employees only| PEOPLE_TABLE[People Table]
+        USER_TABLE -.-> |optional link| PEOPLE_TABLE
+    end
+```
+
+**Mode B Settings (when enabled):**
+- Group pattern (e.g., `All-Employees`, `Employees-*`)
+- Property mapping (Entra fields → People fields)
+- Auto-delete when removed from groups
+- Sync frequency
+- Manual sync trigger
+
+**Key Difference from Settings > Integrations:**
+
+| Settings > Integrations | People > Settings |
+|------------------------|-------------------|
+| Entra connection (credentials) | Sync mode selection |
+| SSO configuration | Group pattern for people |
+| SCIM endpoint for users | Property mapping |
+| User → Role mapping | Delete behavior |
+| ~~Sync People with Users~~ | Moved here ↗ |
+
+**Important:** When Mode B is enabled in People > Settings, the "Sync People with Users" option in Settings > Integrations is disabled and shows a message directing users to People > Settings.
+
 ---
 
 ## Permissions
@@ -123,6 +310,9 @@ HR-specific role management.
 | Time Off | View | Yes | Yes | Yes | Own |
 | Time Off | Request | Yes | Yes | Yes | Yes |
 | Time Off | Approve | Yes | Yes | Yes | No |
+| Sync Settings | View | Yes | Yes | Yes | No |
+| Sync Settings | Configure | Yes | Yes | No | No |
+| Sync Settings | Trigger Sync | Yes | Yes | Yes | No |
 
 ### Permission Diagram
 
@@ -141,6 +331,7 @@ graph LR
         DET[Detail]
         ONB[Onboarding]
         TOF[Time Off]
+        SYNC[Sync Settings]
     end
     
     OWNER -->|full access| OVR
@@ -148,18 +339,21 @@ graph LR
     OWNER -->|full access| DET
     OWNER -->|full access| ONB
     OWNER -->|full access| TOF
+    OWNER -->|full access| SYNC
     
     ADMIN -->|full access| OVR
     ADMIN -->|full access| DIR
     ADMIN -->|full access| DET
     ADMIN -->|full access| ONB
     ADMIN -->|full access| TOF
+    ADMIN -->|full access| SYNC
     
     HR -->|view, create, edit| OVR
     HR -->|view, create, edit| DIR
     HR -->|view, edit| DET
     HR -->|full access| ONB
     HR -->|manage| TOF
+    HR -->|view, trigger| SYNC
     
     USER -->|view| OVR
     USER -->|view| DIR
@@ -355,11 +549,22 @@ sequenceDiagram
     "endDate": null,
     "phone": "+1-555-0100",
     "location": "New York",
+    "source": "sync",
+    "entraId": "entra-object-id",
+    "entraGroupId": "group-uuid",
+    "entraGroupName": "All-Employees",
+    "lastSyncedAt": "2024-01-20T10:30:00Z",
+    "syncEnabled": true,
+    "createdAt": "2024-01-15T09:00:00Z",
+    "updatedAt": "2024-01-20T10:30:00Z",
     "hasLinkedUser": true,
     "hasEntraLink": true,
     "linkedUser": {
       "id": "uuid",
-      "email": "john@example.com"
+      "name": "John Doe",
+      "email": "john@example.com",
+      "status": "active",
+      "hasEntraLink": true
     }
   }
 ]
@@ -405,7 +610,12 @@ sequenceDiagram
 | `location` | VARCHAR | Office location |
 | `avatar` | VARCHAR | Avatar URL |
 | `bio` | TEXT | Biography |
+| `source` | ENUM | manual, sync - How the record was created |
 | `entra_id` | VARCHAR | Microsoft Entra ID (nullable) |
+| `entra_group_id` | VARCHAR | Source Entra group ID |
+| `entra_group_name` | VARCHAR | Source Entra group display name |
+| `last_synced_at` | TIMESTAMP | Last sync timestamp |
+| `sync_enabled` | BOOLEAN | Whether Entra is source of truth |
 | `created_at` | TIMESTAMP | Record creation time |
 | `updated_at` | TIMESTAMP | Last update time |
 
@@ -426,7 +636,12 @@ erDiagram
         enum status
         date start_date
         date end_date
+        enum source
         string entra_id
+        string entra_group_id
+        string entra_group_name
+        timestamp last_synced_at
+        boolean sync_enabled
     }
     users {
         uuid id PK
@@ -434,6 +649,7 @@ erDiagram
         uuid person_id FK
         string email
         string name
+        string entra_id
     }
 ```
 
@@ -479,7 +695,12 @@ Located in `lib/generated/people/person/columns.tsx`:
 - Team
 - Status (with badge)
 - Start Date
-- Links (User badge, Entra badge)
+- Entra Group (source group name if synced)
+- Links:
+  - **Sync** badge (green) - Record was synced from Entra
+  - **User** badge (outline) - Has linked user account
+  - **Entra** badge (blue) - Has direct Entra ID link
+  - **Manual** badge (gray) - Created manually
 - Actions (Edit, Delete, Link/Unlink)
 
 ---
@@ -495,16 +716,146 @@ Located in `lib/generated/people/person/columns.tsx`:
 
 ---
 
+## User Flows (Settings)
+
+### Configure People Sync Flow
+
+```mermaid
+sequenceDiagram
+    actor HR as HR Admin
+    participant UI as People > Settings
+    participant Settings as Settings > Integrations
+    participant DB as Database
+    
+    HR->>UI: Navigate to People > Settings
+    UI->>Settings: Check if Entra is connected
+    Settings-->>UI: Connection status
+    
+    alt Entra NOT connected
+        UI-->>HR: Show "Entra not configured" message
+        UI-->>HR: Link to Settings > Integrations
+    else Entra IS connected
+        UI->>DB: Get current sync mode
+        DB-->>UI: Mode A (linked) or Mode B (independent)
+        
+        alt Switch to Mode B
+            HR->>UI: Enable "Independent People Sync"
+            HR->>UI: Enter group pattern (e.g., "All-Employees")
+            HR->>UI: Configure field mapping
+            HR->>UI: Click Save
+            UI->>DB: Save People sync config
+            UI->>DB: Disable "sync people with users" flag
+            DB-->>UI: Saved
+            UI-->>HR: "People sync configured. User sync will no longer create people."
+        end
+    end
+```
+
+### Sync Button Behavior
+
+The sync button on the People Directory page behaves differently based on mode:
+
+```mermaid
+graph TB
+    SYNC[Sync Button Clicked]
+    
+    SYNC --> CHECK{Check Mode}
+    
+    CHECK -->|Mode A: Linked| REDIRECT[Redirect to Settings > Integrations]
+    CHECK -->|Mode B: Independent| PEOPLE_SYNC[Execute People Sync]
+    
+    PEOPLE_SYNC --> FETCH[Fetch from People group pattern]
+    FETCH --> UPSERT[Create/Update People records]
+    UPSERT --> DONE[Show results]
+    
+    REDIRECT --> MSG[Show: Sync users in Settings to update People]
+```
+
+**Mode A (Linked):** Sync button either redirects to Settings or shows a message explaining that syncing users will also sync people.
+
+**Mode B (Independent):** Sync button triggers People-specific sync using the configured group pattern.
+
+---
+
 ## Integration Points
 
 ### With Settings Module
 
 - **Users**: People can be linked to user accounts for system access
-- **Entra ID**: People are auto-created via SCIM provisioning
+- **Integrations**: Borrows the Entra ID connection for People-specific sync (Mode B)
+- **Mutual Exclusivity**: When Mode B is enabled, Settings module shows that people sync is managed elsewhere
+
+### Entra ID Sync Architecture
+
+```mermaid
+sequenceDiagram
+    participant Admin as HR Admin
+    participant People as People Sync Settings
+    participant Settings as Settings Integrations
+    participant Entra as Microsoft Entra ID
+    participant DB as Database
+    
+    Note over Admin,DB: Initial Setup (one-time)
+    Admin->>Settings: Configure Entra connection
+    Settings->>Entra: Validate credentials
+    Entra-->>Settings: Connected
+    
+    Note over Admin,DB: HR Configures People Sync
+    Admin->>People: Select employee groups
+    People->>Settings: Get Entra connection
+    Settings-->>People: Connection details
+    People->>Entra: Fetch group list
+    Entra-->>People: Available groups
+    Admin->>People: Select "All-Employees", "Contractors"
+    Admin->>People: Configure field mapping
+    People->>DB: Save sync configuration
+    
+    Note over Admin,DB: Sync Execution
+    Admin->>People: Click "Sync Now"
+    People->>Settings: Get Entra access token
+    Settings->>Entra: Get token (cached/refresh)
+    Entra-->>Settings: Access token
+    Settings-->>People: Token
+    People->>Entra: GET /groups/{id}/members
+    Entra-->>People: Employee list
+    People->>DB: Upsert people records
+    DB-->>People: Synced
+    People-->>Admin: "Synced 150 employees"
+```
+
+### Data Flow: Users vs People
+
+```mermaid
+graph TB
+    subgraph "Identity Source"
+        ENTRA[Microsoft Entra ID]
+    end
+    
+    subgraph "Settings Module"
+        USER_SYNC[User Sync]
+        USERS[(Users Table)]
+    end
+    
+    subgraph "People Module"
+        PEOPLE_SYNC[People Sync]
+        PEOPLE[(People Table)]
+    end
+    
+    ENTRA -->|Groups: IdaraOS-*| USER_SYNC
+    ENTRA -->|Groups: All-Employees| PEOPLE_SYNC
+    
+    USER_SYNC -->|Create user accounts| USERS
+    PEOPLE_SYNC -->|Create employee records| PEOPLE
+    
+    USERS -.->|Optional link| PEOPLE
+    
+    style USERS fill:#e1f5fe
+    style PEOPLE fill:#f3e5f5
+```
 
 ### With Future Modules
 
-- **Assets**: Assign assets to people
+- **Assets**: Assign assets to people (could have own Entra sync for devices)
 - **Documents**: Link documents to people
 - **Expenses**: People submit expense reports
 - **Workflows**: People as approvers/assignees

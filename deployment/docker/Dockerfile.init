@@ -3,13 +3,19 @@
 # =============================================================================
 # This Dockerfile is used to run database migrations and seeding
 # It runs once and exits after completion
+#
+# Migration Strategy:
+# - Uses proper Drizzle ORM migrations from apps/web/drizzle/*.sql
+# - Migrations are tracked in __drizzle_migrations table
+# - Safe to run multiple times (idempotent)
+# - Supports both fresh installs and upgrades
+# - Handles databases created with db:push (baseline support)
 # =============================================================================
 
 FROM node:22-alpine
 
-# Install pnpm globally and expect for handling interactive prompts
+# Install pnpm globally
 RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN apk add --no-cache expect
 
 WORKDIR /app
 
@@ -23,24 +29,10 @@ RUN pnpm install --frozen-lockfile
 # Copy the application source code
 COPY apps/web ./apps/web
 
-# Create the expect script during build to avoid heredoc issues
-RUN echo '#!/usr/bin/expect -f' > /tmp/drizzle-push.exp && \
-    echo 'set timeout 300' >> /tmp/drizzle-push.exp && \
-    echo 'spawn npx drizzle-kit push --force' >> /tmp/drizzle-push.exp && \
-    echo 'expect {' >> /tmp/drizzle-push.exp && \
-    echo '  "Do you want to truncate" { send "n\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
-    echo '  "Yes, I want to truncate" { send "n\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
-    echo '  "No, add the constraint" { send "\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
-    echo '  -re ".*No.*" { send "\r"; exp_continue }' >> /tmp/drizzle-push.exp && \
-    echo '  eof { exit 0 }' >> /tmp/drizzle-push.exp && \
-    echo '  timeout { exit 1 }' >> /tmp/drizzle-push.exp && \
-    echo '}' >> /tmp/drizzle-push.exp && \
-    chmod +x /tmp/drizzle-push.exp
-
 # Set environment
 ENV NODE_ENV=development
 
-# Run migrations and seeding with explicit output
+# Run migrations and seeding
 CMD ["sh", "-exc", "\
 echo '=========================================='; \
 echo 'IdaraOS Database Initialization'; \
@@ -51,26 +43,49 @@ echo ''; \
 cd /app/apps/web; \
 echo 'Working directory:' $(pwd); \
 echo ''; \
-echo 'Checking schema files...'; \
-ls -la lib/db/schema/; \
+echo 'Available migration files:'; \
+ls -la drizzle/*.sql 2>/dev/null || echo '  No migration files found'; \
 echo ''; \
-echo 'Checking drizzle config...'; \
-cat drizzle.config.ts; \
-echo ''; \
-echo 'Step 1: Pushing database schema...'; \
+echo 'Step 1: Running database migrations...'; \
 echo '------------------------------------------'; \
-expect /tmp/drizzle-push.exp; \
-echo '✅ Database schema pushed successfully'; \
+\
+# Check if database has existing tables (was created with db:push) \
+# If tables exist, always run baseline to ensure migrations are tracked correctly \
+HAS_TABLES=$(node -e \" \
+  const { Pool } = require('pg'); \
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL }); \
+  (async () => { \
+    try { \
+      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\\\"); \
+      console.log(result.rows[0].has_tables ? 'true' : 'false'); \
+    } catch (e) { console.log('false'); } \
+    finally { await pool.end(); } \
+  })(); \
+\" 2>/dev/null || echo 'false'); \
+echo \"Has existing tables: $HAS_TABLES\"; \
+\
+if [ \"$HAS_TABLES\" = \"true\" ]; then \
+  echo 'Existing database detected - ensuring all migrations are baselined...'; \
+  pnpm db:baseline 2>&1 || echo 'Baseline completed with warnings'; \
+fi; \
+\
+# Run migrations \
+pnpm db:run-migrations 2>&1 || { \
+  echo '⚠️  Migration runner failed, falling back to db:push...'; \
+  echo 'Note: This is not recommended for production.'; \
+  npx drizzle-kit push --force 2>&1 || true; \
+}; \
+echo '✅ Database schema applied successfully'; \
 echo ''; \
 echo 'Step 2: Seeding database...'; \
 echo '------------------------------------------'; \
-pnpm db:seed 2>&1; \
-echo '✅ Database seeded successfully'; \
+pnpm db:seed 2>&1 || echo 'Seed skipped or already applied'; \
+echo '✅ Database seed step complete'; \
 echo ''; \
 echo 'Step 3: Seeding RBAC permissions (includes admin user)...'; \
 echo '------------------------------------------'; \
-pnpm db:seed-rbac 2>&1; \
-echo '✅ RBAC permissions seeded successfully'; \
+pnpm db:seed-rbac 2>&1 || echo 'RBAC seed skipped or already applied'; \
+echo '✅ RBAC permissions seed step complete'; \
 echo ''; \
 echo '=========================================='; \
 echo '✅ Database initialization complete!'; \

@@ -117,7 +117,7 @@ export const rolePermissions = pgTable(
 /**
  * Role assignment source - how the role was assigned
  */
-export const roleAssignmentSourceValues = ["manual", "scim"] as const
+export const roleAssignmentSourceValues = ["manual", "sync"] as const
 export type RoleAssignmentSource = (typeof roleAssignmentSourceValues)[number]
 
 /**
@@ -132,8 +132,8 @@ export const userRoles = pgTable(
     assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
     assignedBy: uuid("assigned_by").references(() => users.id, { onDelete: "set null" }),
     
-    // Source of assignment - "manual" (UI/API) or "scim" (provisioned from Entra)
-    // SCIM-assigned roles cannot be modified in the UI unless bidirectional sync is enabled
+    // Source of assignment - "manual" (UI/API) or "sync" (synced from Entra ID)
+    // Synced roles cannot be modified in the UI unless bidirectional sync is enabled
     source: text("source", { enum: roleAssignmentSourceValues }).notNull().default("manual"),
     
     // If assigned via SCIM, reference to the SCIM group that granted this role

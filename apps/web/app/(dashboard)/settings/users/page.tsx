@@ -242,16 +242,16 @@ export default function UsersPage() {
               {assignedRoles.map((role) => (
                   <Tooltip key={role.roleId}>
                     <TooltipTrigger asChild>
-                      <Badge className={`${getRoleColorClass(role.roleColor)} ${role.source === "scim" ? "pr-1" : ""}`}>
+                      <Badge className={`${getRoleColorClass(role.roleColor)} ${role.source === "sync" ? "pr-1" : ""}`}>
                   {role.roleName}
-                        {role.source === "scim" && (
+                        {role.source === "sync" && (
                           <RefreshCw className="h-2.5 w-2.5 ml-1 opacity-70" />
                         )}
                 </Badge>
                     </TooltipTrigger>
-                    {role.source === "scim" && (
+                    {role.source === "sync" && (
                       <TooltipContent>
-                        <p>Assigned via SCIM (Entra ID)</p>
+                        <p>Synced from Entra ID</p>
                       </TooltipContent>
                     )}
                   </Tooltip>
@@ -295,7 +295,7 @@ export default function UsersPage() {
               {user.isScimProvisioned && (
                 <Badge className="gap-1 text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border-0">
                   <RefreshCw className="h-3 w-3" />
-                  SCIM
+                  Sync
                 </Badge>
               )}
               {!user.hasLinkedPerson && !user.hasEntraLink && !user.isScimProvisioned && (
@@ -918,12 +918,12 @@ export default function UsersPage() {
                   Select which roles this user should have. Roles determine what the user can access.
                 </p>
                 
-                {/* SCIM Warning for specific role assignments */}
-                    {sheetMode === "edit" && editUserRoles.some(r => r.source === "scim") && !isScimLocked && (
+                {/* Sync Warning for specific role assignments */}
+                    {sheetMode === "edit" && editUserRoles.some(r => r.source === "sync") && !isScimLocked && (
                   <Alert variant="default" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
                     <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                      Some roles are assigned via SCIM (Entra ID) and cannot be modified here. 
+                      Some roles are synced from Entra ID and cannot be modified here. 
                       To change these roles, update the user&apos;s group membership in Microsoft Entra ID.
                     </AlertDescription>
                   </Alert>
@@ -931,10 +931,10 @@ export default function UsersPage() {
                 
                 <div className="space-y-3">
                   {roles.map((role) => {
-                    // Check if this role is SCIM-assigned for this user
-                    const scimRole = editUserRoles.find(r => r.roleId === role.id && r.source === "scim")
-                    const isScimAssigned = !!scimRole
-                        const isRoleDisabled = isScimAssigned || isScimLocked
+                    // Check if this role is Sync-assigned for this user
+                    const syncRole = editUserRoles.find(r => r.roleId === role.id && r.source === "sync")
+                    const isSyncAssigned = !!syncRole
+                        const isRoleDisabled = isSyncAssigned || isScimLocked
                     
                     return (
                     <div 
@@ -965,10 +965,10 @@ export default function UsersPage() {
                           {role.isSystem && (
                             <Badge variant="outline" className="text-xs">System</Badge>
                           )}
-                            {isScimAssigned && (
+                            {isSyncAssigned && (
                               <Badge variant="outline" className="text-xs gap-1 border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400">
                                 <RefreshCw className="h-2.5 w-2.5" />
-                                SCIM
+                                Sync
                               </Badge>
                             )}
                         </div>

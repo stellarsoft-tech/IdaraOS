@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Pencil, Plus, Trash2, Users, UserCheck, UserPlus, Building2, KeyRound, Link2, Unlink } from "lucide-react"
+import { MoreHorizontal, Pencil, Plus, Trash2, Users, UserCheck, UserPlus, Building2, KeyRound, Link2, Unlink, RefreshCw, Info } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
 
@@ -30,6 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
   DialogContent,
@@ -154,34 +155,69 @@ export default function DirectoryPage() {
   const columns: ColumnDef<Person>[] = [
     ...(baseColumns as ColumnDef<Person>[]),
     {
+      id: "entraGroup",
+      header: "Entra Group",
+      accessorKey: "entraGroupName",
+      cell: ({ row }) => {
+        const person = row.original
+        if (!person.entraGroupName) {
+          return <span className="text-muted-foreground text-xs">—</span>
+        }
+        return (
+          <span className="text-sm text-muted-foreground" title={person.entraGroupName}>
+            {person.entraGroupName.length > 25 
+              ? `${person.entraGroupName.slice(0, 25)}...` 
+              : person.entraGroupName}
+          </span>
+        )
+      },
+      enableSorting: true,
+      enableColumnFilter: true,
+      size: 150,
+    },
+    {
       id: "links",
       header: "Links",
       accessorFn: () => null,
       cell: ({ row }) => {
         const person = row.original
+        const isSynced = person.source === "sync"
+        
         return (
           <div className="flex items-center gap-1.5">
+            {/* Sync badge - shown when person was synced from Entra */}
+            {isSynced && (
+              <Badge className="gap-1 text-xs px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 border-0">
+                <RefreshCw className="h-3 w-3" />
+                Sync
+              </Badge>
+            )}
+            {/* User badge - shown when person has a linked user account */}
             {person.hasLinkedUser && (
               <Badge variant="outline" className="gap-1 text-xs px-1.5 py-0.5">
                 <KeyRound className="h-3 w-3" />
                 User
               </Badge>
             )}
+            {/* Entra badge - shown when person has direct Entra link or via user */}
             {person.hasEntraLink && (
               <Badge className="gap-1 text-xs px-1.5 py-0.5 bg-[#0078D4]/10 text-[#0078D4] dark:bg-[#0078D4]/20 dark:text-[#4DA6FF] border-0">
                 <Building2 className="h-3 w-3" />
                 Entra
               </Badge>
             )}
-            {!person.hasLinkedUser && !person.hasEntraLink && (
-              <span className="text-muted-foreground text-xs">—</span>
+            {/* Manual badge - shown for manually created people */}
+            {!isSynced && !person.hasLinkedUser && !person.hasEntraLink && (
+              <Badge variant="secondary" className="gap-1 text-xs px-1.5 py-0.5">
+                Manual
+              </Badge>
             )}
           </div>
         )
       },
       enableSorting: false,
       enableColumnFilter: false,
-      size: 120,
+      size: 160,
     },
     {
       id: "actions",
@@ -479,7 +515,10 @@ export default function DirectoryPage() {
           open={editOpen}
           onOpenChange={(open) => { setEditOpen(open); if (!open) setSelectedPerson(null); }}
           title={`Edit ${selectedPerson.name}`}
-          description="Update employee information"
+          description={selectedPerson.source === "sync" && selectedPerson.syncEnabled
+            ? "Some fields are managed by Entra ID sync"
+            : "Update employee information"
+          }
           schema={editFormSchema}
           config={formConfig}
           fields={editFields}
@@ -497,6 +536,23 @@ export default function DirectoryPage() {
             bio: selectedPerson.bio || "",
           }}
           onSubmit={handleEdit}
+          // Disable synced fields for people from Entra
+          disabledFields={
+            selectedPerson.source === "sync" && selectedPerson.syncEnabled
+              ? ["name", "email", "role", "team", "startDate", "location", "phone"]
+              : []
+          }
+          infoBanner={
+            selectedPerson.source === "sync" && selectedPerson.syncEnabled ? (
+              <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                  This person is synced from Entra ID ({selectedPerson.entraGroupName || "group"}). 
+                  Synced fields cannot be edited here.
+                </AlertDescription>
+              </Alert>
+            ) : undefined
+          }
         />
       )}
       
