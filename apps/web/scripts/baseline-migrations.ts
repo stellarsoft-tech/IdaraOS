@@ -6,8 +6,9 @@
  * before migrations were set up. It:
  * 
  * 1. Creates the __drizzle_migrations table if it doesn't exist
- * 2. Marks the initial schema migration as already applied
- * 3. Runs only the data migration portion
+ * 2. Reads all migrations from the drizzle journal
+ * 3. Marks ALL schema migrations as already applied (since db:push created all tables)
+ * 4. Runs only the data migration portion
  * 
  * Usage:
  *   pnpm db:baseline
@@ -16,6 +17,22 @@
  */
 
 import { Pool } from "pg"
+import fs from "fs"
+import path from "path"
+
+interface JournalEntry {
+  idx: number
+  version: string
+  when: number
+  tag: string
+  breakpoints: boolean
+}
+
+interface Journal {
+  version: string
+  dialect: string
+  entries: JournalEntry[]
+}
 
 async function baselineMigrations() {
   const databaseUrl = process.env.DATABASE_URL
@@ -65,22 +82,31 @@ async function baselineMigrations() {
     `)
     console.log("✅ Migrations tracking table ready")
     
-    // Check if initial migration is already recorded
-    const migrationCheck = await pool.query(`
-      SELECT * FROM "__drizzle_migrations" 
-      WHERE hash = '0000_cheerful_dust'
-      LIMIT 1
-    `)
+    // Read all migrations from the journal
+    const journalPath = path.join(process.cwd(), "drizzle", "meta", "_journal.json")
+    const journalContent = fs.readFileSync(journalPath, "utf-8")
+    const journal: Journal = JSON.parse(journalContent)
     
-    if (migrationCheck.rows.length > 0) {
-      console.log("✅ Initial migration already baselined")
-    } else {
-      // Mark initial migration as applied (since tables exist via db:push)
-      await pool.query(`
-        INSERT INTO "__drizzle_migrations" (hash, created_at)
-        VALUES ('0000_cheerful_dust', $1)
-      `, [Date.now()])
-      console.log("✅ Marked initial schema migration as applied")
+    console.log(`📋 Found ${journal.entries.length} migration(s) in journal`)
+    
+    // Mark each migration as applied if not already
+    for (const entry of journal.entries) {
+      const migrationCheck = await pool.query(`
+        SELECT * FROM "__drizzle_migrations" 
+        WHERE hash = $1
+        LIMIT 1
+      `, [entry.tag])
+      
+      if (migrationCheck.rows.length > 0) {
+        console.log(`   ✓ ${entry.tag} (already baselined)`)
+      } else {
+        // Mark migration as applied (since tables exist via db:push)
+        await pool.query(`
+          INSERT INTO "__drizzle_migrations" (hash, created_at)
+          VALUES ($1, $2)
+        `, [entry.tag, entry.when])
+        console.log(`   ✓ ${entry.tag} (marked as applied)`)
+      }
     }
     
     // Run the data migration
