@@ -5,8 +5,9 @@
  * This script is for databases that were created using `db:push` (development mode)
  * before migrations were set up. It:
  * 
- * 1. Creates the __drizzle_migrations table if it doesn't exist
- * 2. Reads all migrations from the drizzle journal
+ * 1. Creates the "drizzle" schema and "__drizzle_migrations" table if needed
+ *    (Drizzle ORM stores migrations in drizzle.__drizzle_migrations by default)
+ * 2. Reads all migrations from the drizzle/meta/_journal.json
  * 3. Marks ALL schema migrations as already applied (since db:push created all tables)
  * 4. Runs only the data migration portion
  * 
@@ -73,15 +74,19 @@ async function baselineMigrations() {
     
     console.log("✅ Existing tables detected (from db:push)")
     
+    // Create the drizzle schema if it doesn't exist (Drizzle uses this by default)
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS drizzle`)
+    
     // Create the drizzle migrations table if it doesn't exist
+    // NOTE: Drizzle ORM looks for this table in the "drizzle" schema, not "public"
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+      CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
         id SERIAL PRIMARY KEY,
         hash TEXT NOT NULL,
         created_at BIGINT NOT NULL
       )
     `)
-    console.log("✅ Migrations tracking table ready")
+    console.log("✅ Migrations tracking table ready (drizzle.__drizzle_migrations)")
     
     // Read all migrations from the journal
     const journalPath = path.join(process.cwd(), "drizzle", "meta", "_journal.json")
@@ -93,7 +98,7 @@ async function baselineMigrations() {
     // Mark each migration as applied if not already
     for (const entry of journal.entries) {
       const migrationCheck = await pool.query(`
-        SELECT * FROM "__drizzle_migrations" 
+        SELECT * FROM "drizzle"."__drizzle_migrations" 
         WHERE hash = $1
         LIMIT 1
       `, [entry.tag])
@@ -103,7 +108,7 @@ async function baselineMigrations() {
       } else {
         // Mark migration as applied (since tables exist via db:push)
         await pool.query(`
-          INSERT INTO "__drizzle_migrations" (hash, created_at)
+          INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at)
           VALUES ($1, $2)
         `, [entry.tag, entry.when])
         console.log(`   ✓ ${entry.tag} (marked as applied)`)
