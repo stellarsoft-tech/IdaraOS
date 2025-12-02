@@ -113,35 +113,36 @@ jobs:
         env:
           CI: "true"
           FORCE_COLOR: "0"
+          NODE_ENV: "production"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
           
-          echo "Running database migrations..."
+          echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Install expect for handling interactive prompts reliably
-          sudo apt-get update && sudo apt-get install -y expect
+          # Check if existing tables were created via db:push
+          # If so, run baseline to mark all existing migrations as applied
+          HAS_TABLES=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                console.log(result.rows[0].has_tables ? 'true' : 'false');
+              } catch (e) { console.log('false'); }
+              finally { await pool.end(); }
+            })();
+          ")
           
-          # Create expect script to handle drizzle-kit prompts
-          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
-          #!/usr/bin/expect -f
-          set timeout 300
-          spawn pnpm drizzle-kit push --force
-          expect {
-            "Do you want to truncate" { send "n\r"; exp_continue }
-            "Yes, I want to truncate" { send "n\r"; exp_continue }
-            "No, add the constraint" { send "\r"; exp_continue }
-            -re "❯.*No.*" { send "\r"; exp_continue }
-            eof { exit 0 }
-            timeout { exit 1 }
-          }
-          EXPECT_SCRIPT
-          chmod +x /tmp/drizzle-push.exp
+          if [ "$HAS_TABLES" = "true" ]; then
+            echo "📋 Existing database detected - ensuring all migrations are baselined..."
+            pnpm db:baseline
+          fi
           
-          # Run the expect script
-          expect /tmp/drizzle-push.exp
+          # Run migrations (will skip already-applied migrations)
+          pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
           
@@ -152,21 +153,20 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "Verifying new columns exist..."
+          echo "Verifying database schema..."
           node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                // Check rbac_user_roles.source column
-                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
-                console.log('✅ rbac_user_roles.source column exists');
+                // Check that core tables exist
+                await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
+                console.log('✅ core_organizations table exists');
                 
-                // Check core_integrations.scim_group_prefix column  
-                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
-                console.log('✅ core_integrations.scim_group_prefix column exists');
+                await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles table exists');
                 
-                console.log('✅ All schema changes verified');
+                console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
                 process.exit(1);
@@ -233,12 +233,26 @@ jobs:
           IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
+          # Use custom domain if configured, otherwise use Azure FQDN
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN }}"
+          
           # Check if app exists
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             echo "Updating existing Container App..."
-            # Get current FQDN for APP_URL
+            # Get current FQDN for fallback
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+              echo "Using custom domain: $APP_URL"
+            else
+              APP_URL="https://$FQDN"
+              echo "Using Azure FQDN: $APP_URL"
+            fi
+            
+            # Set ROOT_DOMAIN for multi-domain routing (strip 'app.' prefix if present)
+            ROOT_DOMAIN="${CUSTOM_DOMAIN#app.}"
             
             az containerapp update \
               --name $APP \
@@ -249,7 +263,9 @@ jobs:
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
-                "NEXT_PUBLIC_APP_URL=$APP_URL"
+                "NEXT_PUBLIC_APP_URL=$APP_URL" \
+                "ROOT_DOMAIN=$ROOT_DOMAIN" \
+                "APP_SUBDOMAIN=app"
           else
             echo "Creating new Container App..."
             az containerapp create \
@@ -274,7 +290,13 @@ jobs:
             
             # Get FQDN after creation
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+            else
+              APP_URL="https://$FQDN"
+            fi
             
             # Update with APP_URL (needs second update after we know the FQDN)
             az containerapp update \
@@ -374,35 +396,34 @@ jobs:
         env:
           CI: "true"
           FORCE_COLOR: "0"
+          NODE_ENV: "production"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
           
-          echo "Running database migrations..."
+          echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Install expect for handling interactive prompts reliably
-          sudo apt-get update && sudo apt-get install -y expect
+          # Check if existing tables were created via db:push
+          HAS_TABLES=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                console.log(result.rows[0].has_tables ? 'true' : 'false');
+              } catch (e) { console.log('false'); }
+              finally { await pool.end(); }
+            })();
+          ")
           
-          # Create expect script to handle drizzle-kit prompts
-          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
-          #!/usr/bin/expect -f
-          set timeout 300
-          spawn pnpm drizzle-kit push --force
-          expect {
-            "Do you want to truncate" { send "n\r"; exp_continue }
-            "Yes, I want to truncate" { send "n\r"; exp_continue }
-            "No, add the constraint" { send "\r"; exp_continue }
-            -re "❯.*No.*" { send "\r"; exp_continue }
-            eof { exit 0 }
-            timeout { exit 1 }
-          }
-          EXPECT_SCRIPT
-          chmod +x /tmp/drizzle-push.exp
+          if [ "$HAS_TABLES" = "true" ]; then
+            echo "📋 Existing database detected - ensuring all migrations are baselined..."
+            pnpm db:baseline
+          fi
           
-          # Run the expect script
-          expect /tmp/drizzle-push.exp
+          pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
           
@@ -413,17 +434,17 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "Verifying new columns exist..."
+          echo "Verifying database schema..."
           node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
-                console.log('✅ rbac_user_roles.source column exists');
-                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
-                console.log('✅ core_integrations.scim_group_prefix column exists');
-                console.log('✅ All schema changes verified');
+                await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
+                console.log('✅ core_organizations table exists');
+                await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles table exists');
+                console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
                 process.exit(1);
@@ -490,9 +511,20 @@ jobs:
           IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
+          # Use custom domain if configured, otherwise use Azure FQDN
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN }}"
+
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+              echo "Using custom domain: $APP_URL"
+            else
+              APP_URL="https://$FQDN"
+              echo "Using Azure FQDN: $APP_URL"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -526,7 +558,13 @@ jobs:
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+            else
+              APP_URL="https://$FQDN"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -623,35 +661,34 @@ jobs:
         env:
           CI: "true"
           FORCE_COLOR: "0"
+          NODE_ENV: "production"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
           
-          echo "Running database migrations..."
+          echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Install expect for handling interactive prompts reliably
-          sudo apt-get update && sudo apt-get install -y expect
+          # Check if existing tables were created via db:push
+          HAS_TABLES=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                console.log(result.rows[0].has_tables ? 'true' : 'false');
+              } catch (e) { console.log('false'); }
+              finally { await pool.end(); }
+            })();
+          ")
           
-          # Create expect script to handle drizzle-kit prompts
-          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
-          #!/usr/bin/expect -f
-          set timeout 300
-          spawn pnpm drizzle-kit push --force
-          expect {
-            "Do you want to truncate" { send "n\r"; exp_continue }
-            "Yes, I want to truncate" { send "n\r"; exp_continue }
-            "No, add the constraint" { send "\r"; exp_continue }
-            -re "❯.*No.*" { send "\r"; exp_continue }
-            eof { exit 0 }
-            timeout { exit 1 }
-          }
-          EXPECT_SCRIPT
-          chmod +x /tmp/drizzle-push.exp
+          if [ "$HAS_TABLES" = "true" ]; then
+            echo "📋 Existing database detected - ensuring all migrations are baselined..."
+            pnpm db:baseline
+          fi
           
-          # Run the expect script
-          expect /tmp/drizzle-push.exp
+          pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
           
@@ -662,17 +699,17 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "Verifying new columns exist..."
+          echo "Verifying database schema..."
           node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
-                console.log('✅ rbac_user_roles.source column exists');
-                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
-                console.log('✅ core_integrations.scim_group_prefix column exists');
-                console.log('✅ All schema changes verified');
+                await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
+                console.log('✅ core_organizations table exists');
+                await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles table exists');
+                console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
                 process.exit(1);
@@ -739,9 +776,20 @@ jobs:
           IMAGE="${{ secrets.ACR_NAME }}.azurecr.io/${{ env.APP_NAME }}:${{ github.sha }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
 
+          # Use custom domain if configured, otherwise use Azure FQDN
+          CUSTOM_DOMAIN="${{ vars.CUSTOM_DOMAIN }}"
+
           if az containerapp show --resource-group $RG --name $APP > /dev/null 2>&1; then
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+              echo "Using custom domain: $APP_URL"
+            else
+              APP_URL="https://$FQDN"
+              echo "Using Azure FQDN: $APP_URL"
+            fi
             
             az containerapp update \
               --name $APP \
@@ -775,7 +823,13 @@ jobs:
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
-            APP_URL="https://$FQDN"
+            
+            # Use custom domain if set, otherwise use Azure FQDN
+            if [ -n "$CUSTOM_DOMAIN" ]; then
+              APP_URL="https://$CUSTOM_DOMAIN"
+            else
+              APP_URL="https://$FQDN"
+            fi
             
             az containerapp update \
               --name $APP \

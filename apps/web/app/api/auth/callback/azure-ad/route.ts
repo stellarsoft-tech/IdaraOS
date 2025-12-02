@@ -212,13 +212,29 @@ export async function GET(request: NextRequest) {
 
     // Set session cookie directly on the response
     // This ensures the cookie is set before the redirect happens
-    redirectResponse.cookies.set("idaraos_session", token, {
+    // Domain is set to root domain (e.g., .idaraos.com) for cross-subdomain support
+    const cookieOptions: {
+      httpOnly: boolean
+      secure: boolean
+      sameSite: "lax" | "strict" | "none"
+      maxAge: number
+      path: string
+      domain?: string
+    } = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
-    })
+    }
+    
+    // Set cookie domain for cross-subdomain support in production
+    // This allows the cookie to work on both idaraos.com and app.idaraos.com
+    if (process.env.ROOT_DOMAIN) {
+      cookieOptions.domain = `.${process.env.ROOT_DOMAIN}`
+    }
+    
+    redirectResponse.cookies.set("idaraos_session", token, cookieOptions)
 
     console.log(`[Azure AD Callback] Session cookie set, redirecting to: ${returnTo}`)
 

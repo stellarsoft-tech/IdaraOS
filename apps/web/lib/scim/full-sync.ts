@@ -7,7 +7,7 @@
  * 2. Automatically via SCIM provisioning from Entra ID
  * 
  * The sync process:
- * 1. Fetches all groups from Entra ID that match the configured prefix
+ * 1. Fetches all groups from Entra ID that match the configured pattern (supports wildcards)
  * 2. For each group, fetches all members
  * 3. Creates/updates users in the application
  * 4. Assigns roles based on group memberships
@@ -15,7 +15,7 @@
  * 6. Updates sync counts in the integration record
  */
 
-import { eq, and, inArray, count } from "drizzle-orm"
+import { eq, and, inArray, count, ilike, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { 
   users, 
@@ -24,9 +24,11 @@ import {
   userScimGroups, 
   userRoles,
   roles,
-  persons
+  persons,
+  peopleSettings
 } from "@/lib/db/schema"
 import { getEntraConfig, type EntraConfig } from "@/lib/auth/entra-config"
+import { performPeopleSync, getPeopleSyncSettings } from "@/lib/people/sync"
 
 /**
  * Property mapping configuration for syncing Entra user properties to People fields
@@ -137,18 +139,75 @@ async function getGraphAccessToken(): Promise<string | null> {
 }
 
 /**
- * Fetch groups from Entra ID that match the configured prefix
+ * Convert a wildcard pattern to a regex
+ * Supports * as a wildcard that matches any characters
  */
-async function fetchEntraGroups(accessToken: string, prefix: string): Promise<GraphGroup[]> {
+function patternToRegex(pattern: string): RegExp {
+  // Escape special regex characters except *
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+  // Convert * to regex wildcard
+  const regexStr = escaped.replace(/\*/g, '.*')
+  return new RegExp(`^${regexStr}$`, 'i')
+}
+
+/**
+ * Check if a group name matches the configured pattern
+ */
+function matchesPattern(groupName: string, pattern: string): boolean {
+  if (!pattern) return true
+  const regex = patternToRegex(pattern)
+  return regex.test(groupName)
+}
+
+/**
+ * Extract role slug from a group name based on the pattern
+ * The role slug is derived by removing the matched pattern parts
+ */
+function extractRoleSlug(groupName: string, pattern: string): string | null {
+  if (!pattern) return groupName.toLowerCase()
+  
+  // Find the position of * in the pattern to extract the role part
+  const starIndex = pattern.indexOf('*')
+  if (starIndex === -1) {
+    // No wildcard - exact match, return the group name as slug
+    return pattern.toLowerCase() === groupName.toLowerCase() ? groupName.toLowerCase() : null
+  }
+  
+  const prefix = pattern.substring(0, starIndex)
+  const suffix = pattern.substring(starIndex + 1)
+  
+  // Extract the middle part (the role)
+  let rolePart = groupName
+  
+  if (prefix && groupName.toLowerCase().startsWith(prefix.toLowerCase())) {
+    rolePart = groupName.substring(prefix.length)
+  }
+  
+  if (suffix && rolePart.toLowerCase().endsWith(suffix.toLowerCase())) {
+    rolePart = rolePart.substring(0, rolePart.length - suffix.length)
+  }
+  
+  return rolePart.toLowerCase() || null
+}
+
+/**
+ * Fetch groups from Entra ID that match the configured pattern
+ * Pattern supports wildcards (*) anywhere in the name
+ */
+async function fetchEntraGroups(accessToken: string, pattern: string): Promise<GraphGroup[]> {
   try {
-    // If prefix is provided, filter by displayName starting with prefix
+    // Extract prefix (before first *) for MS Graph filter optimization
+    const starIndex = pattern.indexOf('*')
+    const prefix = starIndex > 0 ? pattern.substring(0, starIndex) : ""
+    
+    // If we have a prefix, use startswith filter. Otherwise fetch more groups.
     const filter = prefix 
       ? `startswith(displayName,'${prefix}')`
       : ""
     
     const url = filter
       ? `https://graph.microsoft.com/v1.0/groups?$filter=${encodeURIComponent(filter)}&$select=id,displayName,description`
-      : `https://graph.microsoft.com/v1.0/groups?$select=id,displayName,description&$top=100`
+      : `https://graph.microsoft.com/v1.0/groups?$select=id,displayName,description&$top=200`
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -161,7 +220,19 @@ async function fetchEntraGroups(accessToken: string, prefix: string): Promise<Gr
     }
 
     const data = await response.json()
-    return data.value || []
+    const allGroups: GraphGroup[] = data.value || []
+    
+    // If pattern has wildcards, filter client-side for full pattern match
+    if (pattern && pattern.includes('*')) {
+      return allGroups.filter(g => matchesPattern(g.displayName, pattern))
+    }
+    
+    // If exact pattern (no wildcards), filter for exact match
+    if (pattern && !pattern.includes('*')) {
+      return allGroups.filter(g => g.displayName.toLowerCase() === pattern.toLowerCase())
+    }
+    
+    return allGroups
   } catch (error) {
     console.error("[Full Sync] Error fetching groups:", error)
     return []
@@ -217,11 +288,11 @@ async function getDefaultRole(orgId: string): Promise<typeof roles.$inferSelect 
 }
 
 /**
- * Map a group display name to a role using the configured prefix
+ * Map a group display name to a role using the configured pattern
  */
-async function mapGroupToRole(displayName: string, orgId: string, prefix: string | null): Promise<typeof roles.$inferSelect | null> {
-  if (!prefix) {
-    // No prefix - try direct match
+async function mapGroupToRole(displayName: string, orgId: string, pattern: string | null): Promise<typeof roles.$inferSelect | null> {
+  if (!pattern) {
+    // No pattern - try direct match with group name as slug
     const [role] = await db
       .select()
       .from(roles)
@@ -230,11 +301,17 @@ async function mapGroupToRole(displayName: string, orgId: string, prefix: string
     return role || null
   }
 
-  if (!displayName.startsWith(prefix)) {
+  // Check if group matches the pattern
+  if (!matchesPattern(displayName, pattern)) {
     return null
   }
 
-  const roleSlug = displayName.substring(prefix.length).toLowerCase()
+  // Extract role slug from group name based on pattern
+  const roleSlug = extractRoleSlug(displayName, pattern)
+  
+  if (!roleSlug) {
+    return null
+  }
   
   const [role] = await db
     .select()
@@ -319,16 +396,26 @@ function generateSlug(name: string, email: string): string {
 }
 
 /**
+ * Entra group info for tracking sync source
+ */
+interface EntraGroupInfo {
+  id: string
+  displayName: string
+}
+
+/**
  * Create or update a Person record linked to a User
  */
 async function getOrCreatePerson(
   orgId: string,
   userId: string,
   entraUser: GraphUser,
-  _config: EntraConfig // Reserved for future property mapping support
+  _config: EntraConfig, // Reserved for future property mapping support
+  groupInfo?: EntraGroupInfo // Optional group info for sync tracking
 ): Promise<{ person: typeof persons.$inferSelect | null; created: boolean; updated: boolean }> {
   const email = entraUser.mail || entraUser.userPrincipalName
   const name = entraUser.displayName || email
+  const now = new Date()
 
   // Check if user already has a linked person
   const [existingUser] = await db
@@ -347,7 +434,19 @@ async function getOrCreatePerson(
 
     if (existingPerson) {
       // Update person with latest Entra data
-      const updates: Partial<typeof persons.$inferInsert> = {}
+      const updates: Partial<typeof persons.$inferInsert> = {
+        // Always update sync tracking fields
+        source: "sync" as const,
+        entraId: entraUser.id,
+        lastSyncedAt: now,
+        syncEnabled: true,
+      }
+      
+      // Update group info if provided
+      if (groupInfo) {
+        updates.entraGroupId = groupInfo.id
+        updates.entraGroupName = groupInfo.displayName
+      }
       
       if (name !== existingPerson.name) updates.name = name
       if (email !== existingPerson.email) updates.email = email
@@ -364,67 +463,164 @@ async function getOrCreatePerson(
         updates.phone = entraUser.mobilePhone
       }
 
-      if (Object.keys(updates).length > 0) {
-        const [updated] = await db
-          .update(persons)
-          .set({ ...updates, updatedAt: new Date() })
-          .where(eq(persons.id, existingPerson.id))
-          .returning()
-        return { person: updated, created: false, updated: true }
-      }
-
-      return { person: existingPerson, created: false, updated: false }
+      const [updated] = await db
+        .update(persons)
+        .set({ ...updates, updatedAt: now })
+        .where(eq(persons.id, existingPerson.id))
+        .returning()
+      return { person: updated, created: false, updated: true }
     }
   }
 
-  // Try to find person by email (might exist but not linked)
+  // Try to find person by email (case-insensitive, might exist but not linked)
   const [existingPersonByEmail] = await db
     .select()
     .from(persons)
-    .where(and(eq(persons.orgId, orgId), eq(persons.email, email)))
+    .where(and(eq(persons.orgId, orgId), ilike(persons.email, email)))
     .limit(1)
 
   if (existingPersonByEmail) {
-    // Link existing person to user
+    // Link existing person to user and update sync fields
     await db
       .update(users)
-      .set({ personId: existingPersonByEmail.id, updatedAt: new Date() })
+      .set({ personId: existingPersonByEmail.id, updatedAt: now })
       .where(eq(users.id, userId))
+    
+    // Update the person with sync tracking info
+    const [updatedPerson] = await db
+      .update(persons)
+      .set({
+        source: "sync" as const,
+        entraId: entraUser.id,
+        entraGroupId: groupInfo?.id || null,
+        entraGroupName: groupInfo?.displayName || null,
+        lastSyncedAt: now,
+        syncEnabled: true,
+        updatedAt: now,
+      })
+      .where(eq(persons.id, existingPersonByEmail.id))
+      .returning()
 
     console.log(`[Full Sync] Linked existing person ${existingPersonByEmail.name} to user`)
-    return { person: existingPersonByEmail, created: false, updated: false }
+    return { person: updatedPerson, created: false, updated: true }
   }
 
-  // Create new person
+  // Create new person with upsert pattern to handle race conditions
   const slug = generateSlug(name, email)
-  const startDate = entraUser.employeeHireDate 
-    ? new Date(entraUser.employeeHireDate).toISOString().split("T")[0]
-    : new Date().toISOString().split("T")[0]
+  
+  // Safely format start date - ensure it's a valid YYYY-MM-DD format
+  let startDate: string
+  try {
+    if (entraUser.employeeHireDate) {
+      const date = new Date(entraUser.employeeHireDate)
+      if (!isNaN(date.getTime())) {
+        startDate = date.toISOString().split("T")[0]
+      } else {
+        startDate = new Date().toISOString().split("T")[0]
+      }
+    } else {
+      startDate = new Date().toISOString().split("T")[0]
+    }
+  } catch {
+    startDate = new Date().toISOString().split("T")[0]
+  }
+  
+  // Validate date format (YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    console.warn(`[Full Sync] Invalid date format "${startDate}", using current date`)
+    startDate = new Date().toISOString().split("T")[0]
+  }
 
-  const [newPerson] = await db
-    .insert(persons)
-    .values({
-      orgId,
-      slug,
-      name,
-      email,
-      role: entraUser.jobTitle || "Employee",
-      team: entraUser.department || null,
-      location: entraUser.officeLocation || null,
-      phone: entraUser.mobilePhone || null,
-      status: "active",
-      startDate,
-    })
-    .returning()
+  try {
+    const [newPerson] = await db
+      .insert(persons)
+      .values({
+        orgId,
+        slug,
+        name,
+        email: email.toLowerCase(), // Normalize email to lowercase
+        role: entraUser.jobTitle || "Employee",
+        team: entraUser.department || null,
+        location: entraUser.officeLocation || null,
+        phone: entraUser.mobilePhone || null,
+        status: "active",
+        startDate,
+        // Sync tracking fields
+        source: "sync" as const,
+        entraId: entraUser.id,
+        entraGroupId: groupInfo?.id || null,
+        entraGroupName: groupInfo?.displayName || null,
+        lastSyncedAt: now,
+        syncEnabled: true,
+      })
+      .onConflictDoUpdate({
+        target: persons.email,
+        set: {
+          name,
+          role: entraUser.jobTitle || sql`${persons.role}`,
+          team: entraUser.department || sql`${persons.team}`,
+          location: entraUser.officeLocation || sql`${persons.location}`,
+          phone: entraUser.mobilePhone || sql`${persons.phone}`,
+          source: "sync",
+          entraId: entraUser.id,
+          entraGroupId: groupInfo?.id || sql`${persons.entraGroupId}`,
+          entraGroupName: groupInfo?.displayName || sql`${persons.entraGroupName}`,
+          lastSyncedAt: now,
+          syncEnabled: true,
+          updatedAt: now,
+        },
+      })
+      .returning()
 
-  // Link person to user
-  await db
-    .update(users)
-    .set({ personId: newPerson.id, updatedAt: new Date() })
-    .where(eq(users.id, userId))
+    // Link person to user
+    await db
+      .update(users)
+      .set({ personId: newPerson.id, updatedAt: now })
+      .where(eq(users.id, userId))
 
-  console.log(`[Full Sync] Created and linked person: ${newPerson.name}`)
-  return { person: newPerson, created: true, updated: false }
+    console.log(`[Full Sync] Created/updated and linked person: ${newPerson.name}`)
+    return { person: newPerson, created: true, updated: false }
+  } catch (error) {
+    // If still failing (e.g., slug conflict), try to find and link existing
+    console.warn(`[Full Sync] Insert failed for ${email}, trying to find existing:`, error)
+    
+    const [existingBySlugOrEmail] = await db
+      .select()
+      .from(persons)
+      .where(
+        and(
+          eq(persons.orgId, orgId),
+          sql`(LOWER(${persons.email}) = LOWER(${email}) OR ${persons.slug} = ${slug})`
+        )
+      )
+      .limit(1)
+    
+    if (existingBySlugOrEmail) {
+      await db
+        .update(users)
+        .set({ personId: existingBySlugOrEmail.id, updatedAt: now })
+        .where(eq(users.id, userId))
+      
+      // Update sync tracking
+      await db
+        .update(persons)
+        .set({
+          source: "sync" as const,
+          entraId: entraUser.id,
+          entraGroupId: groupInfo?.id || null,
+          entraGroupName: groupInfo?.displayName || null,
+          lastSyncedAt: now,
+          syncEnabled: true,
+          updatedAt: now,
+        })
+        .where(eq(persons.id, existingBySlugOrEmail.id))
+      
+      console.log(`[Full Sync] Found and linked existing person: ${existingBySlugOrEmail.name}`)
+      return { person: existingBySlugOrEmail, created: false, updated: true }
+    }
+    
+    throw error
+  }
 }
 
 /**
@@ -511,16 +707,16 @@ async function syncUserGroupMembership(
       await db.insert(userRoles).values({
         userId,
         roleId,
-        source: "scim",
+        source: "sync",
         scimGroupId: groupId,
         assignedAt: new Date(),
       })
       roleAssigned = true
     } else if (existingRole.source === "manual") {
-      // Upgrade from manual to SCIM
+      // Upgrade from manual to Sync
       await db
         .update(userRoles)
-        .set({ source: "scim", scimGroupId: groupId, assignedAt: new Date() })
+        .set({ source: "sync", scimGroupId: groupId, assignedAt: new Date() })
         .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, roleId)))
       roleAssigned = true
     }
@@ -560,13 +756,13 @@ async function cleanupStaleGroupMemberships(
       )
     )
 
-  // Remove SCIM-assigned roles from this group
+  // Remove Sync-assigned roles from this group
   await db
     .delete(userRoles)
     .where(
       and(
         eq(userRoles.scimGroupId, groupId),
-        eq(userRoles.source, "scim"),
+        eq(userRoles.source, "sync"),
         inArray(userRoles.userId, staleUserIds)
       )
     )
@@ -576,7 +772,7 @@ async function cleanupStaleGroupMemberships(
 }
 
 /**
- * Clean up groups that no longer match the prefix and remove associated users/roles/people
+ * Clean up groups that no longer match the pattern and remove associated users/roles/people
  */
 async function cleanupStaleGroups(
   orgId: string,
@@ -621,13 +817,13 @@ async function cleanupStaleGroups(
           .delete(userScimGroups)
           .where(eq(userScimGroups.scimGroupId, staleGroup.id))
 
-        // Remove all SCIM-assigned roles from this group
+        // Remove all Sync-assigned roles from this group
         const deleteResult = await db
           .delete(userRoles)
           .where(
             and(
               eq(userRoles.scimGroupId, staleGroup.id),
-              eq(userRoles.source, "scim")
+              eq(userRoles.source, "sync")
             )
           )
           .returning()
@@ -744,7 +940,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     }
   }
 
-  const prefix = config.scimGroupPrefix || ""
+  const groupPattern = config.scimGroupPrefix || ""
 
   // Get the default role for users in groups without a role mapping
   const defaultRole = await getDefaultRole(orgId)
@@ -755,15 +951,15 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
   }
 
   // Fetch groups from Entra ID
-  console.log(`[Full Sync] Fetching groups with prefix: "${prefix}"`)
-  const entraGroups = await fetchEntraGroups(accessToken, prefix)
+  console.log(`[Full Sync] Fetching groups with pattern: "${groupPattern}"`)
+  const entraGroups = await fetchEntraGroups(accessToken, groupPattern)
   stats.groupsFound = entraGroups.length
   console.log(`[Full Sync] Found ${entraGroups.length} groups`)
 
-  if (entraGroups.length === 0 && prefix) {
+  if (entraGroups.length === 0 && groupPattern) {
     return {
       success: true,
-      message: `No groups found with prefix "${prefix}"`,
+      message: `No groups found matching pattern "${groupPattern}"`,
       stats,
     }
   }
@@ -774,7 +970,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
       console.log(`[Full Sync] Processing group: ${entraGroup.displayName}`)
 
       // Map group to role - use default role if no mapping found
-      let mappedRole = await mapGroupToRole(entraGroup.displayName, orgId, prefix || null)
+      let mappedRole = await mapGroupToRole(entraGroup.displayName, orgId, groupPattern || null)
       
       if (!mappedRole) {
         // Use default role for groups without a specific role mapping
@@ -807,14 +1003,19 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
             console.log(`[Full Sync] Created user: ${user.email}`)
           }
 
-          // Create/update Person record if People sync is enabled
-          if (config.syncPeopleEnabled) {
+          // Create/update Person record if linked mode is enabled
+          // Skip if People module is in independent mode (it handles its own sync)
+          const peopleSettingsCheck = await getPeopleSyncSettings(orgId)
+          const isPeopleManagingOwnSync = peopleSettingsCheck?.syncMode === "independent"
+          
+          if (config.syncPeopleEnabled && !isPeopleManagingOwnSync) {
             try {
               const { created: personCreated, updated: personUpdated } = await getOrCreatePerson(
                 orgId,
                 user.id,
                 member,
-                config
+                config,
+                { id: entraGroup.id, displayName: entraGroup.displayName } // Pass group info for sync tracking
               )
               if (personCreated) stats.peopleCreated++
               if (personUpdated) stats.peopleUpdated++
@@ -866,14 +1067,45 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     }
   }
 
-  // Clean up groups that no longer match the prefix (or were removed from Entra)
-  // This is the key for idempotent sync - removes stale data when prefix changes
+  // Clean up groups that no longer match the pattern (or were removed from Entra)
+  // This is the key for idempotent sync - removes stale data when pattern changes
   const validGroupExternalIds = entraGroups.map(g => g.id)
   const cleanupResult = await cleanupStaleGroups(orgId, validGroupExternalIds, config)
   stats.groupsRemoved = cleanupResult.groupsRemoved
   stats.usersDeleted = cleanupResult.usersRemoved
   stats.peopleDeleted = cleanupResult.peopleRemoved
   stats.rolesRemoved += cleanupResult.rolesRemoved
+
+  // Check if People module has independent sync enabled with SCIM
+  const peopleSyncSettings = await getPeopleSyncSettings(orgId)
+  const isPeopleIndependentMode = peopleSyncSettings?.syncMode === "independent"
+  const isPeopleScimEnabled = peopleSyncSettings?.scimEnabled ?? false
+
+  // If People module is in independent mode with SCIM enabled, also run people sync
+  if (isPeopleIndependentMode && isPeopleScimEnabled && peopleSyncSettings?.peopleGroupPattern) {
+    console.log(`[Full Sync] People module in independent mode - running separate people sync`)
+    
+    try {
+      const peopleSyncResult = await performPeopleSync(orgId, {
+        groupPattern: peopleSyncSettings.peopleGroupPattern,
+        propertyMapping: peopleSyncSettings.propertyMapping,
+        autoDeleteOnRemoval: peopleSyncSettings.autoDeleteOnRemoval,
+        defaultStatus: peopleSyncSettings.defaultStatus,
+      })
+
+      // Add people sync stats
+      stats.peopleCreated += peopleSyncResult.stats.peopleCreated
+      stats.peopleUpdated += peopleSyncResult.stats.peopleUpdated
+      stats.peopleDeleted += peopleSyncResult.stats.peopleDeleted
+      stats.errors.push(...peopleSyncResult.stats.errors)
+
+      console.log(`[Full Sync] People sync complete: ${peopleSyncResult.message}`)
+    } catch (peopleSyncError) {
+      const errorMsg = `Error during people sync: ${peopleSyncError}`
+      console.error(`[Full Sync] ${errorMsg}`)
+      stats.errors.push(errorMsg)
+    }
+  }
 
   // Update integration sync stats
   const [userCountResult] = await db
@@ -898,9 +1130,15 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
     })
     .where(and(eq(integrations.orgId, orgId), eq(integrations.provider, "entra")))
 
-  const peopleInfo = config.syncPeopleEnabled 
-    ? `, people: +${stats.peopleCreated}/-${stats.peopleDeleted}`
+  // Build message based on sync modes
+  const linkedPeopleInfo = config.syncPeopleEnabled && !isPeopleIndependentMode
+    ? `, people (linked): +${stats.peopleCreated}/-${stats.peopleDeleted}`
     : ""
+  const independentPeopleInfo = isPeopleIndependentMode && isPeopleScimEnabled
+    ? `, people (independent): +${stats.peopleCreated}/-${stats.peopleDeleted}`
+    : ""
+  const peopleInfo = linkedPeopleInfo || independentPeopleInfo
+
   const message = `Synced ${stats.groupsSynced} groups (removed ${stats.groupsRemoved} stale), users: +${stats.usersCreated}/-${stats.usersDeleted}${peopleInfo}, roles: +${stats.rolesAssigned}/-${stats.rolesRemoved}`
   console.log(`[Full Sync] Complete: ${message}`)
 

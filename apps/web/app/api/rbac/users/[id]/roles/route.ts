@@ -105,7 +105,7 @@ export async function PUT(
     // Get current user for audit
     const currentUser = await getSessionUser()
 
-    // Check if user has SCIM-assigned roles
+    // Check if user has sync-assigned roles
     const existingRoles = await db
       .select({
         roleId: userRoles.roleId,
@@ -115,11 +115,11 @@ export async function PUT(
       .from(userRoles)
       .where(eq(userRoles.userId, id))
 
-    const scimAssignedRoles = existingRoles.filter(r => r.source === "scim")
+    const syncAssignedRoles = existingRoles.filter(r => r.source === "sync")
     
-    // Check if bidirectional sync is enabled (only if there are SCIM roles to consider)
+    // Check if bidirectional sync is enabled (only if there are synced roles to consider)
     let bidirectionalSyncEnabled = false
-    if (scimAssignedRoles.length > 0) {
+    if (syncAssignedRoles.length > 0) {
       const entraConfig = await db.query.integrations.findFirst({
         where: and(
           eq(integrations.orgId, orgId),
@@ -129,19 +129,19 @@ export async function PUT(
       bidirectionalSyncEnabled = entraConfig?.scimBidirectionalSync || false
     }
 
-    // If there are SCIM-assigned roles and bidirectional sync is disabled,
+    // If there are sync-assigned roles and bidirectional sync is disabled,
     // we should only modify manual roles
-    if (scimAssignedRoles.length > 0 && !bidirectionalSyncEnabled) {
-      // Preserve SCIM-assigned role IDs
-      const scimRoleIds = scimAssignedRoles.map(r => r.roleId)
+    if (syncAssignedRoles.length > 0 && !bidirectionalSyncEnabled) {
+      // Preserve sync-assigned role IDs
+      const syncRoleIds = syncAssignedRoles.map(r => r.roleId)
       
-      // Check if user is trying to modify SCIM-assigned roles
+      // Check if user is trying to modify sync-assigned roles
       const newRoleIdSet = new Set(roleIds)
-      const removingScimRoles = scimRoleIds.some(id => !newRoleIdSet.has(id))
+      const removingSyncRoles = syncRoleIds.some(id => !newRoleIdSet.has(id))
       
-      if (removingScimRoles) {
+      if (removingSyncRoles) {
         return NextResponse.json(
-          { error: "Cannot modify SCIM-assigned roles when bidirectional sync is disabled" },
+          { error: "Cannot modify synced roles when bidirectional sync is disabled" },
           { status: 403 }
         )
       }
@@ -165,7 +165,7 @@ export async function PUT(
       }
     }
 
-    // Clear only manual role assignments (preserve SCIM-assigned roles)
+    // Clear only manual role assignments (preserve sync-assigned roles)
     await db.delete(userRoles).where(
       and(
         eq(userRoles.userId, id),
@@ -173,9 +173,9 @@ export async function PUT(
       )
     )
 
-    // Determine which roles to add as manual (exclude SCIM-assigned)
-    const scimRoleIdSet = new Set(scimAssignedRoles.map(r => r.roleId))
-    const manualRoleIds = roleIds.filter((roleId: string) => !scimRoleIdSet.has(roleId))
+    // Determine which roles to add as manual (exclude sync-assigned)
+    const syncRoleIdSet = new Set(syncAssignedRoles.map(r => r.roleId))
+    const manualRoleIds = roleIds.filter((roleId: string) => !syncRoleIdSet.has(roleId))
 
     // Assign new manual roles
     if (manualRoleIds.length > 0) {

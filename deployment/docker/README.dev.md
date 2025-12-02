@@ -140,6 +140,29 @@ docker-compose -f docker-compose.dev.yml down -v
 docker-compose -f docker-compose.dev.yml up
 ```
 
+### Run Database Migrations
+
+Migrations run automatically when the `db-init` container starts. To run them manually:
+
+```bash
+# Inside the web container
+docker exec -it idaraos-web-dev sh
+cd apps/web
+pnpm db:run-migrations
+```
+
+### Create New Migration
+
+When you modify the database schema:
+
+```bash
+# On your host machine (in apps/web directory)
+cd apps/web
+pnpm db:generate --name your_migration_name
+```
+
+This creates a new SQL file in `apps/web/drizzle/` that will be applied on next deployment.
+
 ### Rebuild Container (after dependency changes)
 
 ```bash
