@@ -122,29 +122,26 @@ jobs:
           
           echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Check if migrations table exists (indicates migrations are set up)
-          # If not, and tables exist, run baseline first
-          NEEDS_BASELINE=$(node -e "
+          # Check if existing tables were created via db:push
+          # If so, run baseline to mark all existing migrations as applied
+          HAS_TABLES=$(node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             (async () => {
               try {
-                // Check if tables exist but migrations table doesn't
-                const tables = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
-                const migrations = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '__drizzle_migrations') as has_migrations\");
-                const needsBaseline = tables.rows[0].has_tables && !migrations.rows[0].has_migrations;
-                console.log(needsBaseline ? 'true' : 'false');
+                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                console.log(result.rows[0].has_tables ? 'true' : 'false');
               } catch (e) { console.log('false'); }
               finally { await pool.end(); }
             })();
           ")
           
-          if [ "$NEEDS_BASELINE" = "true" ]; then
-            echo "📋 Existing database detected - running baseline first..."
+          if [ "$HAS_TABLES" = "true" ]; then
+            echo "📋 Existing database detected - ensuring all migrations are baselined..."
             pnpm db:baseline
           fi
           
-          # Run migrations
+          # Run migrations (will skip already-applied migrations)
           pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
