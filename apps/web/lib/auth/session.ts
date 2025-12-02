@@ -52,16 +52,31 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
 }
 
 /**
+ * Get the cookie domain for cross-subdomain support
+ * Returns .idaraos.com format for production (works on both root and app subdomain)
+ */
+function getCookieDomain(): string | undefined {
+  const rootDomain = process.env.ROOT_DOMAIN
+  if (rootDomain && process.env.NODE_ENV === "production") {
+    return `.${rootDomain}`
+  }
+  return undefined
+}
+
+/**
  * Set the session cookie
  */
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies()
+  const domain = getCookieDomain()
+  
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: SESSION_DURATION,
     path: "/",
+    ...(domain && { domain }),
   })
 }
 
@@ -84,7 +99,21 @@ export async function getSession(): Promise<SessionPayload | null> {
  */
 export async function clearSession(): Promise<void> {
   const cookieStore = await cookies()
-  cookieStore.delete(SESSION_COOKIE_NAME)
+  const domain = getCookieDomain()
+  
+  // Delete with domain if set (for cross-subdomain support)
+  if (domain) {
+    cookieStore.set(SESSION_COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 0, // Expire immediately
+      path: "/",
+      domain,
+    })
+  } else {
+    cookieStore.delete(SESSION_COOKIE_NAME)
+  }
 }
 
 /**

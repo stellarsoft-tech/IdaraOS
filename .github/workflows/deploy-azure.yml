@@ -251,6 +251,9 @@ jobs:
               echo "Using Azure FQDN: $APP_URL"
             fi
             
+            # Set ROOT_DOMAIN for multi-domain routing (strip 'app.' prefix if present)
+            ROOT_DOMAIN="${CUSTOM_DOMAIN#app.}"
+            
             az containerapp update \
               --name $APP \
               --resource-group $RG \
@@ -260,7 +263,9 @@ jobs:
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
-                "NEXT_PUBLIC_APP_URL=$APP_URL"
+                "NEXT_PUBLIC_APP_URL=$APP_URL" \
+                "ROOT_DOMAIN=$ROOT_DOMAIN" \
+                "APP_SUBDOMAIN=app"
           else
             echo "Creating new Container App..."
             az containerapp create \
