@@ -44,10 +44,24 @@ export async function GET() {
       )
       .limit(1)
 
+    // Debug logging to help diagnose Entra connection status
+    console.log("[People Settings] Entra integration query result:", {
+      found: !!entraIntegration,
+      status: entraIntegration?.status,
+      scimEnabled: entraIntegration?.scimEnabled,
+      syncPeopleEnabled: entraIntegration?.syncPeopleEnabled,
+    })
+
     const isEntraConnected = entraIntegration?.status === "connected"
     const isCoreScimEnabled = entraIntegration?.scimEnabled ?? false
     const isSyncPeopleEnabledInCore = entraIntegration?.syncPeopleEnabled ?? false
     const isDeletePeopleOnUserDeleteInCore = entraIntegration?.deletePeopleOnUserDelete ?? true
+    
+    console.log("[People Settings] Computed values:", {
+      isEntraConnected,
+      isCoreScimEnabled,
+      isSyncPeopleEnabledInCore,
+    })
 
     // If no settings exist, return defaults
     if (!settings) {
