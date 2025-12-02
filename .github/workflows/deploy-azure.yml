@@ -113,35 +113,39 @@ jobs:
         env:
           CI: "true"
           FORCE_COLOR: "0"
+          NODE_ENV: "production"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
           
-          echo "Running database migrations..."
+          echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Install expect for handling interactive prompts reliably
-          sudo apt-get update && sudo apt-get install -y expect
+          # Check if migrations table exists (indicates migrations are set up)
+          # If not, and tables exist, run baseline first
+          NEEDS_BASELINE=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                // Check if tables exist but migrations table doesn't
+                const tables = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                const migrations = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '__drizzle_migrations') as has_migrations\");
+                const needsBaseline = tables.rows[0].has_tables && !migrations.rows[0].has_migrations;
+                console.log(needsBaseline ? 'true' : 'false');
+              } catch (e) { console.log('false'); }
+              finally { await pool.end(); }
+            })();
+          ")
           
-          # Create expect script to handle drizzle-kit prompts
-          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
-          #!/usr/bin/expect -f
-          set timeout 300
-          spawn pnpm drizzle-kit push --force
-          expect {
-            "Do you want to truncate" { send "n\r"; exp_continue }
-            "Yes, I want to truncate" { send "n\r"; exp_continue }
-            "No, add the constraint" { send "\r"; exp_continue }
-            -re "❯.*No.*" { send "\r"; exp_continue }
-            eof { exit 0 }
-            timeout { exit 1 }
-          }
-          EXPECT_SCRIPT
-          chmod +x /tmp/drizzle-push.exp
+          if [ "$NEEDS_BASELINE" = "true" ]; then
+            echo "📋 Existing database detected - running baseline first..."
+            pnpm db:baseline
+          fi
           
-          # Run the expect script
-          expect /tmp/drizzle-push.exp
+          # Run migrations
+          pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
           
@@ -152,21 +156,20 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "Verifying new columns exist..."
+          echo "Verifying database schema..."
           node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                // Check rbac_user_roles.source column
-                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
-                console.log('✅ rbac_user_roles.source column exists');
+                // Check that core tables exist
+                await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
+                console.log('✅ core_organizations table exists');
                 
-                // Check core_integrations.scim_group_prefix column  
-                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
-                console.log('✅ core_integrations.scim_group_prefix column exists');
+                await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles table exists');
                 
-                console.log('✅ All schema changes verified');
+                console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
                 process.exit(1);
@@ -374,35 +377,36 @@ jobs:
         env:
           CI: "true"
           FORCE_COLOR: "0"
+          NODE_ENV: "production"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
           
-          echo "Running database migrations..."
+          echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Install expect for handling interactive prompts reliably
-          sudo apt-get update && sudo apt-get install -y expect
+          # Check if migrations table exists
+          NEEDS_BASELINE=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                const tables = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                const migrations = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '__drizzle_migrations') as has_migrations\");
+                const needsBaseline = tables.rows[0].has_tables && !migrations.rows[0].has_migrations;
+                console.log(needsBaseline ? 'true' : 'false');
+              } catch (e) { console.log('false'); }
+              finally { await pool.end(); }
+            })();
+          ")
           
-          # Create expect script to handle drizzle-kit prompts
-          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
-          #!/usr/bin/expect -f
-          set timeout 300
-          spawn pnpm drizzle-kit push --force
-          expect {
-            "Do you want to truncate" { send "n\r"; exp_continue }
-            "Yes, I want to truncate" { send "n\r"; exp_continue }
-            "No, add the constraint" { send "\r"; exp_continue }
-            -re "❯.*No.*" { send "\r"; exp_continue }
-            eof { exit 0 }
-            timeout { exit 1 }
-          }
-          EXPECT_SCRIPT
-          chmod +x /tmp/drizzle-push.exp
+          if [ "$NEEDS_BASELINE" = "true" ]; then
+            echo "📋 Existing database detected - running baseline first..."
+            pnpm db:baseline
+          fi
           
-          # Run the expect script
-          expect /tmp/drizzle-push.exp
+          pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
           
@@ -413,17 +417,17 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "Verifying new columns exist..."
+          echo "Verifying database schema..."
           node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
-                console.log('✅ rbac_user_roles.source column exists');
-                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
-                console.log('✅ core_integrations.scim_group_prefix column exists');
-                console.log('✅ All schema changes verified');
+                await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
+                console.log('✅ core_organizations table exists');
+                await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles table exists');
+                console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
                 process.exit(1);
@@ -623,35 +627,36 @@ jobs:
         env:
           CI: "true"
           FORCE_COLOR: "0"
+          NODE_ENV: "production"
         run: |
           PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
           DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
           cd apps/web
           export DATABASE_URL
           
-          echo "Running database migrations..."
+          echo "🔄 Running database migrations using Drizzle ORM..."
           
-          # Install expect for handling interactive prompts reliably
-          sudo apt-get update && sudo apt-get install -y expect
+          # Check if migrations table exists
+          NEEDS_BASELINE=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            (async () => {
+              try {
+                const tables = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
+                const migrations = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '__drizzle_migrations') as has_migrations\");
+                const needsBaseline = tables.rows[0].has_tables && !migrations.rows[0].has_migrations;
+                console.log(needsBaseline ? 'true' : 'false');
+              } catch (e) { console.log('false'); }
+              finally { await pool.end(); }
+            })();
+          ")
           
-          # Create expect script to handle drizzle-kit prompts
-          cat > /tmp/drizzle-push.exp << 'EXPECT_SCRIPT'
-          #!/usr/bin/expect -f
-          set timeout 300
-          spawn pnpm drizzle-kit push --force
-          expect {
-            "Do you want to truncate" { send "n\r"; exp_continue }
-            "Yes, I want to truncate" { send "n\r"; exp_continue }
-            "No, add the constraint" { send "\r"; exp_continue }
-            -re "❯.*No.*" { send "\r"; exp_continue }
-            eof { exit 0 }
-            timeout { exit 1 }
-          }
-          EXPECT_SCRIPT
-          chmod +x /tmp/drizzle-push.exp
+          if [ "$NEEDS_BASELINE" = "true" ]; then
+            echo "📋 Existing database detected - running baseline first..."
+            pnpm db:baseline
+          fi
           
-          # Run the expect script
-          expect /tmp/drizzle-push.exp
+          pnpm db:run-migrations
           
           echo "✅ Database migrations completed"
           
@@ -662,17 +667,17 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "Verifying new columns exist..."
+          echo "Verifying database schema..."
           node -e "
             const { Pool } = require('pg');
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                await pool.query('SELECT source FROM rbac_user_roles LIMIT 1');
-                console.log('✅ rbac_user_roles.source column exists');
-                await pool.query('SELECT scim_group_prefix FROM core_integrations LIMIT 1');
-                console.log('✅ core_integrations.scim_group_prefix column exists');
-                console.log('✅ All schema changes verified');
+                await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
+                console.log('✅ core_organizations table exists');
+                await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
+                console.log('✅ rbac_user_roles table exists');
+                console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
                 process.exit(1);

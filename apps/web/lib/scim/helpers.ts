@@ -128,7 +128,7 @@ export async function assignScimRole(
       await db
         .update(userRoles)
         .set({
-          source: "scim",
+          source: "sync",
           scimGroupId,
           assignedAt: new Date(),
         })
@@ -146,7 +146,7 @@ export async function assignScimRole(
   await db.insert(userRoles).values({
     userId,
     roleId,
-    source: "scim",
+    source: "sync",
     scimGroupId,
     assignedAt: new Date(),
   })
@@ -166,7 +166,7 @@ export async function removeScimRole(
       and(
         eq(userRoles.userId, userId),
         eq(userRoles.scimGroupId, scimGroupId),
-        eq(userRoles.source, "scim")
+        eq(userRoles.source, "sync")
       )
     )
 }
@@ -181,7 +181,7 @@ export async function hasScimAssignedRoles(userId: string): Promise<boolean> {
     .where(
       and(
         eq(userRoles.userId, userId),
-        eq(userRoles.source, "scim")
+        eq(userRoles.source, "sync")
       )
     )
     .limit(1)
@@ -250,7 +250,7 @@ export async function recalculateUserScimRoles(userId: string): Promise<void> {
     .where(
       and(
         eq(userRoles.userId, userId),
-        eq(userRoles.source, "scim")
+        eq(userRoles.source, "sync")
       )
     )
 

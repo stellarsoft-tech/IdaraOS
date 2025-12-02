@@ -15,11 +15,23 @@ export interface LinkedUser {
   hasEntraLink: boolean
 }
 
-// Extended Person type with linked user info
-export interface Person extends BasePerson {
+// Sync tracking info
+export interface SyncInfo {
+  source: "manual" | "sync"
+  entraId: string | null
+  entraGroupId: string | null
+  entraGroupName: string | null
+  lastSyncedAt: string | null
+  syncEnabled: boolean
+}
+
+// Extended Person type with linked user info and sync tracking
+export interface Person extends BasePerson, SyncInfo {
   linkedUser: LinkedUser | null
   hasLinkedUser: boolean
   hasEntraLink: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 // Query keys

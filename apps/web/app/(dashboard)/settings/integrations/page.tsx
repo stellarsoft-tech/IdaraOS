@@ -67,7 +67,7 @@ export default function IntegrationsPage() {
   
   const [showSecrets, setShowSecrets] = useState(false)
   const [scimToken, setScimToken] = useState<string | null>(null)
-  const [scimGroupPrefix, setScimGroupPrefix] = useState("")
+  const [groupPattern, setGroupPattern] = useState("")
   
   // Form state for configuration
   const [formData, setFormData] = useState({
@@ -84,7 +84,7 @@ export default function IntegrationsPage() {
         clientId: entraConfig.clientId || "",
         clientSecret: "",
       })
-      setScimGroupPrefix(entraConfig.scimGroupPrefix || "")
+      setGroupPattern(entraConfig.scimGroupPrefix || "")
     }
   }, [entraConfig])
 
@@ -194,30 +194,6 @@ export default function IntegrationsPage() {
     }
   }
 
-  const handleTogglePeopleSync = async (enabled: boolean) => {
-    try {
-      await updateEntra.mutateAsync({
-        provider: "entra",
-        syncPeopleEnabled: enabled,
-      })
-      toast.success(enabled ? "People Directory sync enabled" : "People Directory sync disabled")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update")
-    }
-  }
-
-  const handleToggleDeletePeopleOnUserDelete = async (enabled: boolean) => {
-    try {
-      await updateEntra.mutateAsync({
-        provider: "entra",
-        deletePeopleOnUserDelete: enabled,
-      })
-      toast.success(enabled ? "People will be deleted with users" : "People will be kept when users are deleted")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update")
-    }
-  }
-
   const handleRegenerateToken = async () => {
     try {
       const result = await regenerateToken.mutateAsync()
@@ -302,7 +278,7 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Single Sign-On (SSO) and user provisioning via SCIM
+                    Single Sign-On (SSO) and user sync from Entra ID
                   </p>
                 </div>
               </div>
@@ -334,7 +310,7 @@ export default function IntegrationsPage() {
                 <TabsList className="mb-4">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="sso">SSO Settings</TabsTrigger>
-                  <TabsTrigger value="scim">SCIM Provisioning</TabsTrigger>
+                  <TabsTrigger value="sync">Sync Settings</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
@@ -381,7 +357,7 @@ export default function IntegrationsPage() {
                           <RefreshCw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         </div>
                         <div>
-                          <div className="text-xs text-muted-foreground">SCIM Sync</div>
+                          <div className="text-xs text-muted-foreground">User Sync</div>
                           <StatusBadge variant={entraConfig?.scimEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
                             {entraConfig?.scimEnabled ? "Active" : "Inactive"}
                           </StatusBadge>
@@ -445,8 +421,8 @@ export default function IntegrationsPage() {
                         <div className="flex items-center gap-3">
                           <ExternalLink className="h-5 w-5 text-muted-foreground" />
                           <div className="text-left">
-                            <div className="font-medium">SCIM Documentation</div>
-                            <div className="text-xs text-muted-foreground">Learn about user provisioning</div>
+                            <div className="font-medium">Sync Documentation</div>
+                            <div className="text-xs text-muted-foreground">Learn about user sync and SCIM</div>
                           </div>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -564,23 +540,23 @@ export default function IntegrationsPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="scim" className="space-y-6">
+                <TabsContent value="sync" className="space-y-6">
                   <Alert>
                     <RefreshCw className="h-4 w-4" />
-                    <AlertTitle>SCIM Provisioning {entraConfig?.scimEnabled ? "Active" : "Disabled"}</AlertTitle>
+                    <AlertTitle>User Sync {entraConfig?.scimEnabled ? "Active" : "Disabled"}</AlertTitle>
                     <AlertDescription>
                       {entraConfig?.scimEnabled
                         ? "Users and groups are automatically synced from Microsoft Entra ID."
-                        : "Enable SCIM to automatically sync users and groups from Microsoft Entra ID."}
+                        : "Enable sync to automatically sync users and groups from Microsoft Entra ID."}
                     </AlertDescription>
                   </Alert>
 
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 rounded-lg border">
                       <div>
-                        <div className="font-medium">Enable SCIM Provisioning</div>
+                        <div className="font-medium">Enable User Sync</div>
                         <div className="text-sm text-muted-foreground">
-                          Automatically create, update, and deactivate users
+                          Automatically sync users from Entra ID groups
                         </div>
                       </div>
                       <Switch 
@@ -590,41 +566,48 @@ export default function IntegrationsPage() {
                       />
                     </div>
 
-                    {/* Group Role Mapping Settings */}
+                    {/* User Sync Settings */}
                     <Card>
                       <CardHeader className="pt-0">
-                        <CardTitle className="text-base">Group Role Mapping</CardTitle>
+                        <CardTitle className="text-base">User Sync Settings</CardTitle>
                         <CardDescription>
-                          Configure how Entra ID groups map to application roles
+                          Configure how Entra ID groups sync users and map to application roles
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="pt-0 space-y-4">
                         <div className="space-y-2">
-                          <Label htmlFor="scimGroupPrefix" className="text-muted-foreground text-xs uppercase tracking-wide">
-                            Group Name Prefix
+                          <Label htmlFor="groupPattern" className="text-muted-foreground text-xs uppercase tracking-wide">
+                            Group Pattern
                           </Label>
                           <div className="flex items-center gap-2">
                             <Input
-                              id="scimGroupPrefix"
-                              placeholder="e.g., IdaraOS-"
-                              value={scimGroupPrefix}
-                              onChange={(e) => setScimGroupPrefix(e.target.value)}
+                              id="groupPattern"
+                              placeholder="e.g., IdaraOS-* or *-Users-*"
+                              value={groupPattern}
+                              onChange={(e) => setGroupPattern(e.target.value)}
                               disabled={!canEdit || updateEntra.isPending}
                               className="flex-1"
                             />
                             <Button 
                               variant="outline"
-                              onClick={() => handleUpdateScimGroupPrefix(scimGroupPrefix)}
-                              disabled={!canEdit || updateEntra.isPending || scimGroupPrefix === (entraConfig?.scimGroupPrefix || "")}
+                              onClick={() => handleUpdateScimGroupPrefix(groupPattern)}
+                              disabled={!canEdit || updateEntra.isPending || groupPattern === (entraConfig?.scimGroupPrefix || "")}
                             >
                               {updateEntra.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                               Save
                             </Button>
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            Groups with this prefix will be mapped to roles. For example, if prefix is &quot;IdaraOS-&quot;, 
-                            a group named &quot;IdaraOS-Admin&quot; will map to the &quot;Admin&quot; role.
+                            Groups matching this pattern will sync users to the application. Use <code className="bg-muted px-1 rounded">*</code> as a wildcard.
                           </p>
+                          <div className="text-xs text-muted-foreground space-y-1 mt-2">
+                            <p className="font-medium">Examples:</p>
+                            <ul className="list-disc ml-4 space-y-0.5">
+                              <li><code className="bg-muted px-1 rounded">IdaraOS-*</code> → Matches IdaraOS-Admin, IdaraOS-Users, etc.</li>
+                              <li><code className="bg-muted px-1 rounded">*-AppAccess</code> → Matches Admin-AppAccess, HR-AppAccess, etc.</li>
+                              <li><code className="bg-muted px-1 rounded">App-*-Users</code> → Matches App-Admin-Users, App-HR-Users, etc.</li>
+                            </ul>
+                          </div>
                         </div>
 
                         <Separator />
@@ -658,7 +641,7 @@ export default function IntegrationsPage() {
                               </div>
                               <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
                                 <li>Users created/updated in Entra ID are synced to the application</li>
-                                <li>Group memberships sync to application roles (based on group prefix)</li>
+                                <li>Group memberships sync to application roles (based on group pattern)</li>
                                 <li>User status changes (active/inactive) sync to the application</li>
                                 <li>User name changes sync to the application</li>
                               </ul>
@@ -684,7 +667,7 @@ export default function IntegrationsPage() {
                                 </ul>
                               ) : (
                                 <div className="text-xs text-muted-foreground ml-6">
-                                  When disabled, SCIM-provisioned users are read-only in the application. 
+                                  When disabled, synced users are read-only in the application. 
                                   All changes must be made in Microsoft Entra ID and will sync to the application automatically.
                                 </div>
                               )}
@@ -696,7 +679,7 @@ export default function IntegrationsPage() {
                           <Alert variant="default" className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
                             <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                              When disabled, SCIM-provisioned users cannot be edited or deleted in the Users settings. 
+                              When disabled, synced users cannot be edited or deleted in the Users settings. 
                               This ensures Entra ID remains the source of truth for user data and roles.
                             </AlertDescription>
                           </Alert>
@@ -704,91 +687,12 @@ export default function IntegrationsPage() {
                       </CardContent>
                     </Card>
 
-                    {/* People Directory Sync */}
+                    {/* SCIM Endpoint Configuration */}
                     <Card>
                       <CardHeader className="pt-0">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          People Directory Sync
-                        </CardTitle>
+                        <CardTitle className="text-base">SCIM Endpoint</CardTitle>
                         <CardDescription>
-                          Automatically create and update People records when syncing users from Entra ID
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="pt-0 space-y-4">
-                        {/* Enable People Sync */}
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <div className="font-medium text-sm">Create People Records</div>
-                            <div className="text-xs text-muted-foreground">
-                              Create entries in the People Directory when syncing users
-                            </div>
-                          </div>
-                          <Switch 
-                            checked={entraConfig?.syncPeopleEnabled || false} 
-                            onCheckedChange={handleTogglePeopleSync}
-                            disabled={!canEdit || updateEntra.isPending}
-                          />
-                        </div>
-
-                        {entraConfig?.syncPeopleEnabled && (
-                          <>
-                            {/* Delete People with Users */}
-                            <div className="flex items-center justify-between">
-                              <div className="space-y-0.5">
-                                <div className="font-medium text-sm">Delete People with Users</div>
-                                <div className="text-xs text-muted-foreground">
-                                  When a user is deleted during sync, also delete their linked Person record
-                                </div>
-                              </div>
-                              <Switch 
-                                checked={entraConfig?.deletePeopleOnUserDelete !== false} 
-                                onCheckedChange={handleToggleDeletePeopleOnUserDelete}
-                                disabled={!canEdit || updateEntra.isPending}
-                              />
-                            </div>
-
-                            <Separator />
-
-                            {/* Property Mapping Info */}
-                            <Card className="bg-muted/50">
-                              <CardHeader className="pb-2 pt-0">
-                                <CardTitle className="text-sm">Property Mapping</CardTitle>
-                              </CardHeader>
-                              <CardContent className="pt-0">
-                                <div className="text-xs text-muted-foreground space-y-2">
-                                  <p>The following Entra ID properties are mapped to People fields:</p>
-                                  <ul className="space-y-1 ml-4 list-disc">
-                                    <li><strong>displayName</strong> → Name</li>
-                                    <li><strong>mail / userPrincipalName</strong> → Email</li>
-                                    <li><strong>jobTitle</strong> → Role/Position</li>
-                                    <li><strong>department</strong> → Team</li>
-                                    <li><strong>officeLocation</strong> → Location</li>
-                                    <li><strong>mobilePhone</strong> → Phone</li>
-                                    <li><strong>employeeHireDate</strong> → Start Date</li>
-                                  </ul>
-                                </div>
-                              </CardContent>
-                            </Card>
-
-                            <Alert variant="default" className="border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
-                              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                              <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
-                                <strong>Important:</strong> When users are deleted during sync (removed from all groups), 
-                                their linked People records will {entraConfig?.deletePeopleOnUserDelete !== false ? "also be deleted" : "be kept"}. 
-                                You can still create and link People manually.
-                              </AlertDescription>
-                            </Alert>
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader className="pt-0">
-                        <CardTitle className="text-base">SCIM Configuration</CardTitle>
-                        <CardDescription>
-                          Use these values to configure provisioning in Microsoft Entra ID
+                          Use these values to configure SCIM provisioning in Microsoft Entra ID (optional)
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="pt-0 space-y-4">

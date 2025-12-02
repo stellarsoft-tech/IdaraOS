@@ -55,8 +55,8 @@ function toApiResponse(
     // Flags for UI badges
     hasLinkedPerson: !!record.personId,
     hasEntraLink: !!record.entraId,
-    // SCIM flags
-    hasScimRoles: userRolesData.some(r => r.source === "scim"),
+    // Sync flags
+    hasScimRoles: userRolesData.some(r => r.source === "sync"),
     isScimProvisioned: record.scimProvisioned ?? false,
   }
 }

@@ -2,7 +2,7 @@
  * People Schema - Drizzle ORM table definitions
  */
 
-import { pgTable, uuid, text, date, timestamp, index, type AnyPgColumn } from "drizzle-orm/pg-core"
+import { pgTable, uuid, text, date, timestamp, index, boolean, type AnyPgColumn } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 
 /**
@@ -10,6 +10,12 @@ import { relations } from "drizzle-orm"
  */
 export const personStatusValues = ["active", "onboarding", "offboarding", "inactive"] as const
 export type PersonStatus = (typeof personStatusValues)[number]
+
+/**
+ * Person source enum values - how the person record was created
+ */
+export const personSourceValues = ["manual", "sync"] as const
+export type PersonSource = (typeof personSourceValues)[number]
 
 /**
  * People/Employees table
@@ -32,6 +38,21 @@ export const persons = pgTable(
     location: text("location"),
     avatar: text("avatar"),
     bio: text("bio"),
+    
+    // Sync tracking fields
+    // Source of creation - "manual" (UI/API) or "sync" (synced from Entra ID)
+    source: text("source", { enum: personSourceValues }).notNull().default("manual"),
+    // Entra ID of the user this person was synced from (if any)
+    entraId: text("entra_id"),
+    // Entra group ID this person was synced from
+    entraGroupId: text("entra_group_id"),
+    // Entra group name for display
+    entraGroupName: text("entra_group_name"),
+    // Last time this person was synced from Entra
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    // Whether Entra is the source of truth for this person's data
+    syncEnabled: boolean("sync_enabled").notNull().default(false),
+    
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -40,6 +61,8 @@ export const persons = pgTable(
     index("idx_people_persons_status").on(table.status),
     index("idx_people_persons_team").on(table.team),
     index("idx_people_persons_slug").on(table.slug),
+    index("idx_people_persons_source").on(table.source),
+    index("idx_people_persons_entra_id").on(table.entraId),
   ]
 )
 
