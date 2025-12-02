@@ -10,7 +10,36 @@
     "lint:fix": "pnpm --filter web exec eslint --fix",
     "typecheck": "pnpm --filter web exec tsc --noEmit --skipLibCheck",
     "generate": "tsx scripts/generate/index.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+
+    "docker:dev": "cd deployment/docker && docker compose -f docker-compose.dev.yml up",
+    "docker:dev:build": "cd deployment/docker && docker compose -f docker-compose.dev.yml up --build",
+    "docker:dev:detach": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d",
+    "docker:stop": "cd deployment/docker && docker compose -f docker-compose.dev.yml stop",
+    "docker:down": "cd deployment/docker && docker compose -f docker-compose.dev.yml down",
+    "docker:down:volumes": "cd deployment/docker && docker compose -f docker-compose.dev.yml down -v",
+    "docker:restart": "cd deployment/docker && docker compose -f docker-compose.dev.yml restart",
+    "docker:restart:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml restart web",
+    "docker:restart:db": "cd deployment/docker && docker compose -f docker-compose.dev.yml restart db",
+    "docker:logs": "cd deployment/docker && docker compose -f docker-compose.dev.yml logs -f",
+    "docker:logs:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml logs -f web",
+    "docker:logs:db": "cd deployment/docker && docker compose -f docker-compose.dev.yml logs -f db",
+    "docker:ps": "cd deployment/docker && docker compose -f docker-compose.dev.yml ps",
+    "docker:shell:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web sh",
+    "docker:shell:db": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec db sh",
+
+    "docker:db:migrate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:run-migrations",
+    "docker:db:generate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:generate",
+    "docker:db:push": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:push",
+    "docker:db:studio": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:studio",
+    "docker:db:seed": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed",
+    "docker:db:seed-rbac": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed-rbac",
+    "docker:db:psql": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec db psql -U idaraos -d idaraos",
+    "docker:db:reset": "cd deployment/docker && docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d",
+
+    "docker:rebuild:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate web",
+    "docker:rebuild:all": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate",
+    "docker:prune": "docker system prune -f"
   },
   "devDependencies": {
     "husky": "^9.1.7",
