@@ -66,8 +66,9 @@ async function baselineMigrations() {
     const tablesExist = tableCheck.rows[0].exists
     
     if (!tablesExist) {
-      console.log("❌ Tables don't exist. Run 'pnpm db:run-migrations' instead.")
-      process.exit(1)
+      console.log("ℹ️  No existing tables detected - skipping baseline")
+      console.log("   (db:run-migrations will create tables from scratch)")
+      return // pool.end() will be called in finally block
     }
     
     console.log("✅ Existing tables detected (from db:push)")
