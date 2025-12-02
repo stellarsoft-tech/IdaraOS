@@ -97,17 +97,17 @@ async function baselineMigrations() {
     
     // Mark each migration as applied if not already
     for (const entry of journal.entries) {
-      const migrationCheck = await pool.query(`
+    const migrationCheck = await pool.query(`
         SELECT * FROM "drizzle"."__drizzle_migrations" 
         WHERE hash = $1
-        LIMIT 1
+      LIMIT 1
       `, [entry.tag])
-      
-      if (migrationCheck.rows.length > 0) {
+    
+    if (migrationCheck.rows.length > 0) {
         console.log(`   ✓ ${entry.tag} (already baselined)`)
-      } else {
+    } else {
         // Mark migration as applied (since tables exist via db:push)
-        await pool.query(`
+      await pool.query(`
           INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at)
           VALUES ($1, $2)
         `, [entry.tag, entry.when])
