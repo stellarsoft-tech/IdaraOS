@@ -54,8 +54,6 @@ The Docker environment provides:
 - Caddy reverse proxy with automatic HTTPS
 - Next.js application (dev or production mode)
 
----
-
 ## Project Structure
 
 ```
@@ -84,8 +82,6 @@ IdaraOS/
 ├── migrations/               # Database migrations
 └── scripts/                  # Build and utility scripts
 ```
-
----
 
 ## Development Philosophy
 
@@ -116,8 +112,6 @@ When building a new module, you'll typically create:
 - **Page Components**: Dashboard pages in `app/(dashboard)/`
 - **RBAC Permissions**: Module and action definitions in `lib/rbac/`
 
----
-
 ## Core Modules
 
 ### Settings
@@ -137,8 +131,6 @@ Workforce management:
 - Onboarding workflows
 - Time off management
 
----
-
 ## Tech Stack
 
 - **Framework**: Next.js 15 (App Router)
@@ -149,8 +141,6 @@ Workforce management:
 - **State**: TanStack Query for server state
 - **Auth**: NextAuth.js with Microsoft Entra ID support
 - **Package Manager**: pnpm (workspaces)
-
----
 
 ## Key Primitives
 
@@ -185,16 +175,12 @@ RBAC-aware component wrapper:
 - Hide/show based on permissions
 - Module and action-level control
 
----
-
 ## Documentation
 
 - **[CONTRIBUTING.md](docs/CONTRIBUTING.md)**: Development workflow and coding standards
 - **[DECISIONS.md](docs/DECISIONS.md)**: Technical decisions and rationale
 - **[QUICK_START.md](QUICK_START.md)**: Detailed setup guide
 - **[Module Docs](docs/modules/)**: Architecture documents for each module
-
----
 
 ## Development Commands
 
@@ -215,13 +201,9 @@ pnpm typecheck
 pnpm test
 ```
 
----
-
 ## Contributing
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for the complete development workflow.
-
----
 
 ## License
 
