@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { integrations, users, scimGroups } from "@/lib/db/schema"
 import { eq, and, count } from "drizzle-orm"
-import { requireOrgId } from "@/lib/api/context"
+import { requireOrgId, getAuditLogger } from "@/lib/api/context"
 import { performFullSync } from "@/lib/scim/full-sync"
 
 /**
@@ -68,6 +68,26 @@ export async function POST(request: NextRequest) {
       .select({ count: count() })
       .from(scimGroups)
       .where(eq(scimGroups.orgId, orgId))
+
+    // Log the sync action
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.log({
+        module: "settings.integrations",
+        action: "sync",
+        entityType: "entra_sync",
+        entityName: "Entra ID Full Sync",
+        description: `Synced ${result.stats.usersCreated} users created, ${result.stats.usersUpdated} updated, ${result.stats.groupsSynced} groups`,
+        current: {
+          usersCreated: result.stats.usersCreated,
+          usersUpdated: result.stats.usersUpdated,
+          usersDeleted: result.stats.usersDeleted,
+          groupsSynced: result.stats.groupsSynced,
+          rolesAssigned: result.stats.rolesAssigned,
+          success: result.success,
+        },
+      })
+    }
 
     return NextResponse.json({
       success: result.success,
