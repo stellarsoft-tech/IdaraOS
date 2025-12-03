@@ -99,10 +99,15 @@ export const columns: ColumnDef<Person>[] = [
     enableColumnFilter: true,
   },
   {
-    id: "startDate",
-    accessorKey: "startDate",
-    header: "Start Date",
-    cell: ({ row }) => formatDate(row.getValue("startDate")),
+    id: "hireDate",
+    accessorKey: "hireDate",
+    header: "Hire Date",
+    cell: ({ row }) => {
+      const hireDate = row.getValue("hireDate") as string | null | undefined
+      // Fallback to startDate if hireDate is not available
+      const startDate = row.original.startDate
+      return hireDate ? formatDate(hireDate) : (startDate ? formatDate(startDate) : <span className="text-muted-foreground">—</span>)
+    },
     enableSorting: true,
     enableColumnFilter: false,
   },
@@ -126,6 +131,6 @@ export const columnConfig = {
   role: { filterable: true, sortable: true },
   team: { filterable: true, sortable: true },
   status: { filterable: true, sortable: true, filterType: "enum" as const },
-  startDate: { filterable: false, sortable: true },
+  hireDate: { filterable: false, sortable: true },
   assignedAssets: { filterable: false, sortable: true },
 }
