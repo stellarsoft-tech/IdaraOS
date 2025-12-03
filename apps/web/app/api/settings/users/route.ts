@@ -9,7 +9,7 @@ import { and, asc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { users, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
 import { z } from "zod"
-import { requireOrgId } from "@/lib/api/context"
+import { requireOrgId, getAuditLogger } from "@/lib/api/context"
 
 // Create user schema
 const CreateUserSchema = z.object({
@@ -208,6 +208,18 @@ export async function POST(request: NextRequest) {
         invitedAt: new Date(),
       })
       .returning()
+
+    // Audit log the creation
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logCreate("settings.users", "user", {
+        id: record.id,
+        name: record.name,
+        email: record.email,
+        role: record.role,
+        status: record.status,
+      })
+    }
 
     return NextResponse.json(toApiResponse(record, []), { status: 201 })
   } catch (error) {

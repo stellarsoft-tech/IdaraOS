@@ -9,7 +9,7 @@ import { eq, ilike, or, and, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { persons, users } from "@/lib/db/schema"
 import { CreatePersonSchema } from "@/lib/generated/people/person/types"
-import { requireOrgId } from "@/lib/api/context"
+import { requireOrgId, getAuditLogger } from "@/lib/api/context"
 
 // Generate slug from name
 function slugify(name: string): string {
@@ -262,6 +262,22 @@ export async function POST(request: NextRequest) {
       })
       .returning()
     const record = result[0]
+    
+    // Audit log the creation
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logCreate("people.directory", "person", {
+        id: record.id,
+        name: record.name,
+        email: record.email,
+        role: record.role,
+        team: record.team,
+        startDate: record.startDate,
+        phone: record.phone,
+        location: record.location,
+        status: record.status,
+      })
+    }
     
     return NextResponse.json(toApiResponse(record), { status: 201 })
   } catch (error) {

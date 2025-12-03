@@ -1,37 +1,37 @@
 "use client"
 
 import { useState } from "react"
-import { Activity } from "lucide-react"
+import { ScrollText } from "lucide-react"
 
 import { PageHeader } from "@/components/page-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AuditLogTable } from "@/components/audit"
-import { useSettingsAuditLogs } from "@/lib/api/audit"
+import { usePeopleAuditLogs } from "@/lib/api/audit"
 import type { AuditLogFilters } from "@/lib/audit"
 
-export default function SettingsAuditLogPage() {
+export default function PeopleAuditLogPage() {
   const [filters, setFilters] = useState<AuditLogFilters>({
     limit: 20,
     offset: 0,
   })
 
-  const { data, isLoading, refetch } = useSettingsAuditLogs(filters)
+  const { data, isLoading, refetch } = usePeopleAuditLogs(filters)
 
   return (
     <div className="space-y-6">
       <PageHeader 
-        title="Audit Log" 
-        description="View and export system activity logs for compliance and security."
+        title="People Audit Log" 
+        description="View audit trail for all People & HR module activities."
       />
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            Settings Activity
+            <ScrollText className="h-4 w-4" />
+            People Activity
           </CardTitle>
           <CardDescription>
-            Audit trail for organization settings, user management, roles, and integrations
+            Audit trail for employee records, directory changes, and HR actions
           </CardDescription>
         </CardHeader>
         <CardContent>

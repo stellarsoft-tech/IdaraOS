@@ -40,6 +40,7 @@ const DEFAULT_MODULES = [
   // People & HR - Operations
   { slug: "people.timeoff", name: "Time Off", description: "Manage time off requests and leave", category: "People & HR", icon: "Calendar", sortOrder: "105" },
   { slug: "people.documents", name: "Documents", description: "Manage employee documents", category: "People & HR", icon: "FileText", sortOrder: "106" },
+  { slug: "people.auditlog", name: "People Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "107" },
   
   // Assets & Equipment
   { slug: "assets.overview", name: "Assets Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200" },
@@ -100,6 +101,7 @@ const SYSTEM_ROLES: Record<string, {
       "people.offboarding": { view: true, create: true, edit: true, delete: true },
       "people.timeoff": { view: true, create: true, edit: true, delete: true },
       "people.documents": { view: true, create: true, edit: true, delete: true },
+      "people.auditlog": { view: true, create: false, edit: false, delete: false },
       // Assets - Full access
       "assets.overview": { view: true, create: true, edit: true, delete: true },
       "assets.inventory": { view: true, create: true, edit: true, delete: true },
@@ -133,6 +135,7 @@ const SYSTEM_ROLES: Record<string, {
       "people.offboarding": { view: true, create: true, edit: true, delete: false },
       "people.timeoff": { view: true, create: true, edit: true, delete: false },
       "people.documents": { view: true, create: true, edit: true, delete: false },
+      "people.auditlog": { view: true, create: false, edit: false, delete: false },
       // Assets - Limited
       "assets.overview": { view: true, create: false, edit: false, delete: false },
       "assets.inventory": { view: true, create: false, edit: true, delete: false },

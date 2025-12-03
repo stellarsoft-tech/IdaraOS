@@ -36,3 +36,4 @@ export {
 export * from "./integrations"
 export * from "./scim"
 export * from "./people-settings"
+export * from "./audit"

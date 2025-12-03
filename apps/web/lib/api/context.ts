@@ -4,20 +4,21 @@
  * Provides centralized helpers for multi-tenant API routes:
  * - Get organization ID from authenticated session
  * - Build queries with automatic organization filtering
+ * - Create audit loggers from session context
  */
 
-import { NextRequest } from "next/server"
-import { getSession } from "@/lib/auth/session"
+import { getSession, type SessionPayload } from "@/lib/auth/session"
 import { eq, and, type SQL } from "drizzle-orm"
+import { createAuditLogger, extractActor, type AuditLogger } from "@/lib/audit"
 
 /**
  * Get organization ID from authenticated session
  * 
- * @param request - Next.js request object
+ * @param _request - Unused, kept for backward compatibility
  * @returns Organization ID or null if not authenticated
  * @throws Error if authentication is required but missing
  */
-export async function getOrgIdFromSession(request?: NextRequest): Promise<string | null> {
+export async function getOrgIdFromSession(_request?: unknown): Promise<string | null> {
   const session = await getSession()
   
   if (!session) {
@@ -31,12 +32,12 @@ export async function getOrgIdFromSession(request?: NextRequest): Promise<string
  * Require organization ID from authenticated session
  * Throws error if not authenticated
  * 
- * @param request - Next.js request object
+ * @param _request - Unused, kept for backward compatibility
  * @returns Organization ID
  * @throws Error if not authenticated
  */
-export async function requireOrgId(request?: NextRequest): Promise<string> {
-  const orgId = await getOrgIdFromSession(request)
+export async function requireOrgId(_request?: unknown): Promise<string> {
+  const orgId = await getOrgIdFromSession()
   
   if (!orgId) {
     throw new Error("Authentication required")
@@ -45,6 +46,9 @@ export async function requireOrgId(request?: NextRequest): Promise<string> {
   return orgId
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle ORM column typing
+type DrizzleColumn = any
+
 /**
  * Build a query condition that filters by organization ID
  * 
@@ -52,7 +56,7 @@ export async function requireOrgId(request?: NextRequest): Promise<string> {
  * @param orgIdColumn - The column to filter on (e.g., users.orgId, persons.orgId)
  * @returns Drizzle SQL condition
  */
-export function orgFilter<T>(orgId: string, orgIdColumn: { orgId: any }): SQL {
+export function orgFilter(orgId: string, orgIdColumn: { orgId: DrizzleColumn }): SQL {
   return eq(orgIdColumn.orgId, orgId)
 }
 
@@ -64,9 +68,9 @@ export function orgFilter<T>(orgId: string, orgIdColumn: { orgId: any }): SQL {
  * @param additionalConditions - Additional SQL conditions to combine
  * @returns Combined SQL condition using AND
  */
-export function orgFilterWith<T>(
+export function orgFilterWith(
   orgId: string,
-  orgIdColumn: { orgId: any },
+  orgIdColumn: { orgId: DrizzleColumn },
   ...additionalConditions: SQL[]
 ): SQL {
   const conditions = [eq(orgIdColumn.orgId, orgId), ...additionalConditions]
@@ -78,3 +82,59 @@ export function orgFilterWith<T>(
  * TODO: Remove this once all APIs use session-based orgId
  */
 export const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+
+/**
+ * Get the current session for the request
+ * 
+ * @returns Session payload or null if not authenticated
+ */
+export async function getCurrentSession(): Promise<SessionPayload | null> {
+  return getSession()
+}
+
+/**
+ * Require session and return it
+ * Throws error if not authenticated
+ * 
+ * @returns Session payload
+ * @throws Error if not authenticated
+ */
+export async function requireSession(): Promise<SessionPayload> {
+  const session = await getSession()
+  
+  if (!session) {
+    throw new Error("Authentication required")
+  }
+  
+  return session
+}
+
+/**
+ * Create an audit logger from the current session
+ * Returns null if not authenticated
+ * 
+ * @returns AuditLogger instance or null
+ */
+export async function getAuditLogger(): Promise<AuditLogger | null> {
+  const session = await getSession()
+  
+  if (!session) {
+    return null
+  }
+  
+  const actor = await extractActor(session.userId, session.email, session.name)
+  return createAuditLogger(session.orgId, actor)
+}
+
+/**
+ * Require an audit logger from the current session
+ * Throws error if not authenticated
+ * 
+ * @returns AuditLogger instance
+ * @throws Error if not authenticated
+ */
+export async function requireAuditLogger(): Promise<AuditLogger> {
+  const session = await requireSession()
+  const actor = await extractActor(session.userId, session.email, session.name)
+  return createAuditLogger(session.orgId, actor)
+}

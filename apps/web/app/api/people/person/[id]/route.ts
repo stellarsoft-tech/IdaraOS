@@ -12,6 +12,7 @@ import { persons, users } from "@/lib/db/schema"
 import { UpdatePersonSchema } from "@/lib/generated/people/person/types"
 import { getEntraConfig } from "@/lib/auth/entra-config"
 import { syncPersonToEntra } from "@/lib/auth/entra-sync"
+import { getAuditLogger } from "@/lib/api/context"
 
 // UUID regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -389,6 +390,43 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .where(eq(persons.id, existing.id))
       .returning()
     
+    // Audit log the update
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logUpdate(
+        "people.directory",
+        "person",
+        record.id,
+        record.name,
+        {
+          name: existing.name,
+          email: existing.email,
+          role: existing.role,
+          team: existing.team,
+          status: existing.status,
+          startDate: existing.startDate,
+          hireDate: existing.hireDate,
+          endDate: existing.endDate,
+          phone: existing.phone,
+          location: existing.location,
+          bio: existing.bio,
+        },
+        {
+          name: record.name,
+          email: record.email,
+          role: record.role,
+          team: record.team,
+          status: record.status,
+          startDate: record.startDate,
+          hireDate: record.hireDate,
+          endDate: record.endDate,
+          phone: record.phone,
+          location: record.location,
+          bio: record.bio,
+        }
+      )
+    }
+    
     // If bidirectional sync is enabled and person has Entra link, sync to Entra
     if (isBidirectionalSyncEnabled && hasEntraLink && existing.entraId) {
       try {
@@ -434,13 +472,33 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params
     
-    const result = await db
-      .delete(persons)
+    // Find the person first to get their details for the audit log
+    const [existing] = await db
+      .select()
+      .from(persons)
       .where(isUUID(id) ? eq(persons.id, id) : eq(persons.slug, id))
-      .returning({ id: persons.id })
+      .limit(1)
     
-    if (result.length === 0) {
+    if (!existing) {
       return NextResponse.json({ error: "Person not found" }, { status: 404 })
+    }
+    
+    // Delete the person
+    await db
+      .delete(persons)
+      .where(eq(persons.id, existing.id))
+    
+    // Audit log the deletion
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logDelete("people.directory", "person", {
+        id: existing.id,
+        name: existing.name,
+        email: existing.email,
+        role: existing.role,
+        team: existing.team,
+        status: existing.status,
+      })
     }
     
     return new NextResponse(null, { status: 204 })

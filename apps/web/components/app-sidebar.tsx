@@ -74,6 +74,7 @@ const navigationData: NavItem[] = [
       { title: "Offboarding", url: "/people/offboarding", module: "people.offboarding" },
       { title: "Time Off", url: "/people/time-off", module: "people.timeoff" },
       { title: "Documents", url: "/people/documents", module: "people.documents" },
+      { title: "Audit Log", url: "/people/audit-log", module: "people.auditlog" },
       { title: "Settings", url: "/people/settings", module: "people.directory" },
     ],
   },
