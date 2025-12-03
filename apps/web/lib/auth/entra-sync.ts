@@ -150,9 +150,11 @@ export async function updateEntraUser(
     displayName?: string
     givenName?: string
     surname?: string
-    jobTitle?: string
-    department?: string
-    mobilePhone?: string
+    jobTitle?: string | null
+    department?: string | null
+    officeLocation?: string | null
+    mobilePhone?: string | null
+    employeeHireDate?: string | null
     accountEnabled?: boolean
   }
 ): Promise<boolean> {
@@ -163,6 +165,34 @@ export async function updateEntraUser(
   }
 
   try {
+    // Build the update payload, ensuring proper formatting
+    const payload: Record<string, unknown> = {}
+    
+    if (updates.displayName !== undefined) payload.displayName = updates.displayName
+    if (updates.givenName !== undefined) payload.givenName = updates.givenName
+    if (updates.surname !== undefined) payload.surname = updates.surname
+    if (updates.jobTitle !== undefined) payload.jobTitle = updates.jobTitle
+    if (updates.department !== undefined) payload.department = updates.department
+    if (updates.officeLocation !== undefined) payload.officeLocation = updates.officeLocation
+    if (updates.mobilePhone !== undefined) payload.mobilePhone = updates.mobilePhone
+    if (updates.accountEnabled !== undefined) payload.accountEnabled = updates.accountEnabled
+    
+    // employeeHireDate needs to be in ISO 8601 date format (YYYY-MM-DD)
+    // Microsoft Graph expects this as a Date string, not datetime
+    if (updates.employeeHireDate !== undefined) {
+      if (updates.employeeHireDate) {
+        // Ensure it's in YYYY-MM-DD format
+        const date = new Date(updates.employeeHireDate)
+        if (!Number.isNaN(date.getTime())) {
+          payload.employeeHireDate = date.toISOString().split("T")[0]
+        }
+      } else {
+        payload.employeeHireDate = null
+      }
+    }
+
+    console.log(`[Entra Sync] Updating user ${entraUserId} with:`, JSON.stringify(payload))
+
     const response = await fetch(
       `https://graph.microsoft.com/v1.0/users/${entraUserId}`,
       {
@@ -171,7 +201,7 @@ export async function updateEntraUser(
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(updates),
+        body: JSON.stringify(payload),
       }
     )
 
@@ -181,7 +211,7 @@ export async function updateEntraUser(
       return false
     }
 
-    console.log(`Updated user ${entraUserId} in Entra ID`)
+    console.log(`[Entra Sync] Successfully updated user ${entraUserId} in Entra ID`)
     return true
   } catch (error) {
     console.error("Error updating user in Entra:", error)
@@ -267,5 +297,85 @@ export async function syncUserToEntra(
 export async function isEntraSyncEnabled(): Promise<boolean> {
   const config = await getEntraConfig()
   return config !== null && config.scimEnabled && config.status === "connected"
+}
+
+/**
+ * Sync a person's details to Entra ID by Entra user ID
+ * Used for bidirectional sync from People entity
+ * Note: Requires User.ReadWrite.All permission in the app registration
+ */
+export async function syncPersonToEntra(
+  entraUserId: string,
+  updates: {
+    displayName?: string
+    jobTitle?: string
+    department?: string
+    officeLocation?: string
+    mobilePhone?: string
+    employeeHireDate?: string
+  }
+): Promise<{ success: boolean; message: string }> {
+  // Get Entra config and check if bidirectional sync is enabled
+  const config = await getEntraConfig()
+  
+  if (!config) {
+    return { success: false, message: "Entra ID not configured" }
+  }
+
+  if (!config.scimBidirectionalSync) {
+    return { success: false, message: "Bidirectional sync is not enabled" }
+  }
+
+  if (config.status !== "connected") {
+    return { success: false, message: "Entra ID integration is not connected" }
+  }
+
+  // Build update payload
+  const entraUpdates: Record<string, unknown> = {}
+
+  if (updates.displayName) {
+    entraUpdates.displayName = updates.displayName
+    // Try to split name into given/surname
+    const nameParts = updates.displayName.trim().split(" ")
+    if (nameParts.length >= 2) {
+      entraUpdates.givenName = nameParts[0]
+      entraUpdates.surname = nameParts.slice(1).join(" ")
+    }
+  }
+
+  if (updates.jobTitle !== undefined) {
+    entraUpdates.jobTitle = updates.jobTitle || null
+  }
+
+  if (updates.department !== undefined) {
+    entraUpdates.department = updates.department || null
+  }
+
+  if (updates.officeLocation !== undefined) {
+    entraUpdates.officeLocation = updates.officeLocation || null
+  }
+
+  if (updates.mobilePhone !== undefined) {
+    entraUpdates.mobilePhone = updates.mobilePhone || null
+  }
+
+  // Note: employeeHireDate may be read-only in some Entra configurations
+  if (updates.employeeHireDate !== undefined) {
+    entraUpdates.employeeHireDate = updates.employeeHireDate || null
+  }
+
+  // Only update if there are changes
+  if (Object.keys(entraUpdates).length === 0) {
+    return { success: true, message: "No changes to sync" }
+  }
+
+  // Update the user in Entra
+  const success = await updateEntraUser(entraUserId, entraUpdates)
+  
+  if (success) {
+    return { success: true, message: `Synced person to Entra ID (${entraUserId})` }
+  } else {
+    return { success: false, message: "Failed to update person in Entra ID" }
+  }
 }
 

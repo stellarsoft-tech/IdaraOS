@@ -659,12 +659,25 @@ export default function IntegrationsPage() {
                                 </Badge>
                               </div>
                               {entraConfig?.scimBidirectionalSync ? (
-                                <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
-                                  <li><strong>Name changes:</strong> Updates displayName, givenName, and surname in Entra ID</li>
-                                  <li><strong>Status changes:</strong> Updates accountEnabled (active/inactive) in Entra ID</li>
-                                  <li><strong>User deletion:</strong> Disables the user account in Entra ID (accountEnabled = false)</li>
-                                  <li><strong>Note:</strong> Email changes and role changes do not sync to Entra ID</li>
-                                </ul>
+                                <div className="space-y-3">
+                                  <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
+                                    <li><strong>Name changes:</strong> Updates displayName, givenName, and surname in Entra ID</li>
+                                    <li><strong>Role/Job Title:</strong> Updates jobTitle in Entra ID</li>
+                                    <li><strong>Team/Department:</strong> Updates department in Entra ID</li>
+                                    <li><strong>Location:</strong> Updates officeLocation in Entra ID</li>
+                                    <li><strong>Phone:</strong> Updates mobilePhone in Entra ID</li>
+                                    <li><strong>Status changes:</strong> Updates accountEnabled (active/inactive) in Entra ID</li>
+                                    <li><strong>Note:</strong> Email changes do not sync to Entra ID</li>
+                                  </ul>
+                                  <div className="ml-6 p-2 rounded bg-muted/50 border">
+                                    <p className="text-xs font-medium mb-1">Required App Registration Permissions:</p>
+                                    <ul className="text-xs text-muted-foreground space-y-0.5 list-disc ml-4">
+                                      <li><code className="bg-muted px-1 rounded">User.ReadWrite.All</code> - Required to update user properties</li>
+                                      <li><code className="bg-muted px-1 rounded">Directory.ReadWrite.All</code> - Required for directory operations</li>
+                                      <li><code className="bg-muted px-1 rounded">AuditLog.Read.All</code> - Optional, for sign-in activity</li>
+                                    </ul>
+                                  </div>
+                                </div>
                               ) : (
                                 <div className="text-xs text-muted-foreground ml-6">
                                   When disabled, synced users are read-only in the application. 

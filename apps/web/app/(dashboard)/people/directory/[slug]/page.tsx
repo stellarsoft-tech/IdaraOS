@@ -8,7 +8,6 @@ import {
   Building2, 
   Calendar, 
   FileText, 
-  HardDrive, 
   Info,
   KeyRound, 
   Mail, 
@@ -18,12 +17,10 @@ import {
   RefreshCw, 
   Trash2, 
   User,
-  Clock,
   Briefcase,
   Shield,
   ExternalLink,
-  Link2,
-  AlertTriangle
+  Link2
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -55,6 +52,14 @@ import {
 } from "@/components/ui/tooltip"
 
 import { usePersonDetail, useUpdatePerson, useDeletePerson } from "@/lib/api/people"
+import { useQuery } from "@tanstack/react-query"
+
+// Fetch Entra integration settings to check bidirectional sync
+async function fetchEntraIntegrationSettings() {
+  const res = await fetch("/api/settings/integrations?provider=entra")
+  if (!res.ok) return null
+  return res.json()
+}
 import { formConfig, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
 import { personStatusVariants, type UpdatePerson } from "@/lib/generated/people/person/types"
 
@@ -129,6 +134,15 @@ export default function PersonDetailPage() {
   const { data: person, isLoading, error } = usePersonDetail(slug)
   const updateMutation = useUpdatePerson()
   const deleteMutation = useDeletePerson()
+  
+  // Fetch Entra integration settings to check if bidirectional sync is enabled
+  const { data: entraSettings } = useQuery({
+    queryKey: ["entra-integration-settings"],
+    queryFn: fetchEntraIntegrationSettings,
+    staleTime: 60000, // Cache for 1 minute
+  })
+  
+  const isBidirectionalSyncEnabled = entraSettings?.scimBidirectionalSync ?? false
   
   const handleEdit = async (values: UpdatePerson) => {
     if (!person) return
@@ -332,9 +346,20 @@ export default function PersonDetailPage() {
                   <span>{person.location}</span>
                 </div>
               )}
+              {person.manager && (
+                <div className="flex items-center gap-3 text-sm">
+                  <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Link 
+                    href={`/people/directory/${person.manager.slug}`}
+                    className="hover:text-primary hover:underline"
+                  >
+                    {person.manager.name}
+                  </Link>
+                </div>
+              )}
               <div className="flex items-center gap-3 text-sm">
                 <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                <span>Started {formatDate(person.startDate)}</span>
+                <span>Started {formatDate(person.hireDate || person.startDate)}</span>
               </div>
               {person.endDate && (
                 <div className="flex items-center gap-3 text-sm text-amber-600 dark:text-amber-400">
@@ -393,8 +418,21 @@ export default function PersonDetailPage() {
                     <p className="font-medium">{person.location || "—"}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Start Date</p>
-                    <p className="font-medium">{formatDate(person.startDate)}</p>
+                    <p className="text-sm text-muted-foreground">Manager</p>
+                    <p className="font-medium">
+                      {person.manager ? (
+                        <Link 
+                          href={`/people/directory/${person.manager.slug}`}
+                          className="hover:text-primary hover:underline"
+                        >
+                          {person.manager.name}
+                        </Link>
+                      ) : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Hire Date</p>
+                    <p className="font-medium">{formatDate(person.hireDate || person.startDate)}</p>
                   </div>
                   {person.endDate && (
                     <div>
@@ -419,6 +457,24 @@ export default function PersonDetailPage() {
                     <div>
                       <p className="text-sm text-muted-foreground">Entra Group</p>
                       <p className="font-medium">{person.entraGroupName}</p>
+                    </div>
+                  )}
+                  {hasEntraLink && person.entraCreatedAt && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Created in Entra</p>
+                      <p className="font-medium">{formatDateTime(person.entraCreatedAt)}</p>
+                    </div>
+                  )}
+                  {hasEntraLink && person.lastSignInAt && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Last Sign-In</p>
+                      <p className="font-medium">{timeAgo(person.lastSignInAt)}</p>
+                    </div>
+                  )}
+                  {hasEntraLink && person.lastPasswordChangeAt && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Password Changed</p>
+                      <p className="font-medium">{timeAgo(person.lastPasswordChangeAt)}</p>
                     </div>
                   )}
                   <div>
@@ -533,6 +589,24 @@ export default function PersonDetailPage() {
                             {person.syncEnabled ? "Enabled" : "Disabled"}
                           </Badge>
                         </div>
+                        {person.entraCreatedAt && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Created in Entra</p>
+                            <p className="font-medium text-sm">{formatDateTime(person.entraCreatedAt)}</p>
+                          </div>
+                        )}
+                        {person.lastSignInAt && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Last Sign-In</p>
+                            <p className="font-medium text-sm">{timeAgo(person.lastSignInAt)}</p>
+                          </div>
+                        )}
+                        {person.lastPasswordChangeAt && (
+                          <div>
+                            <p className="text-sm text-muted-foreground">Password Changed</p>
+                            <p className="font-medium text-sm">{timeAgo(person.lastPasswordChangeAt)}</p>
+                          </div>
+                        )}
                       </div>
 
                       {person.syncEnabled && (
@@ -681,9 +755,12 @@ export default function PersonDetailPage() {
         open={editOpen}
         onOpenChange={setEditOpen}
         title={`Edit ${person.name}`}
-        description={isSynced && person.syncEnabled
-          ? "Some fields are managed by Entra ID sync"
-          : "Update employee information"
+        description={
+          isSynced && person.syncEnabled
+            ? isBidirectionalSyncEnabled
+              ? "Changes will be synced back to Entra ID (except email)"
+              : "Some fields are managed by Entra ID sync"
+            : "Update employee information"
         }
         schema={editFormSchema}
         config={formConfig}
@@ -696,27 +773,40 @@ export default function PersonDetailPage() {
           team: person.team || "",
           status: person.status,
           startDate: person.startDate,
+          hireDate: person.hireDate || "",
           endDate: person.endDate || "",
           phone: person.phone || "",
           location: person.location || "",
           bio: person.bio || "",
         }}
         onSubmit={handleEdit}
-        // Disable synced fields for people from Entra
+        // Disable synced fields ONLY if sync is enabled AND bidirectional sync is disabled
+        // Email is always disabled for synced users (email changes don't sync to Entra)
         disabledFields={
           isSynced && person.syncEnabled
-            ? ["name", "email", "role", "team", "startDate", "location", "phone"]
+            ? isBidirectionalSyncEnabled
+              ? ["email"] // Only email is disabled when bidirectional sync is enabled
+              : ["name", "email", "role", "team", "startDate", "hireDate", "location", "phone"] // All synced fields disabled
             : []
         }
         infoBanner={
           isSynced && person.syncEnabled ? (
-            <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
-              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                This person is synced from Entra ID ({person.entraGroupName || "group"}). 
-                Synced fields cannot be edited here.
-              </AlertDescription>
-            </Alert>
+            isBidirectionalSyncEnabled ? (
+              <Alert className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
+                <RefreshCw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <AlertDescription className="text-emerald-700 dark:text-emerald-300 text-sm">
+                  Bidirectional sync is enabled. Changes made here will be synced back to Entra ID.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                  This person is synced from Entra ID ({person.entraGroupName || "group"}). 
+                  Synced fields cannot be edited here.
+                </AlertDescription>
+              </Alert>
+            )
           ) : undefined
         }
       />

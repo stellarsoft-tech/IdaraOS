@@ -30,6 +30,14 @@ interface LinkedUserInfo {
   hasEntraLink: boolean
 }
 
+// Manager info type
+interface ManagerInfo {
+  id: string
+  name: string
+  email: string
+  slug: string
+}
+
 // Sync info type
 interface SyncInfo {
   source: "manual" | "sync"
@@ -43,7 +51,8 @@ interface SyncInfo {
 // Transform DB record to API response
 function toApiResponse(
   record: typeof persons.$inferSelect,
-  linkedUser?: LinkedUserInfo | null
+  linkedUser?: LinkedUserInfo | null,
+  manager?: ManagerInfo | null
 ) {
   // Determine if person has Entra link (either through linked user or direct sync)
   const hasEntraLink = !!record.entraId || linkedUser?.hasEntraLink || false
@@ -65,7 +74,8 @@ function toApiResponse(
     email: record.email,
     role: record.role,
     team: record.team ?? undefined,
-    manager_id: record.managerId,
+    managerId: record.managerId,
+    manager: manager || null,
     status: record.status,
     startDate: record.startDate,
     endDate: record.endDate,
@@ -76,6 +86,11 @@ function toApiResponse(
     assignedAssets: 0, // TODO: Compute from assets table
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+    // Entra fields
+    entraCreatedAt: record.entraCreatedAt?.toISOString() ?? null,
+    hireDate: record.hireDate ?? null,
+    lastSignInAt: record.lastSignInAt?.toISOString() ?? null,
+    lastPasswordChangeAt: record.lastPasswordChangeAt?.toISOString() ?? null,
     // Linked user info
     linkedUser: linkedUser || null,
     hasLinkedUser: !!linkedUser,
@@ -160,8 +175,22 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // Create lookup map for managers (persons by ID)
+    const managerById = new Map<string, ManagerInfo>()
+    for (const person of results) {
+      managerById.set(person.id, {
+        id: person.id,
+        name: person.name,
+        email: person.email,
+        slug: person.slug,
+      })
+    }
+    
     return NextResponse.json(
-      results.map(person => toApiResponse(person, userByPersonId.get(person.id)))
+      results.map(person => {
+        const manager = person.managerId ? managerById.get(person.managerId) : null
+        return toApiResponse(person, userByPersonId.get(person.id), manager)
+      })
     )
   } catch (error) {
     // Handle authentication errors

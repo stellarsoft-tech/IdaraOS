@@ -62,6 +62,18 @@ interface GraphGroup {
   description?: string
 }
 
+interface GraphManager {
+  id: string
+  displayName?: string
+  mail?: string
+  userPrincipalName?: string
+}
+
+interface GraphSignInActivity {
+  lastSignInDateTime?: string
+  lastNonInteractiveSignInDateTime?: string
+}
+
 interface GraphUser {
   id: string
   displayName: string
@@ -77,6 +89,12 @@ interface GraphUser {
   mobilePhone?: string
   employeeHireDate?: string
   employeeLeaveDateTime?: string
+  // New Entra properties
+  createdDateTime?: string
+  manager?: GraphManager
+  // Security/audit properties (fetched separately from beta API)
+  signInActivity?: GraphSignInActivity
+  lastPasswordChangeDateTime?: string
 }
 
 interface SyncResult {
@@ -247,7 +265,8 @@ async function fetchGroupMembers(accessToken: string, groupId: string): Promise<
     // Request additional properties for People sync
     const selectFields = [
       "id", "displayName", "mail", "userPrincipalName", "givenName", "surname", "accountEnabled",
-      "jobTitle", "department", "officeLocation", "mobilePhone", "employeeHireDate", "employeeLeaveDateTime"
+      "jobTitle", "department", "officeLocation", "mobilePhone", "employeeHireDate", "employeeLeaveDateTime",
+      "createdDateTime"
     ].join(",")
     
     const response = await fetch(
@@ -265,9 +284,53 @@ async function fetchGroupMembers(accessToken: string, groupId: string): Promise<
 
     const data = await response.json()
     // Filter to only return users (not other member types like groups)
-    return (data.value || []).filter((m: { "@odata.type"?: string }) => 
+    const users = (data.value || []).filter((m: { "@odata.type"?: string }) => 
       m["@odata.type"] === "#microsoft.graph.user"
+    ) as GraphUser[]
+    
+    // Fetch manager and security info for each user (requires separate API calls)
+    const usersWithExtendedInfo = await Promise.all(
+      users.map(async (user) => {
+        const updatedUser = { ...user }
+        
+        // Fetch manager
+        try {
+          const managerResponse = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${user.id}/manager?$select=id,displayName,mail,userPrincipalName`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          if (managerResponse.ok) {
+            const manager = await managerResponse.json()
+            updatedUser.manager = manager as GraphManager
+          }
+        } catch {
+          // User may not have a manager, that's OK
+        }
+        
+        // Fetch security info from beta API (signInActivity, lastPasswordChangeDateTime)
+        try {
+          const securityResponse = await fetch(
+            `https://graph.microsoft.com/beta/users/${user.id}?$select=signInActivity,lastPasswordChangeDateTime`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          if (securityResponse.ok) {
+            const securityData = await securityResponse.json()
+            if (securityData.signInActivity) {
+              updatedUser.signInActivity = securityData.signInActivity
+            }
+            if (securityData.lastPasswordChangeDateTime) {
+              updatedUser.lastPasswordChangeDateTime = securityData.lastPasswordChangeDateTime
+            }
+          }
+        } catch {
+          // Security info may not be available (requires AuditLog.Read.All permission)
+        }
+        
+        return updatedUser
+      })
     )
+    
+    return usersWithExtendedInfo
   } catch (error) {
     console.error(`[Full Sync] Error fetching members for group ${groupId}:`, error)
     return []
@@ -384,15 +447,16 @@ async function getOrCreateUser(
 /**
  * Generate a URL-friendly slug from a name
  */
-function generateSlug(name: string, email: string): string {
+function generateSlug(name: string, _email: string): string {
+  // Generate a URL-friendly slug from the full name only
   const baseSlug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
   
-  // Add part of email to make unique
-  const emailPart = email.split("@")[0].replace(/[^a-z0-9]/g, "").slice(0, 8)
-  return `${baseSlug}-${emailPart}`
+  // Add a short random suffix for uniqueness
+  const uniqueSuffix = Math.random().toString(36).slice(2, 6)
+  return `${baseSlug}-${uniqueSuffix}`
 }
 
 /**
@@ -401,6 +465,76 @@ function generateSlug(name: string, email: string): string {
 interface EntraGroupInfo {
   id: string
   displayName: string
+}
+
+/**
+ * Resolve an Entra manager to a Person ID in our database
+ * Looks up by entraId first, then by email
+ */
+async function resolveManagerId(
+  orgId: string,
+  manager: GraphManager | undefined
+): Promise<string | null> {
+  if (!manager) return null
+  
+  // First try to find by Entra ID
+  if (manager.id) {
+    const [personByEntraId] = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(and(eq(persons.orgId, orgId), eq(persons.entraId, manager.id)))
+      .limit(1)
+    
+    if (personByEntraId) {
+      return personByEntraId.id
+    }
+  }
+  
+  // Then try to find by email
+  const managerEmail = manager.mail || manager.userPrincipalName
+  if (managerEmail) {
+    const [personByEmail] = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(and(eq(persons.orgId, orgId), ilike(persons.email, managerEmail)))
+      .limit(1)
+    
+    if (personByEmail) {
+      return personByEmail.id
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Safely format a date string to Date object
+ */
+function safeParseDate(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return null
+    return date
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Safely format a date string to YYYY-MM-DD format
+ */
+function safeFormatDateString(dateStr: string | undefined | null): string | null {
+  if (!dateStr) return null
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return null
+    const formatted = date.toISOString().split("T")[0]
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(formatted)) return null
+    return formatted
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -416,6 +550,12 @@ async function getOrCreatePerson(
   const email = entraUser.mail || entraUser.userPrincipalName
   const name = entraUser.displayName || email
   const now = new Date()
+  
+  // Parse new Entra fields
+  const entraCreatedAt = safeParseDate(entraUser.createdDateTime)
+  const hireDate = safeFormatDateString(entraUser.employeeHireDate)
+  const lastSignInAt = safeParseDate(entraUser.signInActivity?.lastSignInDateTime)
+  const lastPasswordChangeAt = safeParseDate(entraUser.lastPasswordChangeDateTime)
 
   // Check if user already has a linked person
   const [existingUser] = await db
@@ -462,6 +602,12 @@ async function getOrCreatePerson(
       if (entraUser.mobilePhone && entraUser.mobilePhone !== existingPerson.phone) {
         updates.phone = entraUser.mobilePhone
       }
+      
+      // Update new Entra fields
+      if (entraCreatedAt) updates.entraCreatedAt = entraCreatedAt
+      if (hireDate) updates.hireDate = hireDate
+      if (lastSignInAt) updates.lastSignInAt = lastSignInAt
+      if (lastPasswordChangeAt) updates.lastPasswordChangeAt = lastPasswordChangeAt
 
       const [updated] = await db
         .update(persons)
@@ -486,18 +632,24 @@ async function getOrCreatePerson(
       .set({ personId: existingPersonByEmail.id, updatedAt: now })
       .where(eq(users.id, userId))
     
-    // Update the person with sync tracking info
+    // Update the person with sync tracking info and new fields
+    const updateData: Partial<typeof persons.$inferInsert> = {
+      source: "sync" as const,
+      entraId: entraUser.id,
+      entraGroupId: groupInfo?.id || null,
+      entraGroupName: groupInfo?.displayName || null,
+      lastSyncedAt: now,
+      syncEnabled: true,
+      updatedAt: now,
+    }
+    if (entraCreatedAt) updateData.entraCreatedAt = entraCreatedAt
+    if (hireDate) updateData.hireDate = hireDate
+    if (lastSignInAt) updateData.lastSignInAt = lastSignInAt
+    if (lastPasswordChangeAt) updateData.lastPasswordChangeAt = lastPasswordChangeAt
+    
     const [updatedPerson] = await db
       .update(persons)
-      .set({
-        source: "sync" as const,
-        entraId: entraUser.id,
-        entraGroupId: groupInfo?.id || null,
-        entraGroupName: groupInfo?.displayName || null,
-        lastSyncedAt: now,
-        syncEnabled: true,
-        updatedAt: now,
-      })
+      .set(updateData)
       .where(eq(persons.id, existingPersonByEmail.id))
       .returning()
 
@@ -552,6 +704,11 @@ async function getOrCreatePerson(
         entraGroupName: groupInfo?.displayName || null,
         lastSyncedAt: now,
         syncEnabled: true,
+        // New Entra fields
+        entraCreatedAt: entraCreatedAt || null,
+        hireDate: hireDate || null,
+        lastSignInAt: lastSignInAt || null,
+        lastPasswordChangeAt: lastPasswordChangeAt || null,
       })
       .onConflictDoUpdate({
         target: persons.email,
@@ -567,6 +724,10 @@ async function getOrCreatePerson(
           entraGroupName: groupInfo?.displayName || sql`${persons.entraGroupName}`,
           lastSyncedAt: now,
           syncEnabled: true,
+          entraCreatedAt: entraCreatedAt || sql`${persons.entraCreatedAt}`,
+          hireDate: hireDate || sql`${persons.hireDate}`,
+          lastSignInAt: lastSignInAt || sql`${persons.lastSignInAt}`,
+          lastPasswordChangeAt: lastPasswordChangeAt || sql`${persons.lastPasswordChangeAt}`,
           updatedAt: now,
         },
       })
@@ -601,18 +762,24 @@ async function getOrCreatePerson(
         .set({ personId: existingBySlugOrEmail.id, updatedAt: now })
         .where(eq(users.id, userId))
       
-      // Update sync tracking
+      // Update sync tracking and new fields
+      const updateData: Partial<typeof persons.$inferInsert> = {
+        source: "sync" as const,
+        entraId: entraUser.id,
+        entraGroupId: groupInfo?.id || null,
+        entraGroupName: groupInfo?.displayName || null,
+        lastSyncedAt: now,
+        syncEnabled: true,
+        updatedAt: now,
+      }
+      if (entraCreatedAt) updateData.entraCreatedAt = entraCreatedAt
+      if (hireDate) updateData.hireDate = hireDate
+      if (lastSignInAt) updateData.lastSignInAt = lastSignInAt
+      if (lastPasswordChangeAt) updateData.lastPasswordChangeAt = lastPasswordChangeAt
+      
       await db
         .update(persons)
-        .set({
-          source: "sync" as const,
-          entraId: entraUser.id,
-          entraGroupId: groupInfo?.id || null,
-          entraGroupName: groupInfo?.displayName || null,
-          lastSyncedAt: now,
-          syncEnabled: true,
-          updatedAt: now,
-        })
+        .set(updateData)
         .where(eq(persons.id, existingBySlugOrEmail.id))
       
       console.log(`[Full Sync] Found and linked existing person: ${existingBySlugOrEmail.name}`)
@@ -621,6 +788,33 @@ async function getOrCreatePerson(
     
     throw error
   }
+}
+
+/**
+ * Update manager IDs for all synced persons after initial sync
+ * This is done as a second pass because managers may not exist when their reports are synced
+ */
+async function updateManagerIds(
+  orgId: string,
+  syncedUsers: Array<{ personId: string; manager: GraphManager | undefined }>
+): Promise<number> {
+  let updated = 0
+  
+  for (const { personId, manager } of syncedUsers) {
+    if (!manager) continue
+    
+    const managerId = await resolveManagerId(orgId, manager)
+    if (managerId && managerId !== personId) { // Don't allow self-reference
+      await db
+        .update(persons)
+        .set({ managerId, updatedAt: new Date() })
+        .where(eq(persons.id, personId))
+      updated++
+    }
+  }
+  
+  console.log(`[Full Sync] Updated ${updated} manager relationships`)
+  return updated
 }
 
 /**
@@ -990,6 +1184,8 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
       console.log(`[Full Sync] Group "${entraGroup.displayName}" has ${members.length} members`)
 
       const currentMemberUserIds: string[] = []
+      // Track synced users with their managers for second-pass resolution
+      const syncedUsersForManagerUpdate: Array<{ personId: string; manager: GraphManager | undefined }> = []
 
       // Process each member
       for (const member of members) {
@@ -1010,7 +1206,7 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
           
           if (config.syncPeopleEnabled && !isPeopleManagingOwnSync) {
             try {
-              const { created: personCreated, updated: personUpdated } = await getOrCreatePerson(
+              const { person, created: personCreated, updated: personUpdated } = await getOrCreatePerson(
                 orgId,
                 user.id,
                 member,
@@ -1019,6 +1215,11 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
               )
               if (personCreated) stats.peopleCreated++
               if (personUpdated) stats.peopleUpdated++
+              
+              // Track for manager resolution in second pass
+              if (person && member.manager) {
+                syncedUsersForManagerUpdate.push({ personId: person.id, manager: member.manager })
+              }
             } catch (personError) {
               console.error(`[Full Sync] Error creating/updating person for ${user.email}:`, personError)
               // Don't fail the whole sync for person errors
@@ -1043,6 +1244,11 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
           console.error(`[Full Sync] ${errorMsg}`)
           stats.errors.push(errorMsg)
         }
+      }
+      
+      // Second pass: Update manager relationships (after all persons are synced)
+      if (syncedUsersForManagerUpdate.length > 0) {
+        await updateManagerIds(orgId, syncedUsersForManagerUpdate)
       }
 
       // Clean up stale memberships
