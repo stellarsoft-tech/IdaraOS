@@ -22,6 +22,8 @@ The migration workflow is similar to Entity Framework Core:
 | `pnpm --filter web db:status` | Show migration status (applied vs pending) |
 | `pnpm --filter web db:check` | Check if migrations are up to date (CI) |
 | `pnpm --filter web db:run-migrations` | Apply pending migrations |
+| `pnpm --filter web db:baseline` | Mark existing schema as migrated (smart) |
+| `pnpm --filter web db:repair` | Fix incorrectly baselined migrations |
 | `pnpm --filter web db:push` | Push schema directly (dev only, no migration) |
 | `pnpm --filter web db:studio` | Open Drizzle Studio to browse data |
 
@@ -32,6 +34,8 @@ The migration workflow is similar to Entity Framework Core:
 | `pnpm docker:db:generate` | Generate migration in container |
 | `pnpm docker:db:status` | Show migration status |
 | `pnpm docker:db:migrate` | Apply pending migrations |
+| `pnpm docker:db:baseline` | Mark existing schema as migrated (smart) |
+| `pnpm docker:db:repair` | Fix incorrectly baselined migrations |
 | `pnpm docker:db:push` | Push schema directly (dev only) |
 | `pnpm docker:db:reset` | Reset database (drops all data!) |
 
@@ -136,8 +140,23 @@ pnpm docker:db:migrate
 If your database was created with `db:push` (no migrations), run:
 
 ```bash
-# Baseline marks existing schema as migrated
+# Baseline marks existing schema as migrated (smart - only baselines what exists)
 pnpm --filter web db:baseline
+
+# Then run any pending migrations
+pnpm --filter web db:run-migrations
+```
+
+### Incorrectly baselined migrations
+
+If migrations were marked as applied but their changes don't exist in the database:
+
+```bash
+# Repair removes incorrect entries so migrations can run properly
+pnpm --filter web db:repair
+
+# Then run the migrations
+pnpm --filter web db:run-migrations
 ```
 
 ### Schema drift detected in CI

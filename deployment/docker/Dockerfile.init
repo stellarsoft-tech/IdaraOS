@@ -92,14 +92,11 @@ echo '=========================================='; \
 echo 'Step 2: Running database migrations'; \
 echo '=========================================='; \
 \
-if [ \"$HAS_TABLES\" = \"true\" ] && [ \"$HAS_MIGRATIONS\" = \"false\" ]; then \
-  echo '⚠️  Tables exist but no migrations table found'; \
-  echo '   This usually means db:push was used previously.'; \
-  echo '   Running baseline to mark existing migrations as applied...'; \
-  echo ''; \
-  pnpm db:baseline 2>&1 || echo 'Baseline completed with warnings'; \
-  echo ''; \
-fi; \
+# Always run baseline first - it will intelligently check what needs to be baselined \
+# and what needs to be run as actual migrations \
+echo 'Running smart baseline check...'; \
+pnpm db:baseline 2>&1 || echo 'Baseline completed with warnings'; \
+echo ''; \
 \
 # Now run any pending migrations \
 echo 'Running migration runner...'; \
