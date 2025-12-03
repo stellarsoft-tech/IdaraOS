@@ -50,12 +50,81 @@ jobs:
         run: pnpm --filter web exec tsc --noEmit
 
   # ===========================================================================
+  # Database Migration Check
+  # ===========================================================================
+  # Ensures that all schema changes have corresponding migration files
+  # Similar to how Entity Framework checks for pending model changes
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for uncommitted migrations
+        working-directory: apps/web
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  Checking for uncommitted schema changes"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          
+          # Generate migrations to a temp directory
+          TEMP_DIR=$(mktemp -d)
+          echo "Generating migrations to temp dir: $TEMP_DIR"
+          
+          # Run drizzle-kit generate to temp directory
+          npx drizzle-kit generate --out="$TEMP_DIR" 2>&1 || true
+          
+          # Check if any new SQL files were generated
+          NEW_FILES=$(find "$TEMP_DIR" -name "*.sql" 2>/dev/null | wc -l)
+          
+          if [ "$NEW_FILES" -gt 0 ]; then
+            echo ""
+            echo "❌ SCHEMA DRIFT DETECTED"
+            echo ""
+            echo "Your schema definitions have changes that are not in migrations."
+            echo "Generated migration files:"
+            find "$TEMP_DIR" -name "*.sql" -exec echo "  - {}" \;
+            echo ""
+            echo "To fix this:"
+            echo "  1. Run: pnpm --filter web db:generate"
+            echo "  2. Review the generated SQL in apps/web/drizzle/"
+            echo "  3. Commit the migration files"
+            echo ""
+            
+            # Clean up
+            rm -rf "$TEMP_DIR"
+            exit 1
+          fi
+          
+          echo "✅ Schema is up to date with migrations"
+          
+          # Clean up
+          rm -rf "$TEMP_DIR"
+
+  # ===========================================================================
   # Build Docker Image
   # ===========================================================================
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: [lint]
+    needs: [lint, migration-check]
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}

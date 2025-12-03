@@ -30,6 +30,8 @@
 
     "docker:db:migrate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:run-migrations",
     "docker:db:generate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:generate",
+    "docker:db:status": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:status",
+    "docker:db:check": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:check",
     "docker:db:push": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:push",
     "docker:db:studio": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:studio",
     "docker:db:seed": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed",
