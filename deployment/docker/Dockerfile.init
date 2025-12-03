@@ -6,10 +6,16 @@
 #
 # Migration Strategy:
 # - Uses proper Drizzle ORM migrations from apps/web/drizzle/*.sql
-# - Migrations are tracked in __drizzle_migrations table
+# - Migrations are tracked in drizzle.__drizzle_migrations table
 # - Safe to run multiple times (idempotent)
 # - Supports both fresh installs and upgrades
 # - Handles databases created with db:push (baseline support)
+#
+# Best Practices (similar to Entity Framework):
+# 1. Schema changes go in lib/db/schema/*.ts
+# 2. Run `pnpm db:generate` to create migration SQL files
+# 3. Commit the generated migration files to git
+# 4. This init container applies migrations on deployment
 # =============================================================================
 
 FROM node:22-alpine
@@ -43,20 +49,23 @@ echo ''; \
 cd /app/apps/web; \
 echo 'Working directory:' $(pwd); \
 echo ''; \
-echo 'Available migration files:'; \
+echo 'Migration files in drizzle/:'; \
 ls -la drizzle/*.sql 2>/dev/null || echo '  No migration files found'; \
 echo ''; \
-echo 'Step 1: Running database migrations...'; \
-echo '------------------------------------------'; \
+echo 'Migration journal:'; \
+cat drizzle/meta/_journal.json 2>/dev/null | head -30 || echo '  No journal found'; \
+echo ''; \
+echo '=========================================='; \
+echo 'Step 1: Check database state'; \
+echo '=========================================='; \
 \
 # Check if database has existing tables (was created with db:push) \
-# If tables exist, always run baseline to ensure migrations are tracked correctly \
 HAS_TABLES=$(node -e \" \
   const { Pool } = require('pg'); \
   const pool = new Pool({ connectionString: process.env.DATABASE_URL }); \
   (async () => { \
     try { \
-      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\\\"); \
+      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'core_organizations') as has_tables\\\"); \
       console.log(result.rows[0].has_tables ? 'true' : 'false'); \
     } catch (e) { console.log('false'); } \
     finally { await pool.end(); } \
@@ -64,34 +73,82 @@ HAS_TABLES=$(node -e \" \
 \" 2>/dev/null || echo 'false'); \
 echo \"Has existing tables: $HAS_TABLES\"; \
 \
-if [ \"$HAS_TABLES\" = \"true\" ]; then \
-  echo 'Existing database detected - ensuring all migrations are baselined...'; \
+# Check if migrations table exists \
+HAS_MIGRATIONS=$(node -e \" \
+  const { Pool } = require('pg'); \
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL }); \
+  (async () => { \
+    try { \
+      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations') as has_migrations\\\"); \
+      console.log(result.rows[0].has_migrations ? 'true' : 'false'); \
+    } catch (e) { console.log('false'); } \
+    finally { await pool.end(); } \
+  })(); \
+\" 2>/dev/null || echo 'false'); \
+echo \"Has migrations table: $HAS_MIGRATIONS\"; \
+echo ''; \
+\
+echo '=========================================='; \
+echo 'Step 2: Running database migrations'; \
+echo '=========================================='; \
+\
+if [ \"$HAS_TABLES\" = \"true\" ] && [ \"$HAS_MIGRATIONS\" = \"false\" ]; then \
+  echo '⚠️  Tables exist but no migrations table found'; \
+  echo '   This usually means db:push was used previously.'; \
+  echo '   Running baseline to mark existing migrations as applied...'; \
+  echo ''; \
   pnpm db:baseline 2>&1 || echo 'Baseline completed with warnings'; \
+  echo ''; \
 fi; \
 \
-# Run migrations \
-pnpm db:run-migrations 2>&1 || { \
-  echo '⚠️  Migration runner failed, falling back to db:push...'; \
-  echo 'Note: This is not recommended for production.'; \
+# Now run any pending migrations \
+echo 'Running migration runner...'; \
+pnpm db:run-migrations 2>&1; \
+MIGRATION_RESULT=$?; \
+\
+if [ $MIGRATION_RESULT -ne 0 ]; then \
+  echo ''; \
+  echo '⚠️  Migration runner encountered an issue.'; \
+  echo '   Checking migration status...'; \
+  pnpm db:status 2>&1 || true; \
+  echo ''; \
+  echo '   If there are schema changes not in migrations:'; \
+  echo '   1. Run: pnpm db:generate'; \
+  echo '   2. Commit the new migration file'; \
+  echo '   3. Redeploy'; \
+  echo ''; \
+  echo '   Attempting db:push as fallback (dev only)...'; \
   npx drizzle-kit push --force 2>&1 || true; \
-}; \
-echo '✅ Database schema applied successfully'; \
+fi; \
+\
+echo '✅ Database schema is ready'; \
 echo ''; \
-echo 'Step 2: Seeding database...'; \
-echo '------------------------------------------'; \
+\
+echo '=========================================='; \
+echo 'Step 3: Seeding database'; \
+echo '=========================================='; \
 pnpm db:seed 2>&1 || echo 'Seed skipped or already applied'; \
-echo '✅ Database seed step complete'; \
 echo ''; \
-echo 'Step 3: Seeding RBAC permissions (includes admin user)...'; \
-echo '------------------------------------------'; \
+\
+echo '=========================================='; \
+echo 'Step 4: Seeding RBAC permissions'; \
+echo '=========================================='; \
 pnpm db:seed-rbac 2>&1 || echo 'RBAC seed skipped or already applied'; \
-echo '✅ RBAC permissions seed step complete'; \
 echo ''; \
+\
 echo '=========================================='; \
 echo '✅ Database initialization complete!'; \
+echo '=========================================='; \
 echo ''; \
 echo 'Login credentials:'; \
 echo '  Email: admin@example.com'; \
 echo '  Password: Admin123!'; \
 echo '  Role: Owner (full access)'; \
+echo ''; \
+echo 'Migration workflow reminder:'; \
+echo '  1. Make schema changes in lib/db/schema/*.ts'; \
+echo '  2. Run: pnpm db:generate'; \
+echo '  3. Review the generated SQL in drizzle/'; \
+echo '  4. Commit the migration files'; \
+echo '  5. Deploy - migrations run automatically'; \
 echo '=========================================='"]
