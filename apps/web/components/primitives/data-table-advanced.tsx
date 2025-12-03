@@ -502,82 +502,112 @@ export function DataTable<TData>({
         
         const facetConfig = facetedFilters?.[columnId as string]
         
-        // Determine filter type
-        let filterType: "text" | "enum" | "date" | "number" = "text"
-        if (facetConfig?.type) {
-          filterType = facetConfig.type as typeof filterType
+        // Determine filter type - use type assertion to maintain full union type
+        type FilterType = "text" | "enum" | "date" | "number"
+        let filterType: FilterType = "text"
+        if (facetConfig?.type && ["text", "enum", "date", "number"].includes(facetConfig.type)) {
+          filterType = facetConfig.type as FilterType
         } else if (columnId === "assignedAssets" || columnId?.includes("count") || columnId?.includes("Count")) {
           filterType = "number"
         } else if (columnId?.includes("Date") || columnId?.includes("date") || columnId === "startDate" || columnId === "endDate") {
           filterType = "date"
         }
         
-        return {
-          ...col,
-          // Add custom filter function for date columns
-          filterFn: filterType === "date" 
-            ? (row, columnId, filterValue: string[] | undefined) => {
-                if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) {
-                  return true
-                }
-                
-                const cellValue = (row.getValue(columnId) as string | Date | undefined)
-                if (!cellValue) return false
-                
-                // Parse cell date - handle both Date objects and date strings
-                let cellDate: Date
-                if (cellValue instanceof Date) {
-                  cellDate = cellValue
-                } else if (typeof cellValue === "string") {
-                  // Handle ISO strings, YYYY-MM-DD, or other date formats
-                  cellDate = new Date(cellValue)
-                } else {
-                  return false
-                }
-                
-                if (isNaN(cellDate.getTime())) return false
-                
-                // Parse filter dates
-                const fromDateStr = filterValue[0]
-                const toDateStr = filterValue[1]
-                
-                // Normalize dates to start of day for comparison
-                const normalizeDate = (date: Date) => {
-                  const d = new Date(date)
-                  d.setHours(0, 0, 0, 0)
-                  return d
-                }
-                
-                const normalizedCellDate = normalizeDate(cellDate)
-                
-                if (fromDateStr && toDateStr) {
-                  // Range filter: cell date must be between from and to (inclusive)
-                  const fromDate = new Date(fromDateStr)
-                  const toDate = new Date(toDateStr)
-                  if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return false
-                  
-                  const normalizedFrom = normalizeDate(fromDate)
-                  const normalizedTo = normalizeDate(toDate)
-                  return normalizedCellDate >= normalizedFrom && normalizedCellDate <= normalizedTo
-                } else if (fromDateStr) {
-                  // Only from date: cell date must be >= from
-                  const fromDate = new Date(fromDateStr)
-                  if (isNaN(fromDate.getTime())) return false
-                  
-                  const normalizedFrom = normalizeDate(fromDate)
-                  return normalizedCellDate >= normalizedFrom
-                } else if (toDateStr) {
-                  // Only to date: cell date must be <= to
-                  const toDate = new Date(toDateStr)
-                  if (isNaN(toDate.getTime())) return false
-                  
-                  const normalizedTo = normalizeDate(toDate)
-                  return normalizedCellDate <= normalizedTo
-                }
-                
+        // Determine the appropriate filter function
+        const getColumnFilterFn = () => {
+          // Date filter - custom range-based filter
+          if (filterType === "date") {
+            return (row: import("@tanstack/react-table").Row<TData>, columnId: string, filterValue: string[] | undefined) => {
+              if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) {
                 return true
               }
-            : undefined,
+              
+              const cellValue = (row.getValue(columnId) as string | Date | undefined)
+              if (!cellValue) return false
+              
+              // Parse cell date - handle both Date objects and date strings
+              let cellDate: Date
+              if (cellValue instanceof Date) {
+                cellDate = cellValue
+              } else if (typeof cellValue === "string") {
+                // Handle ISO strings, YYYY-MM-DD, or other date formats
+                cellDate = new Date(cellValue)
+              } else {
+                return false
+              }
+              
+              if (isNaN(cellDate.getTime())) return false
+              
+              // Parse filter dates
+              const fromDateStr = filterValue[0]
+              const toDateStr = filterValue[1]
+              
+              // Normalize dates to start of day for comparison
+              const normalizeDate = (date: Date) => {
+                const d = new Date(date)
+                d.setHours(0, 0, 0, 0)
+                return d
+              }
+              
+              const normalizedCellDate = normalizeDate(cellDate)
+              
+              if (fromDateStr && toDateStr) {
+                // Range filter: cell date must be between from and to (inclusive)
+                const fromDate = new Date(fromDateStr)
+                const toDate = new Date(toDateStr)
+                if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return false
+                
+                const normalizedFrom = normalizeDate(fromDate)
+                const normalizedTo = normalizeDate(toDate)
+                return normalizedCellDate >= normalizedFrom && normalizedCellDate <= normalizedTo
+              } else if (fromDateStr) {
+                // Only from date: cell date must be >= from
+                const fromDate = new Date(fromDateStr)
+                if (isNaN(fromDate.getTime())) return false
+                
+                const normalizedFrom = normalizeDate(fromDate)
+                return normalizedCellDate >= normalizedFrom
+              } else if (toDateStr) {
+                // Only to date: cell date must be <= to
+                const toDate = new Date(toDateStr)
+                if (isNaN(toDate.getTime())) return false
+                
+                const normalizedTo = normalizeDate(toDate)
+                return normalizedCellDate <= normalizedTo
+              }
+              
+              return true
+            }
+          }
+          
+          // Enum filter - array-based multi-select filter
+          // Use original filterFn if provided, otherwise provide default enum filter
+          if (filterType === "enum") {
+            if ((col as { filterFn?: unknown }).filterFn) {
+              return (col as { filterFn: unknown }).filterFn
+            }
+            // Default enum filter for multi-select
+            return (row: import("@tanstack/react-table").Row<TData>, columnId: string, filterValue: string[] | undefined) => {
+              if (!filterValue || !Array.isArray(filterValue) || filterValue.length === 0) {
+                return true
+              }
+              const cellValue = row.getValue(columnId)
+              return filterValue.includes(String(cellValue))
+            }
+          }
+          
+          // Text filter - use original filterFn if provided, or use built-in "includesString"
+          if ((col as { filterFn?: unknown }).filterFn) {
+            return (col as { filterFn: unknown }).filterFn
+          }
+          
+          // For text columns, use the built-in includesString filter
+          return "includesString" as const
+        }
+        
+        return {
+          ...col,
+          filterFn: getColumnFilterFn(),
           header: ({ column }) => {
             const title = typeof col.header === "string" ? col.header : String(columnId || "")
             return (

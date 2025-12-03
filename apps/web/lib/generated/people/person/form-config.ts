@@ -71,6 +71,11 @@ export const formConfig: FormConfig = {
     placeholder: "Select start date",
     required: true,
   },
+  hireDate: {
+    component: "date-picker",
+    label: "Hire Date",
+    placeholder: "Select hire date",
+  },
   endDate: {
     component: "date-picker",
     label: "End Date",
@@ -118,6 +123,7 @@ export const editFormSchema = z.object({
   team: z.string().optional(),
   status: z.enum(["active", "onboarding", "offboarding", "inactive"]),
   startDate: z.string().min(1, "Start date is required"),
+  hireDate: z.string().optional(),
   endDate: z.string().optional(),
   phone: z.string().optional(),
   location: z.string().optional(),
@@ -129,7 +135,7 @@ export const editFormSchema = z.object({
  */
 export function getFormFields(mode: "create" | "edit"): string[] {
   if (mode === "create") {
-    return ["name", "email", "role", "team", "startDate", "phone", "location"]
+    return ["name", "email", "role", "team", "startDate", "hireDate", "phone", "location"]
   }
-  return ["name", "email", "role", "team", "status", "startDate", "endDate", "phone", "location", "bio"]
+  return ["name", "email", "role", "team", "status", "startDate", "hireDate", "endDate", "phone", "location", "bio"]
 }

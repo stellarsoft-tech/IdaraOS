@@ -36,6 +36,18 @@ function safeFormatDate(dateStr: string | undefined | null): string | null {
   }
 }
 
+interface GraphManager {
+  id: string
+  displayName?: string
+  mail?: string
+  userPrincipalName?: string
+}
+
+interface GraphSignInActivity {
+  lastSignInDateTime?: string
+  lastNonInteractiveSignInDateTime?: string
+}
+
 interface GraphUser {
   id: string
   displayName: string
@@ -50,6 +62,12 @@ interface GraphUser {
   mobilePhone?: string
   employeeHireDate?: string
   employeeLeaveDateTime?: string
+  // New Entra properties
+  createdDateTime?: string
+  manager?: GraphManager
+  // Security/audit properties
+  signInActivity?: GraphSignInActivity
+  lastPasswordChangeDateTime?: string
 }
 
 interface GraphGroup {
@@ -85,8 +103,10 @@ const DEFAULT_MAPPING: PeoplePropertyMapping = {
   department: "team",
   officeLocation: "location",
   mobilePhone: "phone",
-  employeeHireDate: "startDate",
+  employeeHireDate: "hireDate",
   employeeLeaveDateTime: "endDate",
+  createdDateTime: "entraCreatedAt",
+  manager: "managerId",
 }
 
 /**
@@ -201,7 +221,8 @@ async function fetchGroupMembers(accessToken: string, groupId: string): Promise<
   try {
     const selectFields = [
       "id", "displayName", "mail", "userPrincipalName", "givenName", "surname", "accountEnabled",
-      "jobTitle", "department", "officeLocation", "mobilePhone", "employeeHireDate", "employeeLeaveDateTime"
+      "jobTitle", "department", "officeLocation", "mobilePhone", "employeeHireDate", "employeeLeaveDateTime",
+      "createdDateTime"
     ].join(",")
     
     const response = await fetch(
@@ -219,9 +240,53 @@ async function fetchGroupMembers(accessToken: string, groupId: string): Promise<
 
     const data = await response.json()
     // Filter to only return users (not other member types like groups)
-    return (data.value || []).filter((m: { "@odata.type"?: string }) => 
+    const users = (data.value || []).filter((m: { "@odata.type"?: string }) => 
       m["@odata.type"] === "#microsoft.graph.user"
+    ) as GraphUser[]
+    
+    // Fetch manager and security info for each user (requires separate API calls)
+    const usersWithExtendedInfo = await Promise.all(
+      users.map(async (user) => {
+        const updatedUser = { ...user }
+        
+        // Fetch manager
+        try {
+          const managerResponse = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${user.id}/manager?$select=id,displayName,mail,userPrincipalName`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          if (managerResponse.ok) {
+            const manager = await managerResponse.json()
+            updatedUser.manager = manager as GraphManager
+          }
+        } catch {
+          // User may not have a manager, that's OK
+        }
+        
+        // Fetch security info from beta API (signInActivity, lastPasswordChangeDateTime)
+        try {
+          const securityResponse = await fetch(
+            `https://graph.microsoft.com/beta/users/${user.id}?$select=signInActivity,lastPasswordChangeDateTime`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          )
+          if (securityResponse.ok) {
+            const securityData = await securityResponse.json()
+            if (securityData.signInActivity) {
+              updatedUser.signInActivity = securityData.signInActivity
+            }
+            if (securityData.lastPasswordChangeDateTime) {
+              updatedUser.lastPasswordChangeDateTime = securityData.lastPasswordChangeDateTime
+            }
+          }
+        } catch {
+          // Security info may not be available (requires AuditLog.Read.All permission)
+        }
+        
+        return updatedUser
+      })
     )
+    
+    return usersWithExtendedInfo
   } catch (error) {
     console.error(`[People Sync] Error fetching members for group ${groupId}:`, error)
     return []
@@ -229,17 +294,71 @@ async function fetchGroupMembers(accessToken: string, groupId: string): Promise<
 }
 
 /**
+ * Resolve an Entra manager to a Person ID in our database
+ */
+async function resolveManagerId(
+  orgId: string,
+  manager: GraphManager | undefined
+): Promise<string | null> {
+  if (!manager) return null
+  
+  // First try to find by Entra ID
+  if (manager.id) {
+    const [personByEntraId] = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(and(eq(persons.orgId, orgId), eq(persons.entraId, manager.id)))
+      .limit(1)
+    
+    if (personByEntraId) {
+      return personByEntraId.id
+    }
+  }
+  
+  // Then try to find by email
+  const managerEmail = manager.mail || manager.userPrincipalName
+  if (managerEmail) {
+    const [personByEmail] = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(and(eq(persons.orgId, orgId), ilike(persons.email, managerEmail)))
+      .limit(1)
+    
+    if (personByEmail) {
+      return personByEmail.id
+    }
+  }
+  
+  return null
+}
+
+/**
+ * Safely parse a date string to Date object
+ */
+function safeParseDate(dateStr: string | undefined | null): Date | null {
+  if (!dateStr) return null
+  try {
+    const date = new Date(dateStr)
+    if (isNaN(date.getTime())) return null
+    return date
+  } catch {
+    return null
+  }
+}
+
+/**
  * Generate a URL-friendly slug from a name
  */
-function generateSlug(name: string, email: string): string {
+function generateSlug(name: string, _email: string): string {
+  // Generate a URL-friendly slug from the full name only
   const baseSlug = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
   
-  // Add part of email to make unique
-  const emailPart = email.split("@")[0].replace(/[^a-z0-9]/g, "").slice(0, 8)
-  return `${baseSlug}-${emailPart}`
+  // Add a short random suffix for uniqueness
+  const uniqueSuffix = Math.random().toString(36).slice(2, 6)
+  return `${baseSlug}-${uniqueSuffix}`
 }
 
 /**
@@ -280,16 +399,43 @@ function mapEntraUserToPerson(
   }
   
   // Safely parse dates
-  if (user.employeeHireDate && mapping.employeeHireDate === "startDate") {
+  if (user.employeeHireDate) {
     const formattedDate = safeFormatDate(user.employeeHireDate)
     if (formattedDate) {
-      person.startDate = formattedDate
+      // Map to hireDate field if mapping says so, otherwise to startDate
+      if (mapping.employeeHireDate === "hireDate") {
+        person.hireDate = formattedDate
+      } else if (mapping.employeeHireDate === "startDate") {
+        person.startDate = formattedDate
+      }
     }
   }
   if (user.employeeLeaveDateTime && mapping.employeeLeaveDateTime === "endDate") {
     const formattedDate = safeFormatDate(user.employeeLeaveDateTime)
     if (formattedDate) {
       person.endDate = formattedDate
+    }
+  }
+  
+  // Map new Entra fields
+  if (user.createdDateTime && mapping.createdDateTime === "entraCreatedAt") {
+    const parsedDate = safeParseDate(user.createdDateTime)
+    if (parsedDate) {
+      person.entraCreatedAt = parsedDate
+    }
+  }
+  
+  // Map security fields
+  if (user.signInActivity?.lastSignInDateTime) {
+    const parsedDate = safeParseDate(user.signInActivity.lastSignInDateTime)
+    if (parsedDate) {
+      person.lastSignInAt = parsedDate
+    }
+  }
+  if (user.lastPasswordChangeDateTime) {
+    const parsedDate = safeParseDate(user.lastPasswordChangeDateTime)
+    if (parsedDate) {
+      person.lastPasswordChangeAt = parsedDate
     }
   }
 
@@ -357,6 +503,8 @@ export async function performPeopleSync(
 
   // Collect all synced emails to track for deletion
   const syncedEmails: string[] = []
+  // Track synced persons with their managers for second-pass resolution
+  const syncedPersonsForManagerUpdate: Array<{ personId: string; manager: GraphManager | undefined }> = []
 
   // Process each group
   for (const group of groups) {
@@ -408,6 +556,19 @@ export async function performPeopleSync(
             if (personData.phone && personData.phone !== existing.phone) {
               updates.phone = personData.phone
             }
+            // Add new Entra fields
+            if (personData.entraCreatedAt) {
+              updates.entraCreatedAt = personData.entraCreatedAt
+            }
+            if (personData.hireDate) {
+              updates.hireDate = personData.hireDate
+            }
+            if (personData.lastSignInAt) {
+              updates.lastSignInAt = personData.lastSignInAt
+            }
+            if (personData.lastPasswordChangeAt) {
+              updates.lastPasswordChangeAt = personData.lastPasswordChangeAt
+            }
 
             await db
               .update(persons)
@@ -415,12 +576,17 @@ export async function performPeopleSync(
               .where(eq(persons.id, existing.id))
             stats.peopleUpdated++
             console.log(`[People Sync] Updated person: ${email}`)
+            
+            // Track for manager resolution
+            if (member.manager) {
+              syncedPersonsForManagerUpdate.push({ personId: existing.id, manager: member.manager })
+            }
           } else {
             // Create new person with upsert to handle race conditions
             const slug = generateSlug(personData.name as string, email)
             
             try {
-              await db.insert(persons).values({
+              const [newPerson] = await db.insert(persons).values({
                 orgId,
                 slug,
                 email, // Already lowercase
@@ -441,6 +607,10 @@ export async function performPeopleSync(
                   team: personData.team || sql`${persons.team}`,
                   location: personData.location || sql`${persons.location}`,
                   phone: personData.phone || sql`${persons.phone}`,
+                  entraCreatedAt: personData.entraCreatedAt || sql`${persons.entraCreatedAt}`,
+                  hireDate: personData.hireDate || sql`${persons.hireDate}`,
+                  lastSignInAt: personData.lastSignInAt || sql`${persons.lastSignInAt}`,
+                  lastPasswordChangeAt: personData.lastPasswordChangeAt || sql`${persons.lastPasswordChangeAt}`,
                   source: "sync",
                   entraId: member.id,
                   entraGroupId: group.id,
@@ -450,15 +620,21 @@ export async function performPeopleSync(
                   updatedAt: now,
                 },
               })
+              .returning()
               
               stats.peopleCreated++
               console.log(`[People Sync] Created person: ${email}`)
+              
+              // Track for manager resolution
+              if (newPerson && member.manager) {
+                syncedPersonsForManagerUpdate.push({ personId: newPerson.id, manager: member.manager })
+              }
             } catch (insertError) {
               // If slug conflict, try with a different slug
               console.warn(`[People Sync] Insert failed for ${email}, retrying with unique slug:`, insertError)
               const uniqueSlug = `${slug}-${Date.now().toString(36)}`
               
-              await db.insert(persons).values({
+              const [newPerson] = await db.insert(persons).values({
                 orgId,
                 slug: uniqueSlug,
                 email,
@@ -472,9 +648,15 @@ export async function performPeopleSync(
                 syncEnabled: true,
               } as typeof persons.$inferInsert)
               .onConflictDoNothing() // If still fails, person likely already exists
+              .returning()
               
               stats.peopleCreated++
               console.log(`[People Sync] Created person with unique slug: ${email}`)
+              
+              // Track for manager resolution
+              if (newPerson && member.manager) {
+                syncedPersonsForManagerUpdate.push({ personId: newPerson.id, manager: member.manager })
+              }
             }
           }
 
@@ -490,6 +672,24 @@ export async function performPeopleSync(
       console.error(`[People Sync] ${errorMsg}`)
       stats.errors.push(errorMsg)
     }
+  }
+  
+  // Second pass: Update manager relationships (after all persons are synced)
+  if (syncedPersonsForManagerUpdate.length > 0) {
+    let managersUpdated = 0
+    for (const { personId, manager } of syncedPersonsForManagerUpdate) {
+      if (!manager) continue
+      
+      const managerId = await resolveManagerId(orgId, manager)
+      if (managerId && managerId !== personId) { // Don't allow self-reference
+        await db
+          .update(persons)
+          .set({ managerId, updatedAt: new Date() })
+          .where(eq(persons.id, personId))
+        managersUpdated++
+      }
+    }
+    console.log(`[People Sync] Updated ${managersUpdated} manager relationships`)
   }
 
   // Handle deletions if auto-delete is enabled

@@ -53,6 +53,16 @@ export const persons = pgTable(
     // Whether Entra is the source of truth for this person's data
     syncEnabled: boolean("sync_enabled").notNull().default(false),
     
+    // Additional Entra sync fields
+    // When the user was created in Entra (createdDateTime)
+    entraCreatedAt: timestamp("entra_created_at", { withTimezone: true }),
+    // Employee hire date from Entra (employeeHireDate)
+    hireDate: date("hire_date"),
+    // Last sign-in date (cached from Entra, but fetched real-time when Entra enabled)
+    lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+    // Last password change date (cached from Entra, but fetched real-time when Entra enabled)
+    lastPasswordChangeAt: timestamp("last_password_change_at", { withTimezone: true }),
+    
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

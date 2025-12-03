@@ -6,10 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, and, inArray } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { persons, users } from "@/lib/db/schema"
 import { UpdatePersonSchema } from "@/lib/generated/people/person/types"
+import { getEntraConfig } from "@/lib/auth/entra-config"
+import { syncPersonToEntra } from "@/lib/auth/entra-sync"
 
 // UUID regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -36,6 +38,20 @@ interface LinkedUserInfo {
   hasEntraLink: boolean
 }
 
+// Manager info type
+interface ManagerInfo {
+  id: string
+  name: string
+  email: string
+  slug: string
+}
+
+// Real-time Entra info (fetched live, not stored)
+interface EntraRealTimeInfo {
+  lastSignInAt: string | null
+  lastPasswordChangeAt: string | null
+}
+
 // Sync info type
 interface SyncInfo {
   source: "manual" | "sync"
@@ -49,7 +65,9 @@ interface SyncInfo {
 // Transform DB record to API response
 function toApiResponse(
   record: typeof persons.$inferSelect,
-  linkedUser?: LinkedUserInfo | null
+  linkedUser?: LinkedUserInfo | null,
+  manager?: ManagerInfo | null,
+  entraRealTimeInfo?: EntraRealTimeInfo | null
 ) {
   // Determine if person has Entra link (either through linked user or direct sync)
   const hasEntraLink = !!record.entraId || linkedUser?.hasEntraLink || false
@@ -71,7 +89,8 @@ function toApiResponse(
     email: record.email,
     role: record.role,
     team: record.team ?? undefined,
-    manager_id: record.managerId,
+    managerId: record.managerId,
+    manager: manager || null,
     status: record.status,
     startDate: record.startDate,
     endDate: record.endDate,
@@ -82,12 +101,78 @@ function toApiResponse(
     assignedAssets: 0,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
+    // Entra fields (stored in DB)
+    entraCreatedAt: record.entraCreatedAt?.toISOString() ?? null,
+    hireDate: record.hireDate ?? null,
+    // Last sign-in and password change - use real-time if available, else use cached DB value
+    lastSignInAt: entraRealTimeInfo?.lastSignInAt ?? record.lastSignInAt?.toISOString() ?? null,
+    lastPasswordChangeAt: entraRealTimeInfo?.lastPasswordChangeAt ?? record.lastPasswordChangeAt?.toISOString() ?? null,
     // Linked user info
     linkedUser: linkedUser || null,
     hasLinkedUser: !!linkedUser,
     hasEntraLink,
     // Sync tracking
     ...syncInfo,
+  }
+}
+
+/**
+ * Fetch real-time sign-in activity from Entra ID
+ */
+async function fetchEntraRealTimeInfo(entraId: string): Promise<EntraRealTimeInfo | null> {
+  try {
+    const config = await getEntraConfig()
+    if (!config || config.status !== "connected") {
+      return null
+    }
+
+    // Get access token
+    const tokenResponse = await fetch(
+      `https://login.microsoftonline.com/${config.tenantId}/oauth2/v2.0/token`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: config.clientId,
+          scope: "https://graph.microsoft.com/.default",
+          client_secret: config.clientSecret,
+          grant_type: "client_credentials",
+        }),
+      }
+    )
+
+    if (!tokenResponse.ok) {
+      console.error("[People API] Failed to get Graph access token")
+      return null
+    }
+
+    const tokenData = await tokenResponse.json()
+    const accessToken = tokenData.access_token
+
+    // Fetch user with sign-in activity (requires AuditLog.Read.All or Directory.Read.All)
+    // Note: signInActivity requires Azure AD Premium license
+    const userResponse = await fetch(
+      `https://graph.microsoft.com/beta/users/${entraId}?$select=signInActivity,lastPasswordChangeDateTime`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    )
+
+    if (!userResponse.ok) {
+      // May not have permission or user not found
+      console.warn("[People API] Could not fetch Entra sign-in activity")
+      return null
+    }
+
+    const userData = await userResponse.json()
+    
+    return {
+      lastSignInAt: userData.signInActivity?.lastSignInDateTime ?? null,
+      lastPasswordChangeAt: userData.lastPasswordChangeDateTime ?? null,
+    }
+  } catch (error) {
+    console.error("[People API] Error fetching Entra real-time info:", error)
+    return null
   }
 }
 
@@ -136,7 +221,32 @@ export async function GET(request: NextRequest, context: RouteContext) {
       }
     }
     
-    return NextResponse.json(toApiResponse(record, linkedUser))
+    // Fetch manager info if exists
+    let manager: ManagerInfo | null = null
+    if (record.managerId) {
+      const [managerRecord] = await db
+        .select({
+          id: persons.id,
+          name: persons.name,
+          email: persons.email,
+          slug: persons.slug,
+        })
+        .from(persons)
+        .where(eq(persons.id, record.managerId))
+        .limit(1)
+      
+      if (managerRecord) {
+        manager = managerRecord
+      }
+    }
+    
+    // Fetch real-time Entra info if person has an Entra link
+    let entraRealTimeInfo: EntraRealTimeInfo | null = null
+    if (record.entraId) {
+      entraRealTimeInfo = await fetchEntraRealTimeInfo(record.entraId)
+    }
+    
+    return NextResponse.json(toApiResponse(record, linkedUser, manager, entraRealTimeInfo))
   } catch (error) {
     console.error("Error fetching person:", error)
     return NextResponse.json({ error: "Failed to fetch person" }, { status: 500 })
@@ -171,45 +281,57 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Person not found" }, { status: 404 })
     }
     
+    // Get Entra config to check bidirectional sync setting
+    const config = await getEntraConfig()
+    const isBidirectionalSyncEnabled = config?.scimBidirectionalSync ?? false
+    const hasEntraLink = !!existing.entraId
+    
     const data = parseResult.data
     
     // Fields that are managed by sync and should not be updated when syncEnabled
+    // UNLESS bidirectional sync is enabled
     const syncManagedFields = ["name", "email", "role", "team", "location", "phone", "startDate"]
     
     // Build update object
     const updateData: Partial<typeof persons.$inferInsert> = {}
     
-    // If sync is enabled, only allow updating non-sync-managed fields
-    if (existing.syncEnabled) {
-      // Only allow updating: status, endDate, bio, avatar
+    // Determine if we can edit synced fields
+    const canEditSyncedFields = !existing.syncEnabled || (isBidirectionalSyncEnabled && hasEntraLink)
+    
+    if (canEditSyncedFields) {
+      // Allow all updates (except email for synced users with bidirectional sync)
+      if (data.name !== undefined) {
+        updateData.name = data.name
+        updateData.slug = slugify(data.name)
+      }
+      // Email changes are not synced to Entra, so only allow for non-synced users
+      if (data.email !== undefined && !existing.syncEnabled) {
+        updateData.email = data.email
+      }
+      if (data.role !== undefined) updateData.role = data.role
+      if (data.team !== undefined) updateData.team = data.team || null
+      if (data.status !== undefined) updateData.status = data.status
+      if (data.startDate !== undefined) updateData.startDate = data.startDate
+      if (data.hireDate !== undefined) updateData.hireDate = data.hireDate || null
+      if (data.endDate !== undefined) updateData.endDate = data.endDate || null
+      if (data.phone !== undefined) updateData.phone = data.phone || null
+      if (data.location !== undefined) updateData.location = data.location || null
+      if (data.bio !== undefined) updateData.bio = data.bio || null
+    } else {
+      // Sync is enabled without bidirectional sync - only allow updating non-sync-managed fields
       if (data.status !== undefined) updateData.status = data.status
       if (data.endDate !== undefined) updateData.endDate = data.endDate || null
       if (data.bio !== undefined) updateData.bio = data.bio || null
       
       // Warn if trying to update sync-managed fields
       const attemptedSyncFields = syncManagedFields.filter(
-        field => (data as any)[field] !== undefined
+        field => (data as Record<string, unknown>)[field] !== undefined
       )
       if (attemptedSyncFields.length > 0) {
         console.warn(
           `[People API] Ignoring sync-managed fields for ${existing.email}: ${attemptedSyncFields.join(", ")}`
         )
       }
-    } else {
-      // Not synced - allow all updates
-      if (data.name !== undefined) {
-        updateData.name = data.name
-        updateData.slug = slugify(data.name)
-      }
-      if (data.email !== undefined) updateData.email = data.email
-      if (data.role !== undefined) updateData.role = data.role
-      if (data.team !== undefined) updateData.team = data.team || null
-      if (data.status !== undefined) updateData.status = data.status
-      if (data.startDate !== undefined) updateData.startDate = data.startDate
-      if (data.endDate !== undefined) updateData.endDate = data.endDate || null
-      if (data.phone !== undefined) updateData.phone = data.phone || null
-      if (data.location !== undefined) updateData.location = data.location || null
-      if (data.bio !== undefined) updateData.bio = data.bio || null
     }
     
     // Fetch linked user before update
@@ -236,8 +358,27 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
     
+    // Fetch manager info if exists
+    let manager: ManagerInfo | null = null
+    if (existing.managerId) {
+      const [managerRecord] = await db
+        .select({
+          id: persons.id,
+          name: persons.name,
+          email: persons.email,
+          slug: persons.slug,
+        })
+        .from(persons)
+        .where(eq(persons.id, existing.managerId))
+        .limit(1)
+      
+      if (managerRecord) {
+        manager = managerRecord
+      }
+    }
+    
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(toApiResponse(existing, linkedUser))
+      return NextResponse.json(toApiResponse(existing, linkedUser, manager))
     }
     
     updateData.updatedAt = new Date()
@@ -248,7 +389,38 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .where(eq(persons.id, existing.id))
       .returning()
     
-    return NextResponse.json(toApiResponse(record, linkedUser))
+    // If bidirectional sync is enabled and person has Entra link, sync to Entra
+    if (isBidirectionalSyncEnabled && hasEntraLink && existing.entraId) {
+      try {
+        const entraUpdates: Record<string, string | undefined> = {}
+        
+        if (data.name !== undefined) entraUpdates.displayName = data.name
+        if (data.role !== undefined) entraUpdates.jobTitle = data.role
+        if (data.team !== undefined) entraUpdates.department = data.team
+        if (data.location !== undefined) entraUpdates.officeLocation = data.location
+        if (data.phone !== undefined) entraUpdates.mobilePhone = data.phone
+        if (data.hireDate !== undefined) entraUpdates.employeeHireDate = data.hireDate
+        
+        console.log(`[People API] Bidirectional sync triggered for ${existing.email}`)
+        console.log(`[People API] Updates to sync:`, JSON.stringify(entraUpdates))
+        
+        if (Object.keys(entraUpdates).length > 0) {
+          const syncResult = await syncPersonToEntra(existing.entraId, entraUpdates)
+          if (!syncResult.success) {
+            console.warn(`[People API] Failed to sync to Entra: ${syncResult.message}`)
+          } else {
+            console.log(`[People API] Successfully synced changes to Entra for ${existing.email}`)
+          }
+        } else {
+          console.log(`[People API] No Entra-syncable fields changed for ${existing.email}`)
+        }
+      } catch (syncError) {
+        console.error("[People API] Error syncing to Entra:", syncError)
+        // Don't fail the request, just log the error
+      }
+    }
+    
+    return NextResponse.json(toApiResponse(record, linkedUser, manager))
   } catch (error) {
     console.error("Error updating person:", error)
     return NextResponse.json({ error: "Failed to update person" }, { status: 500 })

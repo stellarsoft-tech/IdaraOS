@@ -25,8 +25,12 @@ export interface PeoplePropertyMapping {
   department: string // default: "team"
   officeLocation: string // default: "location"
   mobilePhone: string // default: "phone"
-  employeeHireDate: string // default: "startDate"
+  employeeHireDate: string // default: "startDate" (can also be "hireDate")
   employeeLeaveDateTime: string // default: "endDate"
+  // Additional Entra properties (stored in DB)
+  createdDateTime?: string // default: "entraCreatedAt"
+  manager?: string // default: "managerId" (resolved via email/UPN lookup)
+  // Note: signInActivity and passwordProfile are fetched real-time from Entra, not stored
 }
 
 export const DEFAULT_PROPERTY_MAPPING: PeoplePropertyMapping = {
@@ -36,8 +40,11 @@ export const DEFAULT_PROPERTY_MAPPING: PeoplePropertyMapping = {
   department: "team",
   officeLocation: "location",
   mobilePhone: "phone",
-  employeeHireDate: "startDate",
+  employeeHireDate: "hireDate",
   employeeLeaveDateTime: "endDate",
+  // Additional Entra properties (stored in DB)
+  createdDateTime: "entraCreatedAt",
+  manager: "managerId",
 }
 
 /**

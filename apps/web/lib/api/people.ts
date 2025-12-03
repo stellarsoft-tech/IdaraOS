@@ -15,6 +15,14 @@ export interface LinkedUser {
   hasEntraLink: boolean
 }
 
+// Manager info
+export interface ManagerInfo {
+  id: string
+  name: string
+  email: string
+  slug: string
+}
+
 // Sync tracking info
 export interface SyncInfo {
   source: "manual" | "sync"
@@ -32,6 +40,14 @@ export interface Person extends BasePerson, SyncInfo {
   hasEntraLink: boolean
   createdAt: string
   updatedAt: string
+  // Manager info
+  managerId: string | null
+  manager: ManagerInfo | null
+  // Entra fields (stored in DB, but fetched real-time when Entra enabled)
+  entraCreatedAt: string | null
+  hireDate: string | null
+  lastSignInAt: string | null
+  lastPasswordChangeAt: string | null
 }
 
 // Query keys

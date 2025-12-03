@@ -68,6 +68,7 @@ export const UpdatePersonSchema = z.object({
   team: z.string().optional(),
   status: z.enum(personStatusValues).optional(),
   startDate: z.string().optional(),
+  hireDate: z.string().optional(),
   endDate: z.string().optional(),
   phone: z.string().optional(),
   location: z.string().optional(),

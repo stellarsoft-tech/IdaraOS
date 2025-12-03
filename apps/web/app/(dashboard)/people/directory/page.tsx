@@ -51,7 +51,14 @@ import { Protected, AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { useUsersList, useUpdateUser, usersKeys } from "@/lib/api/users"
 import { peopleKeys } from "@/lib/api/people"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+
+// Fetch Entra integration settings to check bidirectional sync
+async function fetchEntraIntegrationSettings() {
+  const res = await fetch("/api/settings/integrations?provider=entra")
+  if (!res.ok) return null
+  return res.json()
+}
 
 // Generated from spec
 import { columns as baseColumns } from "@/lib/generated/people/person/columns"
@@ -125,6 +132,14 @@ export default function DirectoryPage() {
   const deleteMutation = useDeletePerson()
   const updateUserMutation = useUpdateUser()
   
+  // Fetch Entra integration settings for bidirectional sync check
+  const { data: entraSettings } = useQuery({
+    queryKey: ["entra-integration-settings"],
+    queryFn: fetchEntraIntegrationSettings,
+    staleTime: 60000, // Cache for 1 minute
+  })
+  const isBidirectionalSyncEnabled = entraSettings?.scimBidirectionalSync ?? false
+  
   // Get users that are not already linked to a person
   const availableUsers = useMemo(() => {
     return users.filter(u => !u.personId)
@@ -154,6 +169,32 @@ export default function DirectoryPage() {
   // Add links and actions columns
   const columns: ColumnDef<Person>[] = [
     ...(baseColumns as ColumnDef<Person>[]),
+    {
+      id: "manager",
+      header: "Manager",
+      accessorFn: (row) => row.manager?.name,
+      cell: ({ row }) => {
+        const person = row.original
+        if (!person.manager) {
+          return <span className="text-muted-foreground text-xs">—</span>
+        }
+        return (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              router.push(`/people/directory/${person.manager!.slug}`)
+            }}
+            className="text-sm text-primary hover:underline truncate max-w-[150px]"
+            title={person.manager.name}
+          >
+            {person.manager.name}
+          </button>
+        )
+      },
+      enableSorting: true,
+      enableColumnFilter: true,
+      size: 150,
+    },
     {
       id: "entraGroup",
       header: "Entra Group",
@@ -530,27 +571,40 @@ export default function DirectoryPage() {
             team: selectedPerson.team || "",
             status: selectedPerson.status,
             startDate: selectedPerson.startDate,
+            hireDate: selectedPerson.hireDate || "",
             endDate: selectedPerson.endDate || "",
             phone: selectedPerson.phone || "",
             location: selectedPerson.location || "",
             bio: selectedPerson.bio || "",
           }}
           onSubmit={handleEdit}
-          // Disable synced fields for people from Entra
+          // Disable synced fields ONLY if sync is enabled AND bidirectional sync is disabled
+          // Email is always disabled for synced users (email changes don't sync to Entra)
           disabledFields={
             selectedPerson.source === "sync" && selectedPerson.syncEnabled
-              ? ["name", "email", "role", "team", "startDate", "location", "phone"]
+              ? isBidirectionalSyncEnabled
+                ? ["email"] // Only email is disabled when bidirectional sync is enabled
+                : ["name", "email", "role", "team", "startDate", "hireDate", "location", "phone"] // All synced fields disabled
               : []
           }
           infoBanner={
             selectedPerson.source === "sync" && selectedPerson.syncEnabled ? (
-              <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
-                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
-                  This person is synced from Entra ID ({selectedPerson.entraGroupName || "group"}). 
-                  Synced fields cannot be edited here.
-                </AlertDescription>
-              </Alert>
+              isBidirectionalSyncEnabled ? (
+                <Alert className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
+                  <RefreshCw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <AlertDescription className="text-emerald-700 dark:text-emerald-300 text-sm">
+                    Bidirectional sync is enabled. Changes made here will be synced back to Entra ID (except email).
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                  <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                    This person is synced from Entra ID ({selectedPerson.entraGroupName || "group"}). 
+                    Synced fields cannot be edited here.
+                  </AlertDescription>
+                </Alert>
+              )
             ) : undefined
           }
         />
