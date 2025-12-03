@@ -165,13 +165,81 @@ See [People Module Architecture](../people/architecture.md) for People sync conf
 
 ### Audit Log (`/settings/audit-log`)
 
-View system activity for compliance and security.
+View system activity for compliance and security. This page shows audit logs specifically for the Settings module (organization settings, users, roles, integrations).
 
 **Features:**
-- Activity timeline with filters
-- Search by action, actor, or target
-- Export capability
-- Color-coded event types
+- Searchable, filterable audit log table
+- Filter by action type (create, update, delete, login, sync)
+- Filter by date range
+- Full-text search by entity name, actor email
+- View detailed change history with before/after comparison
+- Export to CSV/JSON for compliance reporting
+- Actor identification (who made the change)
+- IP address and user agent tracking
+
+**Audit Architecture:**
+
+```mermaid
+graph TB
+    subgraph "API Layer"
+        PEOPLE_API[People API Routes]
+        SETTINGS_API[Settings API Routes]
+        AUTH_API[Auth API Routes]
+    end
+    
+    subgraph "Audit Service"
+        LOGGER[AuditLogger]
+        DIFF[FieldDiffCalculator]
+        SANITIZE[SensitiveDataSanitizer]
+    end
+    
+    subgraph "Storage"
+        AUDIT_DB[(audit_logs table)]
+    end
+    
+    subgraph "UI - Filtered Views"
+        PEOPLE_AUDIT[People > Audit Log<br/>modulePrefix: people.*]
+        SETTINGS_AUDIT[Settings > Audit Log<br/>modulePrefix: settings.*]
+    end
+    
+    PEOPLE_API --> LOGGER
+    SETTINGS_API --> LOGGER
+    AUTH_API --> LOGGER
+    
+    LOGGER --> DIFF
+    LOGGER --> SANITIZE
+    LOGGER --> AUDIT_DB
+    
+    AUDIT_DB --> |filtered by module| PEOPLE_AUDIT
+    AUDIT_DB --> |filtered by module| SETTINGS_AUDIT
+```
+
+**Logged Actions:**
+
+| Module | Actions Logged |
+|--------|----------------|
+| `settings.users` | User create, update, delete, role changes |
+| `settings.roles` | Role create, update, delete, permission changes |
+| `settings.organization` | Organization settings updates |
+| `settings.integrations` | Connection changes (secrets masked) |
+| `auth` | Login, logout events |
+
+**Sensitive Data Handling:**
+
+The audit logger automatically masks sensitive fields:
+- Passwords and password hashes
+- API keys and tokens
+- Client secrets
+- Encryption keys
+
+Example masked output:
+```json
+{
+  "changedFields": ["clientSecret"],
+  "previousValues": { "clientSecret": "[REDACTED]" },
+  "newValues": { "clientSecret": "[REDACTED]" }
+}
+```
 
 ### API Keys (`/settings/api-keys`) - Placeholder
 
@@ -441,6 +509,30 @@ sequenceDiagram
 | GET | `/api/scim/Groups` | List groups (SCIM) |
 | PATCH | `/api/scim/Groups/[id]` | Update group (SCIM) |
 
+### Audit Log API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/audit/logs` | List audit logs with filtering |
+| GET | `/api/audit/logs/[id]` | Get single audit log entry |
+| GET | `/api/audit/logs/export` | Export logs as CSV/JSON |
+
+**Query Parameters for `/api/audit/logs`:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `module` | string | Exact module match (e.g., `settings.users`) |
+| `modulePrefix` | string | Module prefix match (e.g., `settings.` for all settings) |
+| `action` | string | Filter by action type (create, update, delete, etc.) |
+| `entityType` | string | Filter by entity type (user, role, person, etc.) |
+| `entityId` | uuid | Filter by specific entity ID |
+| `actorId` | uuid | Filter by actor (who made the change) |
+| `from` | ISO date | Start of date range |
+| `to` | ISO date | End of date range |
+| `search` | string | Full-text search in entity names, descriptions |
+| `limit` | number | Max results (default 50, max 100) |
+| `offset` | number | Pagination offset |
+
 ---
 
 ## Database Schema
@@ -458,6 +550,29 @@ sequenceDiagram
 - `integrations` - Integration configurations
 - `audit_logs` - System activity log
 
+### Audit Logs Table Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization reference |
+| `module` | TEXT | Module identifier (e.g., `people.directory`) |
+| `action` | TEXT | Action type (create, update, delete, etc.) |
+| `entity_type` | TEXT | Type of entity affected (person, user, role) |
+| `entity_id` | UUID | ID of the affected entity |
+| `entity_name` | TEXT | Human-readable name for display |
+| `actor_id` | UUID | User who performed the action |
+| `actor_email` | TEXT | Actor's email at time of action |
+| `actor_name` | TEXT | Actor's name at time of action |
+| `actor_ip` | TEXT | IP address of the request |
+| `actor_user_agent` | TEXT | Browser/client user agent |
+| `previous_values` | JSONB | State before the change |
+| `new_values` | JSONB | State after the change |
+| `changed_fields` | TEXT[] | Array of changed field names |
+| `metadata` | JSONB | Additional context |
+| `description` | TEXT | Human-readable description |
+| `timestamp` | TIMESTAMPTZ | When the action occurred |
+
 ### Key Relationships
 
 ```mermaid
@@ -470,7 +585,24 @@ erDiagram
     rbac_modules ||--o{ rbac_permissions : has
     rbac_actions ||--o{ rbac_permissions : has
     organizations ||--o{ integrations : has
+    organizations ||--o{ audit_logs : has
     users ||--o{ audit_logs : creates
+    
+    audit_logs {
+        uuid id PK
+        uuid org_id FK
+        text module
+        text action
+        text entity_type
+        uuid entity_id
+        text entity_name
+        uuid actor_id FK
+        text actor_email
+        jsonb previous_values
+        jsonb new_values
+        text[] changed_fields
+        timestamptz timestamp
+    }
 ```
 
 ---

@@ -29,6 +29,13 @@
       "when": 1764700000000,
       "tag": "0003_add_people_entra_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1764800000000,
+      "tag": "0004_add_audit_logs",
+      "breakpoints": true
     }
   ]
 }

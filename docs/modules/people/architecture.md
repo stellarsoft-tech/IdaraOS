@@ -16,6 +16,7 @@ graph TB
         TIMEOFF[Time Off]
         ROLES[HR Roles]
         SYNC[Sync Settings]
+        AUDIT[Audit Log]
     end
     
     OVERVIEW --> DIR
@@ -24,6 +25,7 @@ graph TB
     ONBOARD --> DIR
     TIMEOFF --> DIR
     SYNC --> |configures| DIR
+    DIR --> |actions logged to| AUDIT
     
     subgraph "Settings Module"
         USERS
@@ -232,6 +234,55 @@ HR-specific role management.
 - Reporting structures
 - Compensation bands
 
+### Audit Log (`/people/audit-log`)
+
+View audit trail for all People & HR module activities.
+
+**Features:**
+- Searchable, filterable audit log table
+- Filter by action type (create, update, delete)
+- Filter by date range
+- View detailed change history with before/after comparison
+- Export to CSV/JSON
+- Actor identification (who made the change)
+- IP address and user agent tracking
+
+**Audit Log Data Flow:**
+
+```mermaid
+sequenceDiagram
+    participant User as User or System
+    participant API as People API
+    participant AuditService as Audit Logger
+    participant DB as Database
+    
+    User->>API: Create/Update/Delete Person
+    API->>DB: Execute operation
+    DB-->>API: Success
+    API->>AuditService: Log action
+    AuditService->>AuditService: Calculate field diff
+    AuditService->>AuditService: Mask sensitive data
+    AuditService->>DB: Insert audit_logs entry
+    DB-->>AuditService: Logged
+    API-->>User: Response
+```
+
+**Audit Entry Structure:**
+
+| Field | Description |
+|-------|-------------|
+| `module` | Module identifier (e.g., `people.directory`) |
+| `action` | Action type (create, update, delete) |
+| `entityType` | Entity type (e.g., `person`) |
+| `entityId` | UUID of affected entity |
+| `entityName` | Human-readable name |
+| `actorEmail` | Email of the actor |
+| `actorIp` | IP address of the request |
+| `previousValues` | JSON of values before the change |
+| `newValues` | JSON of values after the change |
+| `changedFields` | Array of field names that changed |
+| `timestamp` | When the action occurred |
+
 ### Settings (`/people/settings`) - Planned
 
 Module-level settings for People & HR, including Entra sync configuration.
@@ -310,6 +361,7 @@ graph TB
 | Time Off | View | Yes | Yes | Yes | Own |
 | Time Off | Request | Yes | Yes | Yes | Yes |
 | Time Off | Approve | Yes | Yes | Yes | No |
+| Audit Log | View | Yes | Yes | Yes | No |
 | Sync Settings | View | Yes | Yes | Yes | No |
 | Sync Settings | Configure | Yes | Yes | No | No |
 | Sync Settings | Trigger Sync | Yes | Yes | Yes | No |
@@ -331,6 +383,7 @@ graph LR
         DET[Detail]
         ONB[Onboarding]
         TOF[Time Off]
+        AUD[Audit Log]
         SYNC[Sync Settings]
     end
     
@@ -339,6 +392,7 @@ graph LR
     OWNER -->|full access| DET
     OWNER -->|full access| ONB
     OWNER -->|full access| TOF
+    OWNER -->|view| AUD
     OWNER -->|full access| SYNC
     
     ADMIN -->|full access| OVR
@@ -346,6 +400,7 @@ graph LR
     ADMIN -->|full access| DET
     ADMIN -->|full access| ONB
     ADMIN -->|full access| TOF
+    ADMIN -->|view| AUD
     ADMIN -->|full access| SYNC
     
     HR -->|view, create, edit| OVR
@@ -353,6 +408,7 @@ graph LR
     HR -->|view, edit| DET
     HR -->|full access| ONB
     HR -->|manage| TOF
+    HR -->|view| AUD
     HR -->|view, trigger| SYNC
     
     USER -->|view| OVR

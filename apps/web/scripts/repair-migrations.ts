@@ -18,22 +18,6 @@
  */
 
 import { Pool } from "pg"
-import fs from "fs"
-import path from "path"
-
-interface JournalEntry {
-  idx: number
-  version: string
-  when: number
-  tag: string
-  breakpoints: boolean
-}
-
-interface Journal {
-  version: string
-  dialect: string
-  entries: JournalEntry[]
-}
 
 /**
  * Check if a specific column exists in a table
@@ -93,6 +77,11 @@ const migrationChecks: MigrationCheck[] = [
     tag: "0003_add_people_entra_fields",
     description: "Entra fields (entra_created_at, hire_date, etc.)",
     verify: async (pool) => columnExists(pool, "people_persons", "entra_created_at"),
+  },
+  {
+    tag: "0004_add_audit_logs",
+    description: "Audit logs table",
+    verify: async (pool) => tableExists(pool, "audit_logs"),
   },
 ]
 

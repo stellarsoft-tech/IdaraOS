@@ -96,6 +96,11 @@ const migrationChecks: MigrationCheck[] = [
     tag: "0003_add_people_entra_fields",
     verify: async (pool) => columnExists(pool, "people_persons", "entra_created_at"),
   },
+  {
+    // Audit logs - check if audit_logs table exists
+    tag: "0004_add_audit_logs",
+    verify: async (pool) => tableExists(pool, "audit_logs"),
+  },
 ]
 
 /**
@@ -235,7 +240,7 @@ async function baselineMigrations() {
       } else {
         console.log("✅ No 'scim' values found (already migrated or none existed)")
       }
-    } catch (error) {
+    } catch (_error) {
       // Column might not exist yet, that's fine
       console.log("ℹ️  Data migration skipped (table may not have source column yet)")
     }

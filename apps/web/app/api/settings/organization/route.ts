@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizations } from "@/lib/db/schema"
 import { z } from "zod"
-import { requireOrgId } from "@/lib/api/context"
+import { requireOrgId, getAuditLogger } from "@/lib/api/context"
 
 // Update schema
 const UpdateOrganizationSchema = z.object({
@@ -87,6 +87,20 @@ export async function PUT(request: NextRequest) {
     // Get orgId from authenticated session
     const orgId = await requireOrgId(request)
 
+    // Get existing organization for audit log
+    const [existing] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1)
+
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Organization not found" },
+        { status: 404 }
+      )
+    }
+
     // Update organization
     const [updated] = await db
       .update(organizations)
@@ -101,6 +115,41 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: "Organization not found" },
         { status: 404 }
+      )
+    }
+
+    // Audit log the update
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logUpdate(
+        "settings.organization",
+        "organization",
+        updated.id,
+        updated.name,
+        {
+          name: existing.name,
+          domain: existing.domain,
+          logo: existing.logo,
+          appName: existing.appName,
+          timezone: existing.timezone,
+          dateFormat: existing.dateFormat,
+          currency: existing.currency,
+          linkedIn: existing.linkedIn,
+          twitter: existing.twitter,
+          youtube: existing.youtube,
+        },
+        {
+          name: updated.name,
+          domain: updated.domain,
+          logo: updated.logo,
+          appName: updated.appName,
+          timezone: updated.timezone,
+          dateFormat: updated.dateFormat,
+          currency: updated.currency,
+          linkedIn: updated.linkedIn,
+          twitter: updated.twitter,
+          youtube: updated.youtube,
+        }
       )
     }
 

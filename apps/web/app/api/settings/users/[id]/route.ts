@@ -11,7 +11,7 @@ import { db } from "@/lib/db"
 import { users, userRoleValues, userStatusValues, persons, integrations } from "@/lib/db/schema"
 import { z } from "zod"
 import { syncUserToEntra, isEntraSyncEnabled } from "@/lib/auth/entra-sync"
-import { requireOrgId } from "@/lib/api/context"
+import { requireOrgId, getAuditLogger } from "@/lib/api/context"
 
 // Update user schema
 const UpdateUserSchema = z.object({
@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     // Check if user is SCIM-provisioned
     const [existingUser] = await db
-      .select({ scimProvisioned: users.scimProvisioned })
+      .select()
       .from(users)
       .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .limit(1)
@@ -144,6 +144,33 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     if (!record) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Audit log the update
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logUpdate(
+        "settings.users",
+        "user",
+        record.id,
+        record.email,
+        {
+          name: existingUser.name,
+          email: existingUser.email,
+          role: existingUser.role,
+          status: existingUser.status,
+          personId: existingUser.personId,
+          avatar: existingUser.avatar,
+        },
+        {
+          name: record.name,
+          email: record.email,
+          role: record.role,
+          status: record.status,
+          personId: record.personId,
+          avatar: record.avatar,
+        }
+      )
     }
 
     // Sync to Entra ID if SCIM is enabled
@@ -203,7 +230,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     // Get user details before deleting (for validation and Entra sync)
     const [userToDelete] = await db
-      .select({ email: users.email, scimProvisioned: users.scimProvisioned })
+      .select()
       .from(users)
       .where(and(eq(users.id, id), eq(users.orgId, orgId)))
       .limit(1)
@@ -231,6 +258,18 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     if (result.length === 0) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    // Audit log the deletion
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logDelete("settings.users", "user", {
+        id: userToDelete.id,
+        name: userToDelete.name,
+        email: userToDelete.email,
+        role: userToDelete.role,
+        status: userToDelete.status,
+      })
     }
 
     // Disable user in Entra if SCIM is enabled
