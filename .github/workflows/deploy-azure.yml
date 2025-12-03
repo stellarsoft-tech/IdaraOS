@@ -120,31 +120,30 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "🔄 Running database migrations using Drizzle ORM..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  IdaraOS Database Migration Pipeline"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
           
-          # Check if existing tables were created via db:push
-          # If so, run baseline to mark all existing migrations as applied
-          HAS_TABLES=$(node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            (async () => {
-              try {
-                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
-                console.log(result.rows[0].has_tables ? 'true' : 'false');
-              } catch (e) { console.log('false'); }
-              finally { await pool.end(); }
-            })();
-          ")
+          # Step 1: Repair any incorrectly baselined migrations
+          # This checks if tracked migrations actually exist in the database
+          # and removes incorrect entries so they can be applied properly
+          echo "🔧 Step 1: Checking for incorrectly baselined migrations..."
+          pnpm db:repair || echo "ℹ️  Repair skipped (no migrations table yet)"
+          echo ""
           
-          if [ "$HAS_TABLES" = "true" ]; then
-            echo "📋 Existing database detected - ensuring all migrations are baselined..."
-            pnpm db:baseline
-          fi
+          # Step 2: Smart baseline for existing databases
+          # This only marks migrations as applied if their changes actually exist
+          echo "📋 Step 2: Running smart baseline..."
+          pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
+          echo ""
           
-          # Run migrations (will skip already-applied migrations)
+          # Step 3: Apply any pending migrations
+          echo "🔄 Step 3: Applying pending migrations..."
           pnpm db:run-migrations
           
-          echo "✅ Database migrations completed"
+          echo ""
+          echo "✅ Database migrations completed successfully!"
           
       - name: Verify database schema
         run: |
@@ -159,13 +158,31 @@ jobs:
             const pool = new Pool({ connectionString: process.env.DATABASE_URL });
             async function verify() {
               try {
-                // Check that core tables exist
+                // Check core tables
                 await pool.query('SELECT 1 FROM core_organizations LIMIT 1');
                 console.log('✅ core_organizations table exists');
                 
                 await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
                 console.log('✅ rbac_user_roles table exists');
                 
+                // Check people_persons has required columns (including Entra fields)
+                const result = await pool.query(\`
+                  SELECT column_name FROM information_schema.columns 
+                  WHERE table_name = 'people_persons' 
+                  AND column_name IN ('source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at')
+                \`);
+                const columns = result.rows.map(r => r.column_name);
+                
+                const required = ['source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at'];
+                const missing = required.filter(c => !columns.includes(c));
+                
+                if (missing.length > 0) {
+                  console.error('❌ Missing columns in people_persons:', missing.join(', '));
+                  console.error('   Run db:repair and db:run-migrations to fix');
+                  process.exit(1);
+                }
+                
+                console.log('✅ people_persons has all required columns');
                 console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
@@ -403,29 +420,27 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "🔄 Running database migrations using Drizzle ORM..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  IdaraOS Database Migration Pipeline"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
           
-          # Check if existing tables were created via db:push
-          HAS_TABLES=$(node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            (async () => {
-              try {
-                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
-                console.log(result.rows[0].has_tables ? 'true' : 'false');
-              } catch (e) { console.log('false'); }
-              finally { await pool.end(); }
-            })();
-          ")
+          # Step 1: Repair any incorrectly baselined migrations
+          echo "🔧 Step 1: Checking for incorrectly baselined migrations..."
+          pnpm db:repair || echo "ℹ️  Repair skipped (no migrations table yet)"
+          echo ""
           
-          if [ "$HAS_TABLES" = "true" ]; then
-            echo "📋 Existing database detected - ensuring all migrations are baselined..."
-            pnpm db:baseline
-          fi
+          # Step 2: Smart baseline for existing databases
+          echo "📋 Step 2: Running smart baseline..."
+          pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
+          echo ""
           
+          # Step 3: Apply any pending migrations
+          echo "🔄 Step 3: Applying pending migrations..."
           pnpm db:run-migrations
           
-          echo "✅ Database migrations completed"
+          echo ""
+          echo "✅ Database migrations completed successfully!"
           
       - name: Verify database schema
         run: |
@@ -444,6 +459,23 @@ jobs:
                 console.log('✅ core_organizations table exists');
                 await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
                 console.log('✅ rbac_user_roles table exists');
+                
+                // Check people_persons has required columns
+                const result = await pool.query(\`
+                  SELECT column_name FROM information_schema.columns 
+                  WHERE table_name = 'people_persons' 
+                  AND column_name IN ('source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at')
+                \`);
+                const columns = result.rows.map(r => r.column_name);
+                const required = ['source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at'];
+                const missing = required.filter(c => !columns.includes(c));
+                
+                if (missing.length > 0) {
+                  console.error('❌ Missing columns in people_persons:', missing.join(', '));
+                  process.exit(1);
+                }
+                
+                console.log('✅ people_persons has all required columns');
                 console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
@@ -668,29 +700,27 @@ jobs:
           cd apps/web
           export DATABASE_URL
           
-          echo "🔄 Running database migrations using Drizzle ORM..."
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "  IdaraOS Database Migration Pipeline"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
           
-          # Check if existing tables were created via db:push
-          HAS_TABLES=$(node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            (async () => {
-              try {
-                const result = await pool.query(\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'core_organizations') as has_tables\");
-                console.log(result.rows[0].has_tables ? 'true' : 'false');
-              } catch (e) { console.log('false'); }
-              finally { await pool.end(); }
-            })();
-          ")
+          # Step 1: Repair any incorrectly baselined migrations
+          echo "🔧 Step 1: Checking for incorrectly baselined migrations..."
+          pnpm db:repair || echo "ℹ️  Repair skipped (no migrations table yet)"
+          echo ""
           
-          if [ "$HAS_TABLES" = "true" ]; then
-            echo "📋 Existing database detected - ensuring all migrations are baselined..."
-            pnpm db:baseline
-          fi
+          # Step 2: Smart baseline for existing databases
+          echo "📋 Step 2: Running smart baseline..."
+          pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
+          echo ""
           
+          # Step 3: Apply any pending migrations
+          echo "🔄 Step 3: Applying pending migrations..."
           pnpm db:run-migrations
           
-          echo "✅ Database migrations completed"
+          echo ""
+          echo "✅ Database migrations completed successfully!"
           
       - name: Verify database schema
         run: |
@@ -709,6 +739,23 @@ jobs:
                 console.log('✅ core_organizations table exists');
                 await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
                 console.log('✅ rbac_user_roles table exists');
+                
+                // Check people_persons has required columns
+                const result = await pool.query(\`
+                  SELECT column_name FROM information_schema.columns 
+                  WHERE table_name = 'people_persons' 
+                  AND column_name IN ('source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at')
+                \`);
+                const columns = result.rows.map(r => r.column_name);
+                const required = ['source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at'];
+                const missing = required.filter(c => !columns.includes(c));
+                
+                if (missing.length > 0) {
+                  console.error('❌ Missing columns in people_persons:', missing.join(', '));
+                  process.exit(1);
+                }
+                
+                console.log('✅ people_persons has all required columns');
                 console.log('✅ Database schema verified');
               } catch (err) {
                 console.error('❌ Schema verification failed:', err.message);
