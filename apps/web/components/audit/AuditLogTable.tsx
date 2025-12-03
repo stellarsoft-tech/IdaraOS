@@ -73,7 +73,7 @@ function getActionColor(action: string): string {
 }
 
 const ACTIONS = [
-  { value: "", label: "All Actions" },
+  { value: "all", label: "All Actions" },
   { value: "create", label: "Create" },
   { value: "update", label: "Update" },
   { value: "delete", label: "Delete" },
@@ -103,7 +103,7 @@ export function AuditLogTable({
   }
 
   const handleActionFilter = (action: string) => {
-    onFiltersChange({ ...filters, action: action || undefined, offset: 0 })
+    onFiltersChange({ ...filters, action: action === "all" ? undefined : action, offset: 0 })
   }
 
   const handlePageChange = (newPage: number) => {
@@ -132,7 +132,7 @@ export function AuditLogTable({
         </div>
 
         <Select
-          value={filters.action ?? ""}
+          value={filters.action ?? "all"}
           onValueChange={handleActionFilter}
         >
           <SelectTrigger className="w-[140px]">
