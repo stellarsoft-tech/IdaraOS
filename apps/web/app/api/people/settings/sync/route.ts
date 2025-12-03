@@ -3,22 +3,20 @@
  * POST /api/people/settings/sync - Trigger people sync from Entra
  */
 
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { peopleSettings, integrations } from "@/lib/db/schema"
 import { performPeopleSync } from "@/lib/people/sync"
-
-// Demo org ID
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requireOrgId, getAuditLogger } from "@/lib/api/context"
 
 /**
  * POST /api/people/settings/sync
  * Trigger a manual sync of people from Entra
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
-    const orgId = DEMO_ORG_ID
+    const orgId = await requireOrgId(request)
 
     // Get people settings
     const [settings] = await db
@@ -86,12 +84,40 @@ export async function POST() {
       })
       .where(eq(peopleSettings.id, settings.id))
 
+    // Log the sync action
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.log({
+        module: "people.directory",
+        action: "sync",
+        entityType: "people_sync",
+        entityName: "People Sync from Entra",
+        description: `Synced ${result.stats.peopleCreated} created, ${result.stats.peopleUpdated} updated, ${result.stats.peopleDeleted} deleted`,
+        current: {
+          groupsFound: result.stats.groupsFound,
+          peopleCreated: result.stats.peopleCreated,
+          peopleUpdated: result.stats.peopleUpdated,
+          peopleDeleted: result.stats.peopleDeleted,
+          syncedCount: result.stats.syncedCount,
+          success: result.success,
+        },
+      })
+    }
+
     return NextResponse.json({
       success: result.success,
       message: result.message,
       stats: result.stats,
     })
   } catch (error) {
+    // Handle authentication errors
+    if (error instanceof Error && error.message === "Authentication required") {
+      return NextResponse.json(
+        { error: "Not authenticated" },
+        { status: 401 }
+      )
+    }
+
     console.error("[People Sync] Error:", error)
     return NextResponse.json(
       { error: "Failed to sync people" },

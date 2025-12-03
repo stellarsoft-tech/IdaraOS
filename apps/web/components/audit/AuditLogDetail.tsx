@@ -78,19 +78,19 @@ export function AuditLogDetail({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-6">
+        <SheetHeader className="mb-6">
           <SheetTitle>Audit Log Details</SheetTitle>
         </SheetHeader>
 
         {isLoading ? (
-          <div className="space-y-4 mt-6">
+          <div className="space-y-4">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-48 w-full" />
           </div>
         ) : log ? (
-          <div className="space-y-6 mt-6">
+          <div className="space-y-6">
             {/* Action & Entity */}
             <div className="flex items-center gap-3">
               <Badge className={getActionColor(log.action)}>
