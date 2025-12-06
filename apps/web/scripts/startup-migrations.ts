@@ -19,6 +19,7 @@
  */
 
 import { runMigrations } from "../lib/db/migrate"
+import { syncRBACPermissions } from "./sync-rbac-permissions"
 import { Pool } from "pg"
 import fs from "fs"
 import path from "path"
@@ -169,6 +170,17 @@ async function main() {
   if (status.pendingMigrations.length === 0) {
     console.log("✅ No pending migrations - database is up to date")
     console.log()
+    
+    // Always sync RBAC to ensure Owner has new permissions
+    console.log("🔐 Syncing RBAC permissions...")
+    try {
+      await syncRBACPermissions()
+    } catch (error) {
+      console.warn("⚠️  RBAC sync warning:", error)
+      // Don't fail startup if RBAC sync fails - it's not critical
+    }
+    
+    console.log()
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     process.exit(0)
   }
@@ -183,6 +195,17 @@ async function main() {
     
     console.log()
     console.log("✅ All migrations applied successfully!")
+    console.log()
+    
+    // Sync RBAC permissions after migrations
+    console.log("🔐 Syncing RBAC permissions...")
+    try {
+      await syncRBACPermissions()
+    } catch (rbacError) {
+      console.warn("⚠️  RBAC sync warning:", rbacError)
+      // Don't fail startup if RBAC sync fails - it's not critical
+    }
+    
     console.log()
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     process.exit(0)
