@@ -94,9 +94,19 @@ export const routes: Record<string, RouteConfig> = {
     path: "/assets",
     label: "Assets",
   },
+  "assets.overview": {
+    path: "/assets",
+    label: "Overview",
+    parent: "assets",
+  },
   "assets.inventory": {
     path: "/assets/inventory",
     label: "Inventory",
+    parent: "assets",
+  },
+  "assets.categories": {
+    path: "/assets/categories",
+    label: "Categories",
     parent: "assets",
   },
   "assets.assignments": {
@@ -108,6 +118,18 @@ export const routes: Record<string, RouteConfig> = {
     path: "/assets/maintenance",
     label: "Maintenance",
     parent: "assets",
+  },
+  "assets.lifecycle": {
+    path: "/assets/lifecycle",
+    label: "Lifecycle",
+    parent: "assets",
+    description: "Asset lifecycle events and audit trail",
+  },
+  "assets.settings": {
+    path: "/assets/settings",
+    label: "Settings",
+    parent: "assets",
+    description: "Configure asset sync and integrations",
   },
   
   // Docs

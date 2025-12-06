@@ -53,9 +53,81 @@ export const permissions: Record<string, LegacyPermission> = {
   },
   
   // Assets module
+  "assets.overview": {
+    resource: "assets.overview",
+    actions: ["read"],
+    roles: ["IT", "Admin", "Owner", "User"],
+    scope: "org",
+  },
   "assets.inventory": {
     resource: "assets.inventory",
-    actions: ["read", "write"],
+    actions: ["read"],
+    roles: ["IT", "Admin", "Owner", "User"],
+    scope: "org",
+  },
+  "assets.inventory.write": {
+    resource: "assets.inventory",
+    actions: ["create", "edit"],
+    roles: ["IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.inventory.delete": {
+    resource: "assets.inventory",
+    actions: ["delete"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.categories": {
+    resource: "assets.categories",
+    actions: ["read"],
+    roles: ["IT", "Admin", "Owner", "User"],
+    scope: "org",
+  },
+  "assets.categories.write": {
+    resource: "assets.categories",
+    actions: ["create", "edit", "delete"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.assignments": {
+    resource: "assets.assignments",
+    actions: ["read"],
+    roles: ["IT", "Admin", "Owner", "User"],
+    scope: "org",
+  },
+  "assets.assignments.write": {
+    resource: "assets.assignments",
+    actions: ["create", "edit"],
+    roles: ["IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.maintenance": {
+    resource: "assets.maintenance",
+    actions: ["read"],
+    roles: ["IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.maintenance.write": {
+    resource: "assets.maintenance",
+    actions: ["create", "edit"],
+    roles: ["IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.lifecycle": {
+    resource: "assets.lifecycle",
+    actions: ["read"],
+    roles: ["IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.settings": {
+    resource: "assets.settings",
+    actions: ["read"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "assets.settings.write": {
+    resource: "assets.settings",
+    actions: ["write"],
     roles: ["Admin", "Owner"],
     scope: "org",
   },
