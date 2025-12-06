@@ -31,7 +31,7 @@ interface IntuneDevice {
   userPrincipalName?: string
   userDisplayName?: string
   managedDeviceOwnerType?: string
-  enrollmentType?: string
+  deviceEnrollmentType?: string
 }
 
 interface GraphResponse {
@@ -109,7 +109,7 @@ async function fetchManagedDevices(
   
   const filterQuery = filterParts.length > 0 ? `&$filter=${encodeURIComponent(filterParts.join(" and "))}` : ""
   
-  let url = `https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$select=id,deviceName,serialNumber,manufacturer,model,operatingSystem,osVersion,complianceState,enrolledDateTime,lastSyncDateTime,userPrincipalName,userDisplayName,managedDeviceOwnerType,enrollmentType${filterQuery}`
+  let url = `https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$select=id,deviceName,serialNumber,manufacturer,model,operatingSystem,osVersion,complianceState,enrolledDateTime,lastSyncDateTime,userPrincipalName,userDisplayName,managedDeviceOwnerType,deviceEnrollmentType${filterQuery}`
   
   while (url) {
     const response = await fetch(url, {
@@ -163,7 +163,7 @@ function mapDeviceToAsset(
     source: "intune_sync" as const,
     intuneDeviceId: device.id,
     intuneComplianceState: device.complianceState || null,
-    intuneEnrollmentType: device.enrollmentType || null,
+    intuneEnrollmentType: device.deviceEnrollmentType || null,
     intuneLastSyncAt: device.lastSyncDateTime ? new Date(device.lastSyncDateTime) : null,
     syncEnabled: true,
   }
