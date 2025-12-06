@@ -24,6 +24,9 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
     "db:seed-rbac": "tsx scripts/seed-rbac.ts",
+    "db:sync-rbac": "tsx scripts/sync-rbac-permissions.ts",
+    "db:post-migrate": "tsx scripts/post-migrate.ts",
+    "db:migrate-full": "drizzle-kit migrate && tsx scripts/post-migrate.ts",
     "db:assign-admin-role": "tsx scripts/assign-admin-role.ts",
     "db:create-admin": "tsx scripts/create-admin.ts"
   },

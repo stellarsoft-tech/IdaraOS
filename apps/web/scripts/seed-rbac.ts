@@ -8,6 +8,9 @@
  * - Default system roles (Owner, Admin, Manager, Member, Viewer)
  * 
  * Run: pnpm db:seed-rbac
+ * 
+ * NOTE: Module and action definitions are maintained in sync-rbac-permissions.ts
+ * to ensure consistency between seeding and syncing.
  */
 
 import { drizzle } from "drizzle-orm/node-postgres"
@@ -15,6 +18,7 @@ import { Pool } from "pg"
 import { eq, and } from "drizzle-orm"
 import * as schema from "../lib/db/schema"
 import { hashPassword } from "../lib/auth/session"
+import { MODULE_REGISTRY, ACTION_REGISTRY } from "./sync-rbac-permissions"
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/idaraos",
@@ -25,53 +29,9 @@ const db = drizzle(pool, { schema })
 // Fixed demo org ID - must match what APIs expect
 const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
-// ============ Default Data ============
-
-const DEFAULT_MODULES = [
-  // People & HR - Overview & Directory
-  { slug: "people.overview", name: "People Overview", description: "View People & HR dashboard", category: "People & HR", icon: "LayoutDashboard", sortOrder: "100" },
-  { slug: "people.directory", name: "People Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "101" },
-  { slug: "people.roles", name: "Roles & Teams", description: "Manage organizational roles and teams", category: "People & HR", icon: "UsersRound", sortOrder: "102" },
-  
-  // People & HR - Lifecycle
-  { slug: "people.onboarding", name: "Onboarding", description: "Manage employee onboarding workflows", category: "People & HR", icon: "UserPlus", sortOrder: "103" },
-  { slug: "people.offboarding", name: "Offboarding", description: "Manage employee offboarding workflows", category: "People & HR", icon: "UserMinus", sortOrder: "104" },
-  
-  // People & HR - Operations
-  { slug: "people.timeoff", name: "Time Off", description: "Manage time off requests and leave", category: "People & HR", icon: "Calendar", sortOrder: "105" },
-  { slug: "people.documents", name: "Documents", description: "Manage employee documents", category: "People & HR", icon: "FileText", sortOrder: "106" },
-  { slug: "people.auditlog", name: "People Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "107" },
-  
-  // Assets & Equipment
-  { slug: "assets.overview", name: "Assets Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200" },
-  { slug: "assets.inventory", name: "Asset Inventory", description: "Manage company assets and equipment", category: "Assets", icon: "Package", sortOrder: "201" },
-  { slug: "assets.categories", name: "Asset Categories", description: "Manage asset categories and classification", category: "Assets", icon: "FolderTree", sortOrder: "202" },
-  { slug: "assets.assignments", name: "Asset Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "203" },
-  { slug: "assets.maintenance", name: "Asset Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "204" },
-  { slug: "assets.lifecycle", name: "Asset Lifecycle", description: "Manage asset lifecycle and disposal", category: "Assets", icon: "RotateCcw", sortOrder: "205" },
-  { slug: "assets.settings", name: "Asset Settings", description: "Configure asset module settings and sync", category: "Assets", icon: "Settings", sortOrder: "206" },
-  
-  // Security
-  { slug: "security.overview", name: "Security Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300" },
-  { slug: "security.risks", name: "Risk Register", description: "Manage security risks", category: "Security", icon: "AlertTriangle", sortOrder: "301" },
-  { slug: "security.controls", name: "Controls Library", description: "Manage security controls", category: "Security", icon: "CheckSquare", sortOrder: "302" },
-  
-  // Settings
-  { slug: "settings.organization", name: "Organization Settings", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900" },
-  { slug: "settings.users", name: "Users & Access", description: "Manage system users and invitations", category: "Settings", icon: "Users", sortOrder: "901" },
-  { slug: "settings.roles", name: "Roles & Permissions", description: "Configure custom roles and permissions", category: "Settings", icon: "Shield", sortOrder: "902" },
-  { slug: "settings.integrations", name: "Integrations", description: "Configure third-party integrations", category: "Settings", icon: "Plug", sortOrder: "903" },
-  { slug: "settings.auditlog", name: "Audit Log", description: "View system activity and audit trail", category: "Settings", icon: "FileText", sortOrder: "904" },
-  { slug: "settings.branding", name: "Branding", description: "Customize application appearance", category: "Settings", icon: "Palette", sortOrder: "905" },
-  { slug: "settings.apikeys", name: "API Keys", description: "Manage API access tokens", category: "Settings", icon: "Key", sortOrder: "906" },
-]
-
-const DEFAULT_ACTIONS = [
-  { slug: "view", name: "View", description: "View and list records", sortOrder: "1" },
-  { slug: "create", name: "Create", description: "Create new records", sortOrder: "2" },
-  { slug: "edit", name: "Edit", description: "Edit existing records", sortOrder: "3" },
-  { slug: "delete", name: "Delete", description: "Delete records", sortOrder: "4" },
-]
+// Use shared registries (maintained in sync-rbac-permissions.ts)
+const DEFAULT_MODULES = MODULE_REGISTRY
+const DEFAULT_ACTIONS = ACTION_REGISTRY
 
 // System roles and their permissions
 // true = has permission, false or undefined = no permission
