@@ -5,8 +5,8 @@ import dynamic from "next/dynamic"
 
 import { ChatsyDrawer } from "@/components/chatsy-drawer"
 import { SidebarInset, SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarRail, SidebarMenu, SidebarMenuItem, SidebarGroup, SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { BreadcrumbProvider } from "@/components/breadcrumb-context"
 
 // Sidebar skeleton for loading state
 function SidebarSkeleton() {
@@ -114,18 +114,20 @@ export default function DashboardLayout({
   const [commandOpen, setCommandOpen] = React.useState(false)
 
   return (
-    <SidebarProvider className="h-full">
-      <AppSidebar />
-      <SidebarInset className="overflow-hidden">
-        <div className="flex h-full flex-col">
-          <TopBar onChatsyToggle={() => setChatsyOpen(!chatsyOpen)} onCommandOpen={() => setCommandOpen(true)} />
-          <div className="flex min-h-0 flex-1">
-            <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
-            <ChatsyDrawer open={chatsyOpen} onClose={() => setChatsyOpen(false)} />
+    <BreadcrumbProvider>
+      <SidebarProvider className="h-full">
+        <AppSidebar />
+        <SidebarInset className="overflow-hidden">
+          <div className="flex h-full flex-col">
+            <TopBar onChatsyToggle={() => setChatsyOpen(!chatsyOpen)} onCommandOpen={() => setCommandOpen(true)} />
+            <div className="flex min-h-0 flex-1">
+              <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+              <ChatsyDrawer open={chatsyOpen} onClose={() => setChatsyOpen(false)} />
+            </div>
           </div>
-        </div>
-      </SidebarInset>
-      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-    </SidebarProvider>
+        </SidebarInset>
+        <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      </SidebarProvider>
+    </BreadcrumbProvider>
   )
 }

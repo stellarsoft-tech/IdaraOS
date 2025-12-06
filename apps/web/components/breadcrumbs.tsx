@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { Home } from "lucide-react"
+import { useBreadcrumb } from "./breadcrumb-context"
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -54,6 +55,7 @@ const routeLabels: Record<string, string> = {
 export function Breadcrumbs() {
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
+  const { detailLabel } = useBreadcrumb()
 
   if (segments.length === 0 || (segments.length === 1 && segments[0] === "dashboard")) {
     return (
@@ -67,8 +69,15 @@ export function Breadcrumbs() {
 
   const breadcrumbs = segments.map((segment, index) => {
     const href = "/" + segments.slice(0, index + 1).join("/")
-    const label = routeLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
     const isLast = index === segments.length - 1
+    
+    // Use custom detail label for the last segment if provided
+    let label: string
+    if (isLast && detailLabel) {
+      label = detailLabel
+    } else {
+      label = routeLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
+    }
 
     return { href, label, isLast }
   })

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
 import { 
@@ -53,6 +53,7 @@ import {
 
 import { usePersonDetail, useUpdatePerson, useDeletePerson } from "@/lib/api/people"
 import { useQuery } from "@tanstack/react-query"
+import { useBreadcrumb } from "@/components/breadcrumb-context"
 
 // Fetch Entra integration settings to check bidirectional sync
 async function fetchEntraIntegrationSettings() {
@@ -134,6 +135,15 @@ export default function PersonDetailPage() {
   const { data: person, isLoading, error } = usePersonDetail(slug)
   const updateMutation = useUpdatePerson()
   const deleteMutation = useDeletePerson()
+  const { setDetailLabel } = useBreadcrumb()
+  
+  // Set breadcrumb label to person's name
+  useEffect(() => {
+    if (person?.name) {
+      setDetailLabel(person.name)
+    }
+    return () => setDetailLabel(null)
+  }, [person?.name, setDetailLabel])
   
   // Fetch Entra integration settings to check if bidirectional sync is enabled
   const { data: entraSettings } = useQuery({
@@ -432,7 +442,7 @@ export default function PersonDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Hire Date</p>
-                    <p className="font-medium">{formatDate(person.hireDate || person.startDate)}</p>
+                    <p className="font-medium">{person.hireDate ? formatDate(person.hireDate) : "—"}</p>
                   </div>
                   {person.endDate && (
                     <div>
