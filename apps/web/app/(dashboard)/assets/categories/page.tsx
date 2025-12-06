@@ -159,7 +159,7 @@ export default function CategoriesPage() {
       component: "select" as const,
       label: "Parent Category", 
       placeholder: "None (top-level)", 
-      options: [{ value: "", label: "None (top-level)" }, ...parentOptions],
+      options: [{ value: "__none__", label: "None (top-level)" }, ...parentOptions],
     },
     icon: { 
       component: "select" as const,
@@ -355,7 +355,8 @@ export default function CategoriesPage() {
     try {
       const category = await createMutation.mutateAsync({
         ...values,
-        parentId: values.parentId || undefined,
+        // Convert __none__ placeholder to undefined
+        parentId: values.parentId === "__none__" ? undefined : values.parentId || undefined,
       })
       toast.success(`Category "${category.name}" has been created`)
       setCreateOpen(false)
@@ -371,7 +372,8 @@ export default function CategoriesPage() {
         id: selectedCategory.id, 
         data: {
           ...values,
-          parentId: values.parentId || null,
+          // Convert __none__ placeholder to null
+          parentId: values.parentId === "__none__" ? null : values.parentId || null,
         }
       })
       toast.success("Category updated successfully")
@@ -494,7 +496,7 @@ export default function CategoriesPage() {
           defaultValues={{
             name: selectedCategory.name,
             description: selectedCategory.description || "",
-            parentId: selectedCategory.parentId || "",
+            parentId: selectedCategory.parentId || "__none__",
             icon: selectedCategory.icon,
             color: selectedCategory.color,
             defaultDepreciationYears: selectedCategory.defaultDepreciationYears || undefined,
