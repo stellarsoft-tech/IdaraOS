@@ -14,6 +14,7 @@ import {
   assetsSettings,
 } from "@/lib/db/schema"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { decrypt } from "@/lib/encryption"
 
 // Microsoft Graph API types
 interface IntuneDevice {
@@ -218,12 +219,20 @@ export async function POST(_request: NextRequest) {
     
     const syncSettings = (settingsResult[0]?.syncSettings as SyncSettings) || {}
     
+    // Decrypt the client secret
+    const clientSecret = decrypt(integration.clientSecretEncrypted)
+    if (!clientSecret) {
+      return NextResponse.json(
+        { error: "Failed to decrypt client secret" },
+        { status: 500 }
+      )
+    }
+    
     // Get access token
-    // In production, the client secret should be decrypted here
     const accessToken = await getGraphAccessToken(
       integration.tenantId,
       integration.clientId,
-      integration.clientSecretEncrypted // Should be decrypted
+      clientSecret
     )
     
     // Fetch devices from Intune

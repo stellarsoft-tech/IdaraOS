@@ -116,6 +116,9 @@ const UpdateEntraConfigSchema = z.object({
   // People sync settings
   syncPeopleEnabled: z.boolean().optional(),
   deletePeopleOnUserDelete: z.boolean().optional(),
+  // Device sync settings (Intune)
+  syncDevicesEnabled: z.boolean().optional(),
+  deleteAssetsOnDeviceDelete: z.boolean().optional(),
   settings: z.record(z.unknown()).optional(),
 })
 
@@ -162,6 +165,11 @@ export async function GET(request: NextRequest) {
           scimBidirectionalSync: false,
           syncPeopleEnabled: false,
           deletePeopleOnUserDelete: true,
+          // Device sync defaults
+          syncDevicesEnabled: false,
+          deleteAssetsOnDeviceDelete: false,
+          lastDeviceSyncAt: null,
+          syncedDeviceCount: 0,
           settings: null,
           lastSyncAt: null,
           syncedUserCount: 0,
@@ -188,6 +196,11 @@ export async function GET(request: NextRequest) {
         // People sync settings
         syncPeopleEnabled: integration.syncPeopleEnabled,
         deletePeopleOnUserDelete: integration.deletePeopleOnUserDelete,
+        // Device sync settings (Intune)
+        syncDevicesEnabled: integration.syncDevicesEnabled,
+        deleteAssetsOnDeviceDelete: integration.deleteAssetsOnDeviceDelete,
+        lastDeviceSyncAt: integration.lastDeviceSyncAt?.toISOString(),
+        syncedDeviceCount: parseInt(integration.syncedDeviceCount || "0"),
         settings: integration.settings,
         lastSyncAt: integration.lastSyncAt?.toISOString(),
         syncedUserCount: parseInt(integration.syncedUserCount || "0"),
@@ -440,6 +453,13 @@ export async function PATCH(request: NextRequest) {
       if (data.deletePeopleOnUserDelete !== undefined) {
         updateData.deletePeopleOnUserDelete = data.deletePeopleOnUserDelete
       }
+      // Device sync settings (Intune)
+      if (data.syncDevicesEnabled !== undefined) {
+        updateData.syncDevicesEnabled = data.syncDevicesEnabled
+      }
+      if (data.deleteAssetsOnDeviceDelete !== undefined) {
+        updateData.deleteAssetsOnDeviceDelete = data.deleteAssetsOnDeviceDelete
+      }
       if (data.settings !== undefined) {
         updateData.settings = data.settings
       }
@@ -460,6 +480,11 @@ export async function PATCH(request: NextRequest) {
         scimBidirectionalSync: updated.scimBidirectionalSync,
         syncPeopleEnabled: updated.syncPeopleEnabled,
         deletePeopleOnUserDelete: updated.deletePeopleOnUserDelete,
+        // Device sync fields
+        syncDevicesEnabled: updated.syncDevicesEnabled,
+        deleteAssetsOnDeviceDelete: updated.deleteAssetsOnDeviceDelete,
+        lastDeviceSyncAt: updated.lastDeviceSyncAt?.toISOString(),
+        syncedDeviceCount: parseInt(updated.syncedDeviceCount || "0"),
         settings: updated.settings,
         message: "Integration updated",
       })

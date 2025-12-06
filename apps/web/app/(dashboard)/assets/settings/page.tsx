@@ -140,7 +140,7 @@ export default function AssetsSettingsPage() {
   const [selectedOsFilters, setSelectedOsFilters] = useState<string[]>([])
   const [selectedComplianceFilters, setSelectedComplianceFilters] = useState<string[]>([])
   const [categoryMappings, setCategoryMappings] = useState<Array<{ deviceType: string; categoryId: string }>>([])
-  const [defaultCategoryId, setDefaultCategoryId] = useState<string>("")
+  const [defaultCategoryId, setDefaultCategoryId] = useState<string>("__none__")
   const [autoDeleteOnRemoval, setAutoDeleteOnRemoval] = useState(false)
   const [autoCreatePeople, setAutoCreatePeople] = useState(false)
   const [updateExistingOnly, setUpdateExistingOnly] = useState(false)
@@ -194,7 +194,7 @@ export default function AssetsSettingsPage() {
       setSelectedOsFilters(settings.syncSettings?.deviceFilters?.osFilter || [])
       setSelectedComplianceFilters(settings.syncSettings?.deviceFilters?.complianceFilter || [])
       setCategoryMappings(settings.syncSettings?.categoryMapping?.mappings || [])
-      setDefaultCategoryId(settings.syncSettings?.categoryMapping?.defaultCategoryId || "")
+      setDefaultCategoryId(settings.syncSettings?.categoryMapping?.defaultCategoryId || "__none__")
       setAutoDeleteOnRemoval(settings.syncSettings?.syncBehavior?.autoDeleteOnRemoval || false)
       setAutoCreatePeople(settings.syncSettings?.syncBehavior?.autoCreatePeople || false)
       setUpdateExistingOnly(settings.syncSettings?.syncBehavior?.updateExistingOnly || false)
@@ -218,7 +218,7 @@ export default function AssetsSettingsPage() {
         },
         categoryMapping: {
           mappings: categoryMappings,
-          defaultCategoryId: defaultCategoryId || undefined,
+          defaultCategoryId: defaultCategoryId === "__none__" ? undefined : defaultCategoryId,
         },
         syncBehavior: {
           autoDeleteOnRemoval,
@@ -246,19 +246,21 @@ export default function AssetsSettingsPage() {
   }
   
   const updateCategoryMapping = (deviceType: string, categoryId: string) => {
+    // Convert __default__ placeholder back to empty string for storage
+    const actualCategoryId = categoryId === "__default__" ? "" : categoryId
     setCategoryMappings(prev => {
       const existing = prev.find(m => m.deviceType === deviceType)
       if (existing) {
         return prev.map(m => 
-          m.deviceType === deviceType ? { ...m, categoryId } : m
+          m.deviceType === deviceType ? { ...m, categoryId: actualCategoryId } : m
         )
       }
-      return [...prev, { deviceType, categoryId }]
+      return [...prev, { deviceType, categoryId: actualCategoryId }]
     })
   }
   
   const getCategoryMapping = (deviceType: string) => {
-    return categoryMappings.find(m => m.deviceType === deviceType)?.categoryId || ""
+    return categoryMappings.find(m => m.deviceType === deviceType)?.categoryId || "__default__"
   }
   
   const isLoading = settingsLoading || entraLoading
@@ -508,7 +510,7 @@ export default function AssetsSettingsPage() {
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Use default</SelectItem>
+                            <SelectItem value="__default__">Use default</SelectItem>
                             {categories.map((cat) => (
                               <SelectItem key={cat.id} value={cat.id}>
                                 {cat.name}
@@ -535,7 +537,7 @@ export default function AssetsSettingsPage() {
                         <SelectValue placeholder="Select default category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None (uncategorized)</SelectItem>
+                        <SelectItem value="__none__">None (uncategorized)</SelectItem>
                         {categories.map((cat) => (
                           <SelectItem key={cat.id} value={cat.id}>
                             {cat.name}

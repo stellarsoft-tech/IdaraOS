@@ -43,8 +43,8 @@ import {
   IntegrationError,
 } from "@/lib/api/integrations"
 
-// Microsoft Entra ID (Azure AD) Icon
-function EntraIcon({ className }: { readonly className?: string }) {
+// Microsoft 365 Icon
+function Microsoft365Icon({ className }: { readonly className?: string }) {
   return (
     <svg className={className} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M48 0C21.49 0 0 21.49 0 48s21.49 48 48 48 48-21.49 48-48S74.51 0 48 0z" fill="#0078D4"/>
@@ -110,7 +110,7 @@ export default function IntegrationsPage() {
         setScimToken(result.scimToken)
       }
       
-      toast.success("Microsoft Entra ID connected successfully")
+      toast.success("Microsoft 365 connected successfully")
     } catch (error) {
       // Show detailed validation error if available
       if (error instanceof IntegrationError && error.details) {
@@ -129,7 +129,7 @@ export default function IntegrationsPage() {
       await disconnectEntra.mutateAsync()
       setFormData({ tenantId: "", clientId: "", clientSecret: "" })
       setScimToken(null)
-      toast.success("Microsoft Entra ID disconnected")
+      toast.success("Microsoft 365 disconnected")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to disconnect")
     }
@@ -262,11 +262,11 @@ export default function IntegrationsPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-xl bg-white dark:bg-[#0078D4] flex items-center justify-center shadow-sm border">
-                  <EntraIcon className="h-8 w-8" />
+                  <Microsoft365Icon className="h-8 w-8" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold">Microsoft Entra ID</h2>
+                    <h2 className="text-lg font-semibold">Microsoft 365</h2>
                     {isLoading ? (
                       <Skeleton className="h-5 w-20" />
                     ) : isConnected ? (
@@ -279,7 +279,7 @@ export default function IntegrationsPage() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Single Sign-On (SSO) and user sync from Entra ID
+                    Identity, user provisioning, and device management
                   </p>
                 </div>
               </div>
@@ -310,69 +310,124 @@ export default function IntegrationsPage() {
               <Tabs defaultValue="overview" className="w-full">
                 <TabsList className="mb-4">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="sso">SSO Settings</TabsTrigger>
-                  <TabsTrigger value="sync">User Sync</TabsTrigger>
-                  <TabsTrigger value="devices">Device Sync</TabsTrigger>
+                  <TabsTrigger value="sso">Identity</TabsTrigger>
+                  <TabsTrigger value="sync">User Provisioning</TabsTrigger>
+                  <TabsTrigger value="devices">Device Management</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
-                  {/* Stats Grid - Compact */}
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Card className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                          <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  {/* Identity Section */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="text-sm font-medium">Identity (Entra ID)</h3>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Card className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                            <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Synced Users</div>
+                            <div className="text-lg font-semibold">{entraConfig?.syncedUserCount || 0}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">Synced Users</div>
-                          <div className="text-lg font-semibold">{entraConfig?.syncedUserCount || 0}</div>
+                      </Card>
+                      <Card className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+                            <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Groups</div>
+                            <div className="text-lg font-semibold">{entraConfig?.syncedGroupCount || 0}</div>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                    <Card className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                          <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                      </Card>
+                      <Card className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                            <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">SSO</div>
+                            <StatusBadge variant={entraConfig?.ssoEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
+                              {entraConfig?.ssoEnabled ? "Enabled" : "Disabled"}
+                            </StatusBadge>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">Groups</div>
-                          <div className="text-lg font-semibold">{entraConfig?.syncedGroupCount || 0}</div>
+                      </Card>
+                      <Card className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                            <RefreshCw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">User Provisioning</div>
+                            <StatusBadge variant={entraConfig?.scimEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
+                              {entraConfig?.scimEnabled ? "Active" : "Inactive"}
+                            </StatusBadge>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                    <Card className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                          <Zap className="h-4 w-4 text-green-600 dark:text-green-400" />
+                      </Card>
+                    </div>
+                  </div>
+
+                  {/* Device Management Section */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <HardDrive className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="text-sm font-medium">Device Management (Intune)</h3>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Card className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-cyan-500/10 flex items-center justify-center shrink-0">
+                            <HardDrive className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Synced Devices</div>
+                            <div className="text-lg font-semibold">{entraConfig?.syncedDeviceCount || 0}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">SSO</div>
-                          <StatusBadge variant={entraConfig?.ssoEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
-                            {entraConfig?.ssoEnabled ? "Enabled" : "Disabled"}
-                          </StatusBadge>
+                      </Card>
+                      <Card className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-teal-500/10 flex items-center justify-center shrink-0">
+                            <RefreshCw className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Device Sync</div>
+                            <StatusBadge variant={entraConfig?.syncDevicesEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
+                              {entraConfig?.syncDevicesEnabled ? "Active" : "Inactive"}
+                            </StatusBadge>
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                    <Card className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                          <RefreshCw className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      </Card>
+                      <Card className="p-3 sm:col-span-2">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg bg-slate-500/10 flex items-center justify-center shrink-0">
+                            <Settings className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-muted-foreground">Last Device Sync</div>
+                            <div className="text-sm font-medium">
+                              {entraConfig?.lastDeviceSyncAt 
+                                ? new Date(entraConfig.lastDeviceSyncAt).toLocaleString()
+                                : "Never synced"}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-muted-foreground">User Sync</div>
-                          <StatusBadge variant={entraConfig?.scimEnabled ? "success" : "default"} className="text-xs px-1.5 py-0">
-                            {entraConfig?.scimEnabled ? "Active" : "Inactive"}
-                          </StatusBadge>
-                        </div>
-                      </div>
-                    </Card>
+                      </Card>
+                    </div>
                   </div>
 
                   {/* Last Sync Info */}
                   <Card className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="font-medium text-sm">Sync Status</div>
+                        <div className="font-medium text-sm">User Sync Status</div>
                         <div className="text-xs text-muted-foreground">
                           {entraConfig?.lastSyncAt 
                             ? `Last synced: ${new Date(entraConfig.lastSyncAt).toLocaleString()}`
@@ -390,14 +445,14 @@ export default function IntegrationsPage() {
                           ) : (
                             <RefreshCw className="mr-2 h-4 w-4" />
                           )}
-                          Sync Now
+                          Sync Users
                         </Button>
                       </Protected>
                     </div>
                   </Card>
 
                   {/* Quick Actions */}
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
                     <Button variant="outline" className="justify-between h-auto py-4" asChild>
                       <a 
                         href="https://entra.microsoft.com" 
@@ -405,10 +460,26 @@ export default function IntegrationsPage() {
                         rel="noopener noreferrer"
                       >
                         <div className="flex items-center gap-3">
-                          <Settings className="h-5 w-5 text-muted-foreground" />
+                          <Shield className="h-5 w-5 text-muted-foreground" />
                           <div className="text-left">
                             <div className="font-medium">Entra Admin Center</div>
-                            <div className="text-xs text-muted-foreground">Manage your Azure AD settings</div>
+                            <div className="text-xs text-muted-foreground">Identity & access</div>
+                          </div>
+                        </div>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </a>
+                    </Button>
+                    <Button variant="outline" className="justify-between h-auto py-4" asChild>
+                      <a 
+                        href="https://intune.microsoft.com" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <HardDrive className="h-5 w-5 text-muted-foreground" />
+                          <div className="text-left">
+                            <div className="font-medium">Intune Admin Center</div>
+                            <div className="text-xs text-muted-foreground">Device management</div>
                           </div>
                         </div>
                         <ExternalLink className="h-4 w-4 text-muted-foreground" />
@@ -423,8 +494,8 @@ export default function IntegrationsPage() {
                         <div className="flex items-center gap-3">
                           <ExternalLink className="h-5 w-5 text-muted-foreground" />
                           <div className="text-left">
-                            <div className="font-medium">Sync Documentation</div>
-                            <div className="text-xs text-muted-foreground">Learn about user sync and SCIM</div>
+                            <div className="font-medium">Documentation</div>
+                            <div className="text-xs text-muted-foreground">Setup guides</div>
                           </div>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -434,6 +505,11 @@ export default function IntegrationsPage() {
                 </TabsContent>
 
                 <TabsContent value="sso" className="space-y-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                      Powered by Entra ID
+                    </Badge>
+                  </div>
                   <Alert>
                     <Shield className="h-4 w-4" />
                     <AlertTitle>Single Sign-On {entraConfig?.ssoEnabled ? "Active" : "Disabled"}</AlertTitle>
@@ -543,13 +619,18 @@ export default function IntegrationsPage() {
                 </TabsContent>
 
                 <TabsContent value="sync" className="space-y-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                      Powered by Entra ID
+                    </Badge>
+                  </div>
                   <Alert>
                     <RefreshCw className="h-4 w-4" />
-                    <AlertTitle>User Sync {entraConfig?.scimEnabled ? "Active" : "Disabled"}</AlertTitle>
+                    <AlertTitle>User Provisioning {entraConfig?.scimEnabled ? "Active" : "Disabled"}</AlertTitle>
                     <AlertDescription>
                       {entraConfig?.scimEnabled
                         ? "Users and groups are automatically synced from Microsoft Entra ID."
-                        : "Enable sync to automatically sync users and groups from Microsoft Entra ID."}
+                        : "Enable provisioning to automatically sync users and groups from Microsoft Entra ID."}
                     </AlertDescription>
                   </Alert>
 
@@ -786,9 +867,14 @@ export default function IntegrationsPage() {
                 </TabsContent>
 
                 <TabsContent value="devices" className="space-y-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                      Powered by Intune
+                    </Badge>
+                  </div>
                   <Alert>
                     <HardDrive className="h-4 w-4" />
-                    <AlertTitle>Device Sync (Microsoft Intune)</AlertTitle>
+                    <AlertTitle>Device Management {entraConfig?.syncDevicesEnabled ? "Active" : "Disabled"}</AlertTitle>
                     <AlertDescription>
                       Sync managed devices from Microsoft Intune to your asset inventory.
                       Configure detailed sync settings in Assets → Settings.
@@ -896,10 +982,10 @@ export default function IntegrationsPage() {
               <div className="space-y-6">
                 <Alert>
                   <Shield className="h-4 w-4" />
-                  <AlertTitle>Connect Microsoft Entra ID</AlertTitle>
+                  <AlertTitle>Connect Microsoft 365</AlertTitle>
                   <AlertDescription>
-                    Enable Single Sign-On and automatic user provisioning for your organization.
-                    Users will be able to sign in with their Microsoft organizational accounts.
+                    Enable Single Sign-On, user provisioning, and device management for your organization.
+                    Connect once to access identity (Entra ID) and device management (Intune) services.
                   </AlertDescription>
                 </Alert>
 
@@ -971,7 +1057,7 @@ export default function IntegrationsPage() {
                     <CardHeader className="pt-0">
                       <CardTitle className="text-base">Enter Your Credentials</CardTitle>
                       <CardDescription>
-                        From your Microsoft Entra ID application
+                        From your Microsoft Entra ID app registration
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-4">
@@ -1014,7 +1100,7 @@ export default function IntegrationsPage() {
                           disabled={saveEntra.isPending || !formData.tenantId || !formData.clientId || !formData.clientSecret}
                         >
                           {saveEntra.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Connect Microsoft Entra ID
+                          Connect Microsoft 365
                         </Button>
                       </Protected>
                     </CardContent>
@@ -1024,7 +1110,7 @@ export default function IntegrationsPage() {
                 {/* Benefits Section */}
                 <Card>
                   <CardHeader className="pt-0">
-                    <CardTitle className="text-base">What you get with Entra ID integration</CardTitle>
+                    <CardTitle className="text-base">What you get with Microsoft 365 integration</CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="grid gap-4 sm:grid-cols-3">
