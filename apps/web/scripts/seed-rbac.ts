@@ -45,9 +45,11 @@ const DEFAULT_MODULES = [
   // Assets & Equipment
   { slug: "assets.overview", name: "Assets Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200" },
   { slug: "assets.inventory", name: "Asset Inventory", description: "Manage company assets and equipment", category: "Assets", icon: "Package", sortOrder: "201" },
-  { slug: "assets.assignments", name: "Asset Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "202" },
-  { slug: "assets.maintenance", name: "Asset Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "203" },
-  { slug: "assets.disposal", name: "Asset Disposal", description: "Manage asset disposal and retirement", category: "Assets", icon: "Trash2", sortOrder: "204" },
+  { slug: "assets.categories", name: "Asset Categories", description: "Manage asset categories and classification", category: "Assets", icon: "FolderTree", sortOrder: "202" },
+  { slug: "assets.assignments", name: "Asset Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "203" },
+  { slug: "assets.maintenance", name: "Asset Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "204" },
+  { slug: "assets.lifecycle", name: "Asset Lifecycle", description: "Manage asset lifecycle and disposal", category: "Assets", icon: "RotateCcw", sortOrder: "205" },
+  { slug: "assets.settings", name: "Asset Settings", description: "Configure asset module settings and sync", category: "Assets", icon: "Settings", sortOrder: "206" },
   
   // Security
   { slug: "security.overview", name: "Security Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300" },
@@ -105,9 +107,11 @@ const SYSTEM_ROLES: Record<string, {
       // Assets - Full access
       "assets.overview": { view: true, create: true, edit: true, delete: true },
       "assets.inventory": { view: true, create: true, edit: true, delete: true },
+      "assets.categories": { view: true, create: true, edit: true, delete: true },
       "assets.assignments": { view: true, create: true, edit: true, delete: true },
       "assets.maintenance": { view: true, create: true, edit: true, delete: true },
-      "assets.disposal": { view: true, create: true, edit: true, delete: true },
+      "assets.lifecycle": { view: true, create: true, edit: true, delete: true },
+      "assets.settings": { view: true, create: true, edit: true, delete: true },
       // Security - Full access
       "security.overview": { view: true, create: true, edit: true, delete: true },
       "security.risks": { view: true, create: true, edit: true, delete: true },
@@ -139,7 +143,10 @@ const SYSTEM_ROLES: Record<string, {
       // Assets - Limited
       "assets.overview": { view: true, create: false, edit: false, delete: false },
       "assets.inventory": { view: true, create: false, edit: true, delete: false },
+      "assets.categories": { view: true, create: false, edit: false, delete: false },
       "assets.assignments": { view: true, create: true, edit: true, delete: false },
+      "assets.maintenance": { view: true, create: false, edit: false, delete: false },
+      "assets.lifecycle": { view: true, create: false, edit: false, delete: false },
       // Security - View only
       "security.overview": { view: true, create: false, edit: false, delete: false },
       "security.risks": { view: true, create: false, edit: false, delete: false },
@@ -163,6 +170,7 @@ const SYSTEM_ROLES: Record<string, {
       // Assets - View only
       "assets.overview": { view: true, create: false, edit: false, delete: false },
       "assets.inventory": { view: true, create: false, edit: false, delete: false },
+      "assets.categories": { view: true, create: false, edit: false, delete: false },
       "assets.assignments": { view: true, create: false, edit: false, delete: false },
       // Settings - View org only
       "settings.organization": { view: true, create: false, edit: false, delete: false },
