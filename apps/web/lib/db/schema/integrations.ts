@@ -51,6 +51,16 @@ export const integrations = pgTable("core_integrations", {
   // When enabled, deletes Person records when their linked User is deleted
   deletePeopleOnUserDelete: boolean("delete_people_on_user_delete").notNull().default(true),
   
+  // Device/Asset sync settings (Microsoft Intune)
+  // When enabled, syncs devices from Microsoft Intune to the Assets module
+  syncDevicesEnabled: boolean("sync_devices_enabled").notNull().default(false),
+  // When enabled, deletes Asset records when devices are removed from Intune
+  deleteAssetsOnDeviceDelete: boolean("delete_assets_on_device_delete").notNull().default(false),
+  // Last device sync timestamp
+  lastDeviceSyncAt: timestamp("last_device_sync_at", { withTimezone: true }),
+  // Count of synced devices
+  syncedDeviceCount: text("synced_device_count").default("0"),
+  
   // SSO configuration
   ssoEnabled: boolean("sso_enabled").notNull().default(false),
   passwordAuthDisabled: boolean("password_auth_disabled").notNull().default(false),

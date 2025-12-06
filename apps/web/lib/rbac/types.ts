@@ -19,7 +19,7 @@ export type Action = "read" | "write" | ActionType
 /**
  * Legacy role type for permissions.ts backwards compatibility
  */
-export type RoleType = "Owner" | "Admin" | "HR" | "Security" | "Auditor" | "User"
+export type RoleType = "Owner" | "Admin" | "HR" | "Security" | "Auditor" | "IT" | "User"
 
 /**
  * User information stored in context

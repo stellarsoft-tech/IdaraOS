@@ -8,6 +8,7 @@ import {
   ChevronRight, 
   Copy, 
   ExternalLink, 
+  HardDrive,
   Key, 
   Loader2, 
   RefreshCw, 
@@ -310,7 +311,8 @@ export default function IntegrationsPage() {
                 <TabsList className="mb-4">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="sso">SSO Settings</TabsTrigger>
-                  <TabsTrigger value="sync">Sync Settings</TabsTrigger>
+                  <TabsTrigger value="sync">User Sync</TabsTrigger>
+                  <TabsTrigger value="devices">Device Sync</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-4">
@@ -780,6 +782,112 @@ export default function IntegrationsPage() {
                         Regenerate Token
                       </Button>
                     </Protected>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="devices" className="space-y-6">
+                  <Alert>
+                    <HardDrive className="h-4 w-4" />
+                    <AlertTitle>Device Sync (Microsoft Intune)</AlertTitle>
+                    <AlertDescription>
+                      Sync managed devices from Microsoft Intune to your asset inventory.
+                      Configure detailed sync settings in Assets → Settings.
+                    </AlertDescription>
+                  </Alert>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg border">
+                      <div className="flex items-center gap-4">
+                        <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                          <HardDrive className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <div className="font-medium">Enable Device Sync</div>
+                          <div className="text-sm text-muted-foreground">
+                            Sync managed devices from Intune to Assets
+                          </div>
+                        </div>
+                      </div>
+                      <Switch 
+                        checked={entraConfig?.syncDevicesEnabled || false} 
+                        onCheckedChange={async (enabled) => {
+                          try {
+                            await updateEntra.mutateAsync({
+                              provider: "entra",
+                              syncDevicesEnabled: enabled,
+                            })
+                            toast.success(enabled ? "Device sync enabled" : "Device sync disabled")
+                          } catch (error) {
+                            toast.error(error instanceof Error ? error.message : "Failed to update")
+                          }
+                        }}
+                        disabled={!canEdit || updateEntra.isPending}
+                      />
+                    </div>
+
+                    {entraConfig?.syncDevicesEnabled && (
+                      <>
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Device Sync Status</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <div className="text-sm text-muted-foreground">Synced Devices</div>
+                                <div className="text-2xl font-bold">{entraConfig?.syncedDeviceCount || 0}</div>
+                              </div>
+                              <div>
+                                <div className="text-sm text-muted-foreground">Last Device Sync</div>
+                                <div className="text-sm font-medium">
+                                  {entraConfig?.lastDeviceSyncAt 
+                                    ? new Date(entraConfig.lastDeviceSyncAt).toLocaleString()
+                                    : "Never synced"}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-base">Required API Permissions</CardTitle>
+                            <CardDescription>
+                              Add these permissions to your Entra app registration for device sync
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="pt-0 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono text-xs">
+                                DeviceManagementManagedDevices.Read.All
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">Read managed devices</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono text-xs">
+                                DeviceManagementServiceConfig.Read.All
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">Read Intune config</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/50">
+                          <div>
+                            <div className="font-medium text-sm">Configure Sync Behavior</div>
+                            <div className="text-xs text-muted-foreground">
+                              Set up device filters, category mapping, and sync options
+                            </div>
+                          </div>
+                          <Button variant="outline" size="sm" asChild>
+                            <a href="/assets/settings">
+                              Go to Assets Settings
+                              <ChevronRight className="ml-2 h-4 w-4" />
+                            </a>
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>

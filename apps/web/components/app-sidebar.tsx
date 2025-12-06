@@ -85,9 +85,11 @@ const navigationData: NavItem[] = [
     items: [
       { title: "Overview", url: "/assets", module: "assets.overview" },
       { title: "Inventory", url: "/assets/inventory", module: "assets.inventory" },
+      { title: "Categories", url: "/assets/categories", module: "assets.categories" },
       { title: "Assignments", url: "/assets/assignments", module: "assets.assignments" },
       { title: "Maintenance", url: "/assets/maintenance", module: "assets.maintenance" },
-      { title: "Disposal", url: "/assets/disposal", module: "assets.disposal" },
+      { title: "Lifecycle", url: "/assets/lifecycle", module: "assets.lifecycle" },
+      { title: "Settings", url: "/assets/settings", module: "assets.settings" },
     ],
   },
   {

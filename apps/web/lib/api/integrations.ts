@@ -32,6 +32,10 @@ export interface EntraIntegration {
   lastSyncAt: string | null
   syncedUserCount: number
   syncedGroupCount: number
+  // Device sync (Intune) fields
+  syncDevicesEnabled: boolean
+  syncedDeviceCount: number
+  lastDeviceSyncAt: string | null
   lastError?: string | null
   lastErrorAt?: string | null
   createdAt?: string
@@ -57,6 +61,8 @@ export interface UpdateEntraConfig {
   syncPeopleEnabled?: boolean
   deletePeopleOnUserDelete?: boolean
   settings?: Record<string, unknown>
+  // Device sync (Intune) fields
+  syncDevicesEnabled?: boolean
 }
 
 // API functions
