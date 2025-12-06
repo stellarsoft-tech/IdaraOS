@@ -350,15 +350,11 @@ function safeParseDate(dateStr: string | undefined | null): Date | null {
  * Generate a URL-friendly slug from a name
  */
 function generateSlug(name: string, _email: string): string {
-  // Generate a URL-friendly slug from the full name only
-  const baseSlug = name
+  // Generate a URL-friendly slug from the full name only (no random suffix)
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
-  
-  // Add a short random suffix for uniqueness
-  const uniqueSuffix = Math.random().toString(36).slice(2, 6)
-  return `${baseSlug}-${uniqueSuffix}`
 }
 
 /**
