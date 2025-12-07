@@ -62,6 +62,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
+import { useBreadcrumbLabel } from "@/components/breadcrumb-context"
 import { usePeopleList } from "@/lib/api/people"
 import { z } from "zod"
 
@@ -151,6 +152,9 @@ export default function AssetDetailPage({ params }: PageProps) {
   const { data: people = [] } = usePeopleList()
   const { data: assignments = [] } = useAssignmentsList({ assetId: id, includeReturned: true })
   const { data: maintenanceRecords = [] } = useMaintenanceList({ assetId: id })
+  
+  // Set breadcrumb label to asset name
+  useBreadcrumbLabel(asset?.name)
   
   // Mutations
   const updateMutation = useUpdateAsset()

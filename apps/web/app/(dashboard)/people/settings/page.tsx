@@ -265,22 +265,43 @@ export default function PeopleSettingsPage() {
       title="People Settings"
       description="Configure People & HR module settings including Entra sync"
       action={
-        <Button 
-          onClick={handleSave} 
-          disabled={!canEdit || isSaving || !hasUnsavedChanges}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Check className="mr-2 h-4 w-4" />
-              Save Changes
-            </>
+        <div className="flex items-center gap-2">
+          <Button 
+            onClick={handleSave} 
+            disabled={!canEdit || isSaving || !hasUnsavedChanges}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
+            )}
+          </Button>
+          {isEntraConnected && (
+            <Button
+              variant="outline"
+              onClick={handleSync}
+              disabled={isSyncing || hasUnsavedChanges || (syncMode === "independent" && !groupPattern.trim()) || (syncMode === "linked" && !syncPeopleEnabled)}
+            >
+              {isSyncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sync Now
+                </>
+              )}
+            </Button>
           )}
-        </Button>
+        </div>
       }
     >
       <div className="space-y-6">
@@ -522,47 +543,33 @@ export default function PeopleSettingsPage() {
 
                 <Separator />
 
-                {/* Sync Stats & Actions */}
+                {/* Sync Status */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium">Sync Status</h4>
-                      {syncMode === "linked" ? (
-                        <p className="text-sm text-muted-foreground">
-                          {syncPeopleEnabled 
-                            ? "Syncs with users from Entra ID groups" 
-                            : "Enable 'Create People Records' to sync"
-                          }
-                        </p>
-                      ) : settings?.lastSyncAt ? (
-                        <p className="text-sm text-muted-foreground">
-                          Last sync: {new Date(settings.lastSyncAt).toLocaleString()}
-                          {settings.syncedPeopleCount && ` • ${settings.syncedPeopleCount} people synced`}
-                        </p>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">Never synced</p>
-                      )}
-                      {settings?.lastSyncError && (
-                        <p className="text-sm text-red-500 mt-1">{settings.lastSyncError}</p>
-                      )}
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={handleSync}
-                      disabled={isSyncing || (syncMode === "independent" && !groupPattern.trim()) || (syncMode === "linked" && !syncPeopleEnabled)}
-                    >
-                      {isSyncing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Syncing...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Sync Now
-                        </>
-                      )}
-                    </Button>
+                  <div>
+                    <h4 className="font-medium">Sync Status</h4>
+                    {syncMode === "linked" ? (
+                      <p className="text-sm text-muted-foreground">
+                        {syncPeopleEnabled 
+                          ? "Syncs with users from Entra ID groups" 
+                          : "Enable 'Create People Records' to sync"
+                        }
+                      </p>
+                    ) : settings?.lastSyncAt ? (
+                      <p className="text-sm text-muted-foreground">
+                        Last sync: {new Date(settings.lastSyncAt).toLocaleString()}
+                        {settings.syncedPeopleCount && ` • ${settings.syncedPeopleCount} people synced`}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Never synced</p>
+                    )}
+                    {settings?.lastSyncError && (
+                      <p className="text-sm text-red-500 mt-1">{settings.lastSyncError}</p>
+                    )}
+                    {hasUnsavedChanges && (
+                      <p className="text-sm text-amber-500 mt-1">
+                        Save your changes before syncing
+                      </p>
+                    )}
                   </div>
                 </div>
               </>

@@ -434,20 +434,6 @@ export default function IntegrationsPage() {
                             : "No sync performed yet"}
                         </div>
                       </div>
-                      <Protected module="settings.integrations" action="edit">
-                        <Button 
-                          size="sm"
-                          onClick={handleSync}
-                          disabled={triggerSync.isPending || (!entraConfig?.ssoEnabled && !entraConfig?.scimEnabled)}
-                        >
-                          {triggerSync.isPending ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                          )}
-                          Sync Users
-                        </Button>
-                      </Protected>
                     </div>
                   </Card>
 
@@ -619,10 +605,23 @@ export default function IntegrationsPage() {
                 </TabsContent>
 
                 <TabsContent value="sync" className="space-y-6">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center justify-between mb-2">
                     <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
                       Powered by Entra ID
                     </Badge>
+                    <Protected module="settings.integrations" action="edit">
+                      <Button 
+                        onClick={handleSync}
+                        disabled={triggerSync.isPending || !entraConfig?.scimEnabled}
+                      >
+                        {triggerSync.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                        )}
+                        Sync Users Now
+                      </Button>
+                    </Protected>
                   </div>
                   <Alert>
                     <RefreshCw className="h-4 w-4" />
