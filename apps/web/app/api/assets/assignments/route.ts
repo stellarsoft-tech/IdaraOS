@@ -18,6 +18,8 @@ interface AssignmentResponse {
     name: string
     model: string | null
     status: string
+    source: string
+    syncEnabled: boolean
   }
   personId: string
   person: {
@@ -73,6 +75,8 @@ export async function GET(request: NextRequest) {
           name: assets.name,
           model: assets.model,
           status: assets.status,
+          source: assets.source,
+          syncEnabled: assets.syncEnabled,
         },
         person: {
           id: persons.id,

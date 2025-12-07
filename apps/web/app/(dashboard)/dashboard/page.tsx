@@ -19,10 +19,34 @@ export default function DashboardPage() {
       <PageHeader title="Dashboard" description="Welcome back! Here's an overview of your organization." />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Total People" value={6} description="1 onboarding" icon={Users} />
-        <StatCard title="Active Assets" value={10} description="8 assigned, 1 available" icon={HardDrive} />
-        <StatCard title="Open Risks" value={3} description="2 high priority" icon={AlertTriangle} />
-        <StatCard title="Active Policies" value={6} description="1 pending review" icon={FileText} />
+        <StatCard 
+          title="Total People" 
+          value={6} 
+          description="1 onboarding" 
+          icon={Users}
+          iconColor="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+        />
+        <StatCard 
+          title="Active Assets" 
+          value={10} 
+          description="8 assigned, 1 available" 
+          icon={HardDrive}
+          iconColor="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+        />
+        <StatCard 
+          title="Open Risks" 
+          value={3} 
+          description="2 high priority" 
+          icon={AlertTriangle}
+          iconColor="bg-red-500/10 text-red-600 dark:text-red-400"
+        />
+        <StatCard 
+          title="Active Policies" 
+          value={6} 
+          description="1 pending review" 
+          icon={FileText}
+          iconColor="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -103,7 +127,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
               <div>
                 <p className="text-sm font-medium">Dell XPS 15 Warranty</p>
-                <p className="text-xs text-muted-foreground">Asset LAP-005</p>
+                <p className="text-xs text-muted-foreground">Asset <span className="font-mono">LAP-005</span></p>
               </div>
               <StatusBadge variant="danger">Expired</StatusBadge>
             </div>

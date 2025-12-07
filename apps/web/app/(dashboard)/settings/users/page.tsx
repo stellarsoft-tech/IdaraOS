@@ -821,11 +821,38 @@ export default function UsersPage() {
               {(() => {
                 const editingUser = users.find(u => u.id === editUserId)
                 const isScimLocked = sheetMode === "edit" && editingUser?.isScimProvisioned && !scimBidirectionalSync
+                const isScimBidirectional = sheetMode === "edit" && editingUser?.isScimProvisioned && scimBidirectionalSync
                 
                 return (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="name" className="flex items-center gap-1.5">
+                    Full Name
+                    {isScimLocked && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex"><Lock className="h-3.5 w-3.5 text-purple-500" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            Synced from Microsoft Entra ID (read-only)
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    {isScimBidirectional && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex"><RefreshCw className="h-3.5 w-3.5 text-green-500" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            Changes will sync back to Entra ID
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </Label>
                   <Input
                     id="name"
                     value={formData.name}
@@ -836,20 +863,62 @@ export default function UsersPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="email" className="flex items-center gap-1.5">
+                    Email Address
+                    {(isScimLocked || isScimBidirectional) && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-flex"><Lock className="h-3.5 w-3.5 text-purple-500" /></span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="text-xs">
+                            {isScimBidirectional 
+                              ? "Email is always managed in Entra ID (cannot sync back)"
+                              : "Synced from Microsoft Entra ID (read-only)"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                     placeholder="user@example.com"
-                        disabled={!!selectedEntraUser || isScimLocked}
+                        disabled={!!selectedEntraUser || isScimLocked || isScimBidirectional}
                   />
                 </div>
 
                 {sheetMode === "edit" && (
                   <div className="space-y-2">
-                    <Label htmlFor="status">Status</Label>
+                    <Label htmlFor="status" className="flex items-center gap-1.5">
+                      Status
+                      {isScimLocked && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex"><Lock className="h-3.5 w-3.5 text-purple-500" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Synced from Microsoft Entra ID (read-only)
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      {isScimBidirectional && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="inline-flex"><RefreshCw className="h-3.5 w-3.5 text-green-500" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Changes will sync back to Entra ID
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </Label>
                     <Select
                       value={formData.status}
                       onValueChange={(value) => setFormData((prev) => ({ 

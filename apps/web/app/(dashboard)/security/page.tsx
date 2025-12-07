@@ -31,15 +31,27 @@ export default function SecurityOverviewPage() {
           value={openRisks}
           description={`${highRisks} high priority`}
           icon={AlertTriangle}
+          iconColor="bg-red-500/10 text-red-600 dark:text-red-400"
         />
         <StatCard
           title="Controls"
           value={controls.length}
           description={`${effectiveControls} effective`}
           icon={Shield}
+          iconColor="bg-blue-500/10 text-blue-600 dark:text-blue-400"
         />
-        <StatCard title="Active Audits" value={activeAudits} icon={ClipboardList} />
-        <StatCard title="Evidence Items" value={54} icon={FileCheck} />
+        <StatCard 
+          title="Active Audits" 
+          value={activeAudits} 
+          icon={ClipboardList}
+          iconColor="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+        />
+        <StatCard 
+          title="Evidence Items" 
+          value={54} 
+          icon={FileCheck}
+          iconColor="bg-green-500/10 text-green-600 dark:text-green-400"
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -158,7 +170,7 @@ export default function SecurityOverviewPage() {
             {risks.slice(0, 4).map((risk) => (
               <div key={risk.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                 <div>
-                  <p className="text-sm font-medium">{risk.id}</p>
+                  <p className="text-sm font-medium !font-mono">{risk.id}</p>
                   <p className="text-xs text-muted-foreground truncate max-w-[200px]">{risk.title}</p>
                 </div>
                 <StatusBadge

@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 
 interface BreadcrumbContextValue {
   /** Custom label to display for the current detail page */
@@ -41,14 +41,9 @@ export function useBreadcrumbLabel(label: string | null | undefined) {
   const { setDetailLabel } = useBreadcrumb()
   
   // Set label on mount/change, clear on unmount
-  useState(() => {
+  useEffect(() => {
     setDetailLabel(label ?? null)
     return () => setDetailLabel(null)
-  })
-  
-  // Update label when it changes
-  if (label !== undefined) {
-    setDetailLabel(label)
-  }
+  }, [label, setDetailLabel])
 }
 

@@ -957,6 +957,43 @@ export default function IntegrationsPage() {
                           </CardContent>
                         </Card>
 
+                        {/* Sync Field Documentation */}
+                        <Card className="bg-muted/50">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm">Field Sync Behavior</CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0 space-y-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <RefreshCw className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                <div className="font-medium text-sm">Intune → Assets (Read-Only)</div>
+                              </div>
+                              <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
+                                <li>Device Name</li>
+                                <li>Serial Number</li>
+                                <li>Manufacturer & Model</li>
+                                <li>Compliance State</li>
+                                <li>Enrollment Type & Date</li>
+                                <li>Assigned User</li>
+                              </ul>
+                            </div>
+                            <Separator />
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Settings className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                <div className="font-medium text-sm">Locally Managed (Editable)</div>
+                              </div>
+                              <ul className="text-xs text-muted-foreground space-y-1 ml-6 list-disc">
+                                <li>Category</li>
+                                <li>Location</li>
+                                <li>Purchase Cost</li>
+                                <li>Warranty End Date</li>
+                                <li>Notes & Custom Fields</li>
+                              </ul>
+                            </div>
+                          </CardContent>
+                        </Card>
+
                         <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/50">
                           <div>
                             <div className="font-medium text-sm">Configure Sync Behavior</div>

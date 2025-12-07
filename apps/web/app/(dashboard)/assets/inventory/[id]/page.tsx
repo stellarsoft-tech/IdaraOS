@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { useBreadcrumbLabel } from "@/components/breadcrumb-context"
@@ -124,6 +125,8 @@ const editAssetSchema = z.object({
   warrantyEnd: z.string().optional().nullable(),
   location: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  assignedToId: z.string().uuid().optional().nullable(),
+  assignedAt: z.string().optional().nullable(),
 })
 
 interface PageProps {
@@ -162,10 +165,23 @@ export default function AssetDetailPage({ params }: PageProps) {
   const assignMutation = useAssignAsset()
   const returnMutation = useReturnAsset()
   
-  // Form config
+  // Determine if asset is Intune-synced with sync enabled
+  const isIntuneSynced = asset?.source === "intune_sync" && asset?.syncEnabled
+  
+  // Form config with sync indicators for Intune-managed fields
   const formConfig = {
-    assetTag: { component: "input" as const, label: "Asset Tag", placeholder: "e.g., LAP-001" },
-    name: { component: "input" as const, label: "Name", placeholder: "e.g., MacBook Pro 16" },
+    assetTag: { 
+      component: "input" as const, 
+      label: "Asset Tag", 
+      placeholder: "e.g., LAP-001",
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+    },
+    name: { 
+      component: "input" as const, 
+      label: "Name", 
+      placeholder: "e.g., MacBook Pro 16",
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+    },
     description: { component: "textarea" as const, label: "Description", placeholder: "Asset description" },
     categoryId: { 
       component: "select" as const,
@@ -184,28 +200,74 @@ export default function AssetDetailPage({ params }: PageProps) {
         { value: "disposed", label: "Disposed" },
       ]
     },
-    serialNumber: { component: "input" as const, label: "Serial Number", placeholder: "Manufacturer serial" },
-    manufacturer: { component: "input" as const, label: "Manufacturer", placeholder: "e.g., Apple, Dell" },
-    model: { component: "input" as const, label: "Model", placeholder: "Model name/number" },
+    serialNumber: { 
+      component: "input" as const, 
+      label: "Serial Number", 
+      placeholder: "Manufacturer serial",
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+    },
+    manufacturer: { 
+      component: "input" as const, 
+      label: "Manufacturer", 
+      placeholder: "e.g., Apple, Dell",
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+    },
+    model: { 
+      component: "input" as const, 
+      label: "Model", 
+      placeholder: "Model name/number",
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+    },
     purchaseDate: { component: "date-picker" as const, label: "Purchase Date" },
     purchaseCost: { component: "input" as const, label: "Purchase Cost", placeholder: "0.00" },
     warrantyEnd: { component: "date-picker" as const, label: "Warranty End" },
     location: { component: "input" as const, label: "Location", placeholder: "e.g., HQ, Remote" },
     notes: { component: "textarea" as const, label: "Notes", placeholder: "Additional notes" },
+    assignedToId: { 
+      component: "select" as const,
+      label: "Assigned To", 
+      placeholder: "Select a person...", 
+      options: [
+        { value: "__none__", label: "Unassigned" },
+        ...people.filter(p => p.status === "active").map(p => ({ value: p.id, label: `${p.name} (${p.email})` })),
+      ],
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+      helpText: isIntuneSynced 
+        ? "Managed by Intune sync based on device user" 
+        : "Select who this asset is assigned to",
+    },
+    assignedAt: { 
+      component: "date-picker" as const, 
+      label: "Assigned Date",
+      syncIndicator: isIntuneSynced ? "intune" as const : undefined,
+      helpText: isIntuneSynced 
+        ? "Set from Intune device enrollment date" 
+        : "When was this asset assigned",
+    },
   }
+  
+  // Show assignment fields only when status is "assigned" or asset is already assigned
+  const showAssignmentFields = asset?.status === "assigned" || asset?.assignedToId
   
   const editFields = [
     "assetTag", "name", "description", "categoryId", "status",
     "serialNumber", "manufacturer", "model",
     "purchaseDate", "purchaseCost", "warrantyEnd",
-    "location", "notes"
+    "location", 
+    ...(showAssignmentFields ? ["assignedToId", "assignedAt"] : []),
+    "notes"
   ]
   
   // Handlers
   const handleEdit = async (values: UpdateAsset) => {
     if (!asset) return
     try {
-      await updateMutation.mutateAsync({ id: asset.id, data: values })
+      // Convert "__none__" to null for assignedToId
+      const processedValues = {
+        ...values,
+        assignedToId: values.assignedToId === "__none__" ? null : values.assignedToId,
+      }
+      await updateMutation.mutateAsync({ id: asset.id, data: processedValues })
       toast.success("Asset updated successfully")
       setEditOpen(false)
     } catch (err) {
@@ -299,7 +361,7 @@ export default function AssetDetailPage({ params }: PageProps) {
   const Icon = getCategoryIcon(asset.category?.slug)
   const isAssigned = asset.status === "assigned" && asset.assignedToId
   const warrantyExpired = asset.warrantyEnd && new Date(asset.warrantyEnd) < new Date()
-  
+
   return (
     <PageShell
       title={asset.name}
@@ -333,9 +395,9 @@ export default function AssetDetailPage({ params }: PageProps) {
             <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
-            </Button>
+        </Button>
           )}
-        </div>
+      </div>
       }
     >
       <div className="space-y-6">
@@ -350,7 +412,7 @@ export default function AssetDetailPage({ params }: PageProps) {
                 <div className="flex items-center gap-3 mb-2">
                   <h2 className="text-2xl font-bold">{asset.name}</h2>
                   <Badge variant={statusVariants[asset.status] || "default"}>
-                    {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
+                {asset.status.charAt(0).toUpperCase() + asset.status.slice(1)}
                   </Badge>
                   {asset.source === "intune_sync" && (
                     <Badge className="gap-1 bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border-0">
@@ -362,19 +424,19 @@ export default function AssetDetailPage({ params }: PageProps) {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Tag className="h-4 w-4" />
-                    <span className="font-mono">{asset.assetTag}</span>
-                  </div>
+                    <span className="!font-mono">{asset.assetTag}</span>
+            </div>
                   {asset.model && (
                     <div className="flex items-center gap-1">
                       <HardDrive className="h-4 w-4" />
                       <span>{asset.manufacturer ? `${asset.manufacturer} ` : ""}{asset.model}</span>
-                    </div>
+              </div>
                   )}
                   {asset.location && (
                     <div className="flex items-center gap-1">
                       <MapPin className="h-4 w-4" />
-                      <span>{asset.location}</span>
-                    </div>
+                <span>{asset.location}</span>
+              </div>
                   )}
                   {asset.warrantyEnd && (
                     <div className="flex items-center gap-1">
@@ -397,25 +459,25 @@ export default function AssetDetailPage({ params }: PageProps) {
                     </Link>
                     <span className="text-xs text-muted-foreground">
                       ({asset.assignedTo.email})
-                    </span>
+                </span>
                   </div>
                 )}
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         {/* Tabs */}
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="assignments">Assignments ({assignments.length})</TabsTrigger>
             <TabsTrigger value="maintenance">Maintenance ({maintenanceRecords.length})</TabsTrigger>
             {asset.source === "intune_sync" && (
               <TabsTrigger value="intune">Intune Info</TabsTrigger>
             )}
-          </TabsList>
-          
+            </TabsList>
+
           <TabsContent value="overview" className="mt-6">
             <div className="grid gap-6 md:grid-cols-2">
               {/* Specifications */}
@@ -425,26 +487,26 @@ export default function AssetDetailPage({ params }: PageProps) {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
+                  <div>
                       <div className="text-muted-foreground">Serial Number</div>
-                      <div className="font-medium font-mono">{asset.serialNumber || "—"}</div>
-                    </div>
-                    <div>
+                      <div className="font-medium !font-mono">{asset.serialNumber || "—"}</div>
+                  </div>
+                  <div>
                       <div className="text-muted-foreground">Manufacturer</div>
                       <div className="font-medium">{asset.manufacturer || "—"}</div>
-                    </div>
-                    <div>
+                  </div>
+                  <div>
                       <div className="text-muted-foreground">Model</div>
                       <div className="font-medium">{asset.model || "—"}</div>
-                    </div>
-                    <div>
+                  </div>
+                  <div>
                       <div className="text-muted-foreground">Category</div>
                       <div className="font-medium">{asset.category?.name || "Uncategorized"}</div>
-                    </div>
+                  </div>
                   </div>
                 </CardContent>
               </Card>
-              
+
               {/* Financial */}
               <Card>
                 <CardHeader>
@@ -497,17 +559,17 @@ export default function AssetDetailPage({ params }: PageProps) {
                 </Card>
               )}
             </div>
-          </TabsContent>
-          
+            </TabsContent>
+
           <TabsContent value="assignments" className="mt-6">
-            <Card>
-              <CardHeader>
+              <Card>
+                <CardHeader>
                 <CardTitle className="text-base">Assignment History</CardTitle>
                 <CardDescription>
                   A complete history of who this asset has been assigned to.
                 </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                 {assignments.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <History className="mx-auto h-8 w-8 mb-2" />
@@ -624,10 +686,10 @@ export default function AssetDetailPage({ params }: PageProps) {
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
+                </CardContent>
+              </Card>
+            </TabsContent>
+
           {asset.source === "intune_sync" && (
             <TabsContent value="intune" className="mt-6">
               <Card>
@@ -644,7 +706,7 @@ export default function AssetDetailPage({ params }: PageProps) {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <div className="text-muted-foreground">Intune Device ID</div>
-                      <div className="font-medium font-mono text-xs">
+                      <div className="font-medium !font-mono text-xs">
                         {asset.intuneDeviceId || "—"}
                       </div>
                     </div>
@@ -696,7 +758,7 @@ export default function AssetDetailPage({ params }: PageProps) {
               </Card>
             </TabsContent>
           )}
-        </Tabs>
+          </Tabs>
       </div>
       
       {/* Edit Drawer */}
@@ -726,12 +788,30 @@ export default function AssetDetailPage({ params }: PageProps) {
           warrantyEnd: asset.warrantyEnd || "",
           location: asset.location || "",
           notes: asset.notes || "",
+          assignedToId: asset.assignedToId || "__none__",
+          assignedAt: asset.assignedAt || "",
         }}
         onSubmit={handleEdit}
         disabledFields={
           asset.source === "intune_sync" && asset.syncEnabled
-            ? ["assetTag", "name", "serialNumber", "manufacturer", "model"]
+            ? ["assetTag", "name", "serialNumber", "manufacturer", "model", "assignedToId", "assignedAt"]
             : []
+        }
+        infoBanner={
+          asset.source === "intune_sync" && asset.syncEnabled ? (
+            <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-2 text-blue-700 dark:text-blue-300 text-sm">
+                <RefreshCw className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-medium">Synced from Microsoft Intune</span>
+                  <p className="text-blue-600 dark:text-blue-400 mt-0.5">
+                    Fields marked with a lock icon are managed by Intune and cannot be edited here.
+                    Changes will be overwritten on the next sync.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : undefined
         }
       />
       
@@ -823,6 +903,15 @@ export default function AssetDetailPage({ params }: PageProps) {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
+            {isIntuneSynced && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Intune Sync Warning</AlertTitle>
+                <AlertDescription>
+                  This asset is synced from Microsoft Intune. After returning it here, you must also manually unassign the device from the user in Intune. Otherwise, the next sync will automatically re-assign it to the same person.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label>Notes (optional)</Label>
               <Textarea

@@ -268,7 +268,7 @@ export default function InventoryPage() {
           <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
             <Icon className="h-4 w-4 text-muted-foreground" />
           </div>
-            <span className="font-mono font-medium">{asset.assetTag}</span>
+          <span className="!font-mono font-medium">{asset.assetTag}</span>
         </div>
       )
       },
@@ -379,6 +379,22 @@ export default function InventoryPage() {
       },
       enableSorting: true,
       size: 120,
+    },
+    {
+      id: "assignedAt",
+      header: "Assigned",
+      accessorKey: "assignedAt",
+      cell: ({ row }) => {
+        const date = row.original.assignedAt
+        if (!date) return <span className="text-muted-foreground">—</span>
+        return (
+          <span className="text-sm">
+            {new Date(date).toLocaleDateString()}
+          </span>
+        )
+      },
+      enableSorting: true,
+      size: 100,
     },
     {
       id: "source",
