@@ -170,7 +170,7 @@ export default function SecurityOverviewPage() {
             {risks.slice(0, 4).map((risk) => (
               <div key={risk.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                 <div>
-                  <p className="text-sm font-medium !font-mono">{risk.id}</p>
+                  <p className="text-sm font-medium">{risk.id}</p>
                   <p className="text-xs text-muted-foreground truncate max-w-[200px]">{risk.title}</p>
                 </div>
                 <StatusBadge

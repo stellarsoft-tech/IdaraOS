@@ -424,7 +424,7 @@ export default function AssetDetailPage({ params }: PageProps) {
                 <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Tag className="h-4 w-4" />
-                    <span className="!font-mono">{asset.assetTag}</span>
+                    <span>{asset.assetTag}</span>
             </div>
                   {asset.model && (
                     <div className="flex items-center gap-1">
@@ -489,7 +489,7 @@ export default function AssetDetailPage({ params }: PageProps) {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                       <div className="text-muted-foreground">Serial Number</div>
-                      <div className="font-medium !font-mono">{asset.serialNumber || "—"}</div>
+                      <div className="font-medium">{asset.serialNumber || "—"}</div>
                   </div>
                   <div>
                       <div className="text-muted-foreground">Manufacturer</div>
@@ -706,7 +706,7 @@ export default function AssetDetailPage({ params }: PageProps) {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <div className="text-muted-foreground">Intune Device ID</div>
-                      <div className="font-medium !font-mono text-xs">
+                      <div className="font-medium text-xs">
                         {asset.intuneDeviceId || "—"}
                       </div>
                     </div>

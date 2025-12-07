@@ -93,7 +93,7 @@ export default function EvidencePage() {
                     )}
                   </div>
                   <div>
-                    <p className="font-medium font-mono text-sm">{item.id}</p>
+                    <p className="font-medium text-sm">{item.id}</p>
                     <p className="text-xs text-muted-foreground">
                       {item.controlId} • {item.controlTitle}
                     </p>

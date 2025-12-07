@@ -531,7 +531,7 @@ export default function PersonDetailPage() {
                 <CardContent className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <p className="text-sm text-muted-foreground">Person ID</p>
-                    <p className="font-medium font-mono text-sm">{person.id.slice(0, 8).toUpperCase()}</p>
+                    <p className="font-medium text-sm">{person.id.slice(0, 8).toUpperCase()}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Department / Team</p>
@@ -704,7 +704,7 @@ export default function PersonDetailPage() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{asset.name}</span>
-                                <Badge variant="outline" className="text-xs font-mono">
+                                <Badge variant="outline" className="text-xs">
                                   {asset.assetTag}
                                 </Badge>
                               </div>
@@ -773,7 +773,7 @@ export default function PersonDetailPage() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <p className="text-sm text-muted-foreground">Entra ID</p>
-                          <p className="font-mono text-xs truncate">{person.entraId || "—"}</p>
+                          <p className="text-xs truncate">{person.entraId || "—"}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Source Group</p>

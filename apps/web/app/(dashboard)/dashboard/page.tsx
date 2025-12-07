@@ -127,7 +127,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
               <div>
                 <p className="text-sm font-medium">Dell XPS 15 Warranty</p>
-                <p className="text-xs text-muted-foreground">Asset <span className="font-mono">LAP-005</span></p>
+                <p className="text-xs text-muted-foreground">Asset LAP-005</p>
               </div>
               <StatusBadge variant="danger">Expired</StatusBadge>
             </div>
