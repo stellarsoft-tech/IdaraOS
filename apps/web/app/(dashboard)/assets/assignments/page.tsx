@@ -129,7 +129,7 @@ export default function AssignmentsPage() {
                 e.stopPropagation()
                 router.push(`/assets/inventory/${assignment.assetId}`)
               }}
-              className="text-sm font-medium !font-mono text-primary hover:underline text-left"
+              className="text-sm font-medium text-primary hover:underline text-left"
             >
               {assignment.asset.assetTag}
             </button>

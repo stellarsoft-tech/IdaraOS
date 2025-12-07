@@ -13,7 +13,7 @@ const columns = [
   {
     key: "id" as const,
     label: "Control ID",
-    render: (control: Control) => <span className="font-mono font-medium">{control.id}</span>,
+    render: (control: Control) => <span className="font-medium">{control.id}</span>,
   },
   {
     key: "title" as const,

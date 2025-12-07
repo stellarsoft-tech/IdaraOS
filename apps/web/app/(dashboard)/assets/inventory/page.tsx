@@ -268,7 +268,7 @@ export default function InventoryPage() {
           <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
             <Icon className="h-4 w-4 text-muted-foreground" />
           </div>
-          <span className="!font-mono font-medium">{asset.assetTag}</span>
+          <span className="font-medium">{asset.assetTag}</span>
         </div>
       )
       },
