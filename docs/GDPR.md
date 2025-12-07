@@ -602,7 +602,7 @@ CREATE TABLE gdpr_consents (
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | 2024-12-07 | IdaraOS Team | Initial GDPR compliance assessment |
+| 1.0 | 2025-12-07 | IdaraOS Team | Initial GDPR compliance assessment |
 
 ---
 
