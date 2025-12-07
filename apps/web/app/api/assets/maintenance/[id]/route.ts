@@ -192,24 +192,25 @@ export async function PATCH(
     
     if (data.type !== undefined) updateData.type = data.type
     if (data.status !== undefined) updateData.status = data.status
-    if (data.description !== undefined) updateData.description = data.description
+    if (data.description !== undefined) updateData.description = data.description || null
     
-    // Handle date fields: convert empty strings to null, keep valid date strings as-is
+    // Handle date fields: convert empty strings to null
     if (data.scheduledDate !== undefined) {
-      updateData.scheduledDate = data.scheduledDate === "" || data.scheduledDate === null
-        ? null
-        : data.scheduledDate
+      updateData.scheduledDate = data.scheduledDate || null
     }
     if (data.completedDate !== undefined) {
-      updateData.completedDate = data.completedDate === "" || data.completedDate === null
-        ? null
-        : data.completedDate
+      updateData.completedDate = data.completedDate || null
     }
     
-    if (data.cost !== undefined) updateData.cost = data.cost
-    if (data.vendor !== undefined) updateData.vendor = data.vendor
-    if (data.assignedToId !== undefined) updateData.assignedToId = data.assignedToId
-    if (data.notes !== undefined) updateData.notes = data.notes
+    // Handle numeric fields: convert empty strings to null
+    if (data.cost !== undefined) {
+      updateData.cost = data.cost || null
+    }
+    
+    // Handle other nullable string fields
+    if (data.vendor !== undefined) updateData.vendor = data.vendor || null
+    if (data.assignedToId !== undefined) updateData.assignedToId = data.assignedToId || null
+    if (data.notes !== undefined) updateData.notes = data.notes || null
     
     // Update record
     const result = await db

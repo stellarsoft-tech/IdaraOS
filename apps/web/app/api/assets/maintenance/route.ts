@@ -241,18 +241,14 @@ export async function POST(request: NextRequest) {
         assetId: data.assetId,
         type: data.type,
         status: data.status,
-        description: data.description ?? null,
-        scheduledDate: data.scheduledDate && data.scheduledDate !== "" 
-          ? data.scheduledDate 
-          : null,
-        completedDate: data.completedDate && data.completedDate !== "" 
-          ? data.completedDate 
-          : null,
-        cost: data.cost ?? null,
-        vendor: data.vendor ?? null,
+        description: data.description || null,
+        scheduledDate: data.scheduledDate || null,
+        completedDate: data.completedDate || null,
+        cost: data.cost || null,
+        vendor: data.vendor || null,
         performedById: session.userId,
-        assignedToId: data.assignedToId ?? null,
-        notes: data.notes ?? null,
+        assignedToId: data.assignedToId || null,
+        notes: data.notes || null,
       })
       .returning()
     
