@@ -12,6 +12,10 @@
  * This is idempotent and safe to run multiple times.
  */
 
+import type { NodeRequire, NodeModule } from 'node';
+declare var require: NodeRequire;
+declare var module: NodeModule;
+
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
 import { eq, and } from "drizzle-orm"
