@@ -264,7 +264,7 @@ export default function InventoryPage() {
         const asset = row.original
         const Icon = getCategoryIcon(asset.category?.slug)
       return (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3"> 
           <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
             <Icon className="h-4 w-4 text-muted-foreground" />
           </div>
