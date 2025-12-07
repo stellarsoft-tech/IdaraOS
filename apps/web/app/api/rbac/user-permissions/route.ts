@@ -18,7 +18,7 @@ import {
 import { eq, and } from "drizzle-orm"
 import { getSessionUser } from "@/lib/auth/session"
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Get current user from session
     const sessionUser = await getSessionUser()
