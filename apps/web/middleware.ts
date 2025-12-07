@@ -140,18 +140,27 @@ function applySecurityHeaders(response: NextResponse): NextResponse {
  * Check if we should apply multi-domain routing for this host
  */
 function isMultiDomainEnabled(host: string): boolean {
+  // Extract hostname (remove port if present)
+  const hostname = host.split(":")[0]
+  
   // Disable multi-domain routing for localhost/development
-  if (host.includes("localhost") || host.includes("127.0.0.1")) {
+  // Check exact match or subdomain of localhost
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+    return false
+  }
+  
+  // Check exact match for 127.0.0.1 (IP addresses don't have subdomains)
+  if (hostname === "127.0.0.1") {
     return false
   }
   
   // Disable for Azure Container Apps default URLs
-  if (host.includes(".azurecontainerapps.io")) {
+  // Check if hostname ends with .azurecontainerapps.io or equals azurecontainerapps.io
+  if (hostname === "azurecontainerapps.io" || hostname.endsWith(".azurecontainerapps.io")) {
     return false
   }
   
   // Check if this is one of our configured domains
-  const hostname = host.split(":")[0] // Remove port if present
   return MULTI_DOMAIN_HOSTS.some(d => hostname === d || hostname.endsWith(`.${d}`))
 }
 

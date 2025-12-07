@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { users, organizations } from "@/lib/db/schema"
+import { users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 
 export async function GET() {

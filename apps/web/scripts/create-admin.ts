@@ -44,7 +44,7 @@ async function createAdmin() {
     let adminUser
     if (existingUser) {
       // Update password if user exists
-      const passwordHash = hashPassword("Admin123!")
+      const passwordHash = await hashPassword("Admin123!")
       const result = await db
         .update(users)
         .set({
@@ -58,7 +58,7 @@ async function createAdmin() {
       console.log("✓ Updated admin@example.com password")
     } else {
       // Create admin user
-      const passwordHash = hashPassword("Admin123!")
+      const passwordHash = await hashPassword("Admin123!")
       const result = await db.insert(users).values({
         orgId: org.id,
         email: "admin@example.com",

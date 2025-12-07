@@ -13,6 +13,11 @@ on:
   pull_request:
     branches: [main]
 
+# Set minimal permissions for all jobs
+# Individual jobs can override if needed
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: "22"
   PNPM_VERSION: "9"
@@ -24,6 +29,8 @@ jobs:
   lint:
     name: Lint & Type Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -57,6 +64,8 @@ jobs:
   migration-check:
     name: Migration Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -125,6 +134,8 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: [lint, migration-check]
+    permissions:
+      contents: read
 
     outputs:
       image_tag: ${{ steps.meta.outputs.tags }}

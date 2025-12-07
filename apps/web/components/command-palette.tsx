@@ -27,7 +27,6 @@ import {
   CommandShortcut,
 } from "@/components/ui/command"
 import { routes } from "@/lib/navigation/routes"
-import { usePermission } from "@/lib/rbac"
 
 // Icon mapping for routes
 const iconMap: Record<string, any> = {

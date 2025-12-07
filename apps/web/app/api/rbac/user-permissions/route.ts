@@ -13,8 +13,7 @@ import {
   rolePermissions, 
   permissions, 
   modules, 
-  actions,
-  users 
+  actions
 } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { getSessionUser } from "@/lib/auth/session"

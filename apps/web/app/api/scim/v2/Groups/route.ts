@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, and, ilike } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { scimGroups, userScimGroups, users } from "@/lib/db/schema"
 import { verifyScimToken, DEMO_ORG_ID, mapGroupToRole } from "@/lib/scim/helpers"
