@@ -49,26 +49,6 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Get all permissions for user's roles
-    const userPermissions = await db
-      .select({
-        permissionId: permissions.id,
-        moduleSlug: modules.slug,
-        moduleName: modules.name,
-        moduleCategory: modules.category,
-        actionSlug: actions.slug,
-        actionName: actions.name,
-      })
-      .from(rolePermissions)
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .innerJoin(modules, eq(permissions.moduleId, modules.id))
-      .innerJoin(actions, eq(permissions.actionId, actions.id))
-      .where(
-        // This gets permissions for all of the user's roles
-        // Using subquery would be cleaner but this works
-        eq(rolePermissions.roleId, roleIds[0]) // Simplified for now
-      )
-
     // For multiple roles, we need to get all permissions
     // Build permission map: { "module.slug": { "action": true } }
     const permissionMap: Record<string, Record<string, boolean>> = {}

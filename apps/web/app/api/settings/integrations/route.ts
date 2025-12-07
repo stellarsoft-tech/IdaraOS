@@ -24,22 +24,6 @@ function encrypt(text: string): string {
   return iv.toString("hex") + ":" + encrypted
 }
 
-function decrypt(encryptedText: string): string {
-  try {
-    const algorithm = "aes-256-cbc"
-    const key = crypto.scryptSync(ENCRYPTION_KEY, "salt", 32)
-    const [ivHex, encrypted] = encryptedText.split(":")
-    const iv = Buffer.from(ivHex, "hex")
-    const decipher = crypto.createDecipheriv(algorithm, key, iv)
-    let decrypted = decipher.update(encrypted, "hex", "utf8")
-    decrypted += decipher.final("utf8")
-    return decrypted
-  } catch {
-    return ""
-  }
-}
-
-
 // Validation schemas
 const SaveEntraConfigSchema = z.object({
   provider: z.literal("entra"),
