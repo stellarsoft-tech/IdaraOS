@@ -15,7 +15,7 @@ import {
   modules, 
   actions
 } from "@/lib/db/schema"
-import { eq, and } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { getSessionUser } from "@/lib/auth/session"
 
 export async function GET(_request: NextRequest) {
