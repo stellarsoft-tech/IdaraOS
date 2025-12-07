@@ -10,7 +10,7 @@
  * - The suffix after the prefix maps to the role slug (e.g., "admin")
  */
 
-import { pgTable, uuid, text, timestamp, boolean, index, primaryKey } from "drizzle-orm/pg-core"
+import { pgTable, uuid, text, timestamp, index, primaryKey } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { organizations } from "./organizations"
 import { users } from "./users"
