@@ -278,6 +278,7 @@ export const assetMaintenanceRecords = pgTable(
     cost: decimal("cost", { precision: 12, scale: 2 }),
     vendor: text("vendor"),
     performedById: uuid("performed_by_id").references(() => users.id, { onDelete: "set null" }),
+    assignedToId: uuid("assigned_to_id").references(() => persons.id, { onDelete: "set null" }),
     notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -287,6 +288,7 @@ export const assetMaintenanceRecords = pgTable(
     index("idx_assets_maintenance_asset").on(table.assetId),
     index("idx_assets_maintenance_status").on(table.status),
     index("idx_assets_maintenance_type").on(table.type),
+    index("idx_assets_maintenance_assigned").on(table.assignedToId),
   ]
 )
 
@@ -305,6 +307,10 @@ export const assetMaintenanceRecordsRelations = relations(assetMaintenanceRecord
   performedBy: one(users, {
     fields: [assetMaintenanceRecords.performedById],
     references: [users.id],
+  }),
+  assignedTo: one(persons, {
+    fields: [assetMaintenanceRecords.assignedToId],
+    references: [persons.id],
   }),
 }))
 

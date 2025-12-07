@@ -6,9 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, and } from "drizzle-orm"
+import { eq, and, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { assets, assetCategories, persons, assetLifecycleEvents } from "@/lib/db/schema"
+import { assets, assetCategories, persons, assetLifecycleEvents, assetAssignments } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
 import { z } from "zod"
 
@@ -27,6 +27,8 @@ const UpdateAssetSchema = z.object({
   warrantyEnd: z.string().optional().nullable(),
   location: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  assignedToId: z.string().uuid().optional().nullable(),
+  assignedAt: z.string().optional().nullable(),
 }).strict()
 
 // Category info type
@@ -254,6 +256,91 @@ export async function PATCH(
     if (data.location !== undefined) updateData.location = data.location
     if (data.notes !== undefined) updateData.notes = data.notes
     
+    // Handle assignment changes
+    const now = new Date()
+    const assignmentChanged = data.assignedToId !== undefined && data.assignedToId !== previousValues.assignedToId
+    
+    if (assignmentChanged) {
+      updateData.assignedToId = data.assignedToId
+      // Use provided assignedAt date or current time
+      updateData.assignedAt = data.assignedAt ? new Date(data.assignedAt) : (data.assignedToId ? now : null)
+      
+      // Close existing assignment if there was one
+      if (previousValues.assignedToId) {
+        await db
+          .update(assetAssignments)
+          .set({ returnedAt: now })
+          .where(and(
+            eq(assetAssignments.assetId, id),
+            eq(assetAssignments.personId, previousValues.assignedToId),
+            isNull(assetAssignments.returnedAt)
+          ))
+        
+        // Log return event
+        await db.insert(assetLifecycleEvents).values({
+          orgId,
+          assetId: id,
+          eventType: "returned",
+          eventDate: now,
+          details: {
+            source: "manual",
+            previousPersonId: previousValues.assignedToId,
+          },
+          performedById: session.userId,
+        })
+      }
+      
+      // Create new assignment if there's a new assignee
+      if (data.assignedToId) {
+        const assignedAt = data.assignedAt ? new Date(data.assignedAt) : now
+        
+        await db.insert(assetAssignments).values({
+          assetId: id,
+          personId: data.assignedToId,
+          assignedAt,
+          assignedById: session.userId,
+          notes: "Manual assignment",
+        })
+        
+        // Get person info for lifecycle event
+        const personResult = await db
+          .select({ name: persons.name, email: persons.email })
+          .from(persons)
+          .where(eq(persons.id, data.assignedToId))
+          .limit(1)
+        
+        const person = personResult[0]
+        
+        // Log assignment event
+        await db.insert(assetLifecycleEvents).values({
+          orgId,
+          assetId: id,
+          eventType: "assigned",
+          eventDate: assignedAt,
+          details: {
+            source: "manual",
+            personId: data.assignedToId,
+            personName: person?.name,
+            personEmail: person?.email,
+          },
+          performedById: session.userId,
+        })
+        
+        // Auto-set status to "assigned" if currently "available"
+        if (previousValues.status === "available" && !data.status) {
+          updateData.status = "assigned"
+        }
+      } else {
+        // Unassigning - auto-set status to "available" if currently "assigned"
+        if (previousValues.status === "assigned" && !data.status) {
+          updateData.status = "available"
+        }
+      }
+    } else if (data.assignedAt !== undefined && previousValues.assignedToId) {
+      // Only updating the assigned date without changing assignee
+      updateData.assignedAt = data.assignedAt ? new Date(data.assignedAt) : null
+    }
+    
     // Update asset
     const result = await db
       .update(assets)
@@ -263,8 +350,8 @@ export async function PATCH(
     
     const record = result[0]
     
-    // Log lifecycle event if status changed
-    if (data.status && data.status !== previousValues.status) {
+    // Log lifecycle event if status changed (and not already logged via assignment)
+    if (data.status && data.status !== previousValues.status && !assignmentChanged) {
       await db.insert(assetLifecycleEvents).values({
         orgId,
         assetId: id,

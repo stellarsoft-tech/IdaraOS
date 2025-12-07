@@ -9,6 +9,7 @@ import {
   HardDrive,
   Calendar,
   ArrowRightLeft,
+  AlertCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -36,6 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 
@@ -90,8 +92,8 @@ export default function AssignmentsPage() {
   const canEdit = usePermission("assets.assignments", "edit")
   const router = useRouter()
   
-  // State
-  const [includeReturned, setIncludeReturned] = useState(false)
+  // State - default to showing full history (transactional log)
+  const [includeReturned, setIncludeReturned] = useState(true)
   const [returnOpen, setReturnOpen] = useState(false)
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
   const [returnNotes, setReturnNotes] = useState<string>("")
@@ -127,7 +129,7 @@ export default function AssignmentsPage() {
                 e.stopPropagation()
                 router.push(`/assets/inventory/${assignment.assetId}`)
               }}
-              className="text-sm font-medium text-primary hover:underline text-left"
+              className="text-sm font-medium !font-mono text-primary hover:underline text-left"
             >
               {assignment.asset.assetTag}
             </button>
@@ -193,7 +195,7 @@ export default function AssignmentsPage() {
       cell: ({ row }) => {
         const returnedAt = row.original.returnedAt
         if (!returnedAt) {
-          return <Badge variant="default">Active</Badge>
+          return <span className="text-muted-foreground">—</span>
         }
         const date = new Date(returnedAt)
         return (
@@ -205,6 +207,50 @@ export default function AssignmentsPage() {
       },
       enableSorting: true,
       size: 120,
+    },
+    {
+      id: "duration",
+      header: "Duration",
+      cell: ({ row }) => {
+        const assignedAt = new Date(row.original.assignedAt)
+        const endDate = row.original.returnedAt 
+          ? new Date(row.original.returnedAt) 
+          : new Date()
+        
+        const diffMs = endDate.getTime() - assignedAt.getTime()
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+        
+        if (diffDays === 0) {
+          const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+          return <span className="text-sm text-muted-foreground">{diffHours}h</span>
+        } else if (diffDays < 30) {
+          return <span className="text-sm">{diffDays}d</span>
+        } else if (diffDays < 365) {
+          const months = Math.floor(diffDays / 30)
+          return <span className="text-sm">{months}mo</span>
+        } else {
+          const years = Math.floor(diffDays / 365)
+          const remainingMonths = Math.floor((diffDays % 365) / 30)
+          return <span className="text-sm">{years}y {remainingMonths}mo</span>
+        }
+      },
+      enableSorting: false,
+      size: 80,
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const isReturned = !!row.original.returnedAt
+        return isReturned ? (
+          <Badge variant="secondary">Returned</Badge>
+        ) : (
+          <Badge variant="default" className="bg-green-600 hover:bg-green-600">Active</Badge>
+        )
+      },
+      enableSorting: true,
+      enableColumnFilter: true,
+      size: 100,
     },
     {
       id: "assignedBy",
@@ -337,7 +383,7 @@ export default function AssignmentsPage() {
   return (
     <PageShell
       title="Asset Assignments"
-      description="Track which assets are assigned to which people."
+      description="Complete transactional history of all asset assignments and returns."
     >
       <div className="space-y-6">
         {/* Stats Overview */}
@@ -377,9 +423,11 @@ export default function AssignmentsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Assignment History</CardTitle>
+                <CardTitle>Assignment Log</CardTitle>
                 <CardDescription>
-                  View all asset assignments and returns.
+                  {includeReturned 
+                    ? "Complete chain of custody for all assets." 
+                    : "Currently active assignments only."}
                 </CardDescription>
               </div>
               <div className="flex items-center space-x-2">
@@ -389,7 +437,7 @@ export default function AssignmentsPage() {
                   onCheckedChange={setIncludeReturned}
                 />
                 <Label htmlFor="include-returned" className="text-sm text-muted-foreground">
-                  Show returned
+                  {includeReturned ? "Full history" : "Active only"}
                 </Label>
               </div>
             </div>
@@ -438,6 +486,15 @@ export default function AssignmentsPage() {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
+            {selectedAssignment && selectedAssignment.asset.source === "intune_sync" && selectedAssignment.asset.syncEnabled && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Intune Sync Warning</AlertTitle>
+                <AlertDescription>
+                  This asset is synced from Microsoft Intune. After returning it here, you must also manually unassign the device from the user in Intune. Otherwise, the next sync will automatically re-assign it to the same person.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="return-notes">Notes (optional)</Label>
               <Textarea

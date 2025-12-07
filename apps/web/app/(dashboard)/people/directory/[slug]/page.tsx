@@ -20,7 +20,14 @@ import {
   Briefcase,
   Shield,
   ExternalLink,
-  Link2
+  Link2,
+  HardDrive,
+  Laptop,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Box,
+  CheckCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -52,6 +59,7 @@ import {
 } from "@/components/ui/tooltip"
 
 import { usePersonDetail, useUpdatePerson, useDeletePerson } from "@/lib/api/people"
+import { useAssetsList, useAssignmentsList } from "@/lib/api/assets"
 import { useQuery } from "@tanstack/react-query"
 import { useBreadcrumb } from "@/components/breadcrumb-context"
 
@@ -61,11 +69,48 @@ async function fetchEntraIntegrationSettings() {
   if (!res.ok) return null
   return res.json()
 }
-import { formConfig, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
+import { formConfig as baseFormConfig, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
 import { personStatusVariants, type UpdatePerson } from "@/lib/generated/people/person/types"
+import type { FormConfig, SyncIndicatorType } from "@/components/primitives/form-drawer"
 
 // Edit form fields
 const editFields = getFormFields("edit")
+
+// Fields that are synced from Entra ID
+const ENTRA_SYNCED_FIELDS = ["name", "email", "role", "team", "startDate", "hireDate", "location", "phone", "status"]
+
+/**
+ * Get form config with sync indicators based on person's sync state
+ */
+function getFormConfigWithSyncIndicators(
+  isSynced: boolean,
+  syncEnabled: boolean,
+  isBidirectionalSyncEnabled: boolean
+): FormConfig {
+  const config: FormConfig = { ...baseFormConfig }
+  
+  if (isSynced && syncEnabled) {
+    for (const fieldName of ENTRA_SYNCED_FIELDS) {
+      if (config[fieldName]) {
+        // Determine indicator type
+        let indicator: SyncIndicatorType | undefined
+        if (isBidirectionalSyncEnabled) {
+          // Email never syncs back, always show as readonly from Entra
+          indicator = fieldName === "email" ? "entra" : "bidirectional"
+        } else {
+          // All synced fields are read-only from Entra
+          indicator = "entra"
+        }
+        config[fieldName] = {
+          ...config[fieldName],
+          syncIndicator: indicator,
+        }
+      }
+    }
+  }
+  
+  return config
+}
 
 function getInitials(name: string): string {
   return name
@@ -74,6 +119,17 @@ function getInitials(name: string): string {
     .join("")
     .toUpperCase()
     .slice(0, 2)
+}
+
+function getAssetIcon(categorySlug?: string | null): React.ReactNode {
+  const iconClass = "h-3.5 w-3.5"
+  const slug = categorySlug?.toLowerCase()
+  
+  if (slug?.includes("laptop")) return <Laptop className={iconClass} />
+  if (slug?.includes("desktop") || slug?.includes("monitor")) return <Monitor className={iconClass} />
+  if (slug?.includes("phone") || slug?.includes("mobile")) return <Smartphone className={iconClass} />
+  if (slug?.includes("tablet") || slug?.includes("ipad")) return <Tablet className={iconClass} />
+  return <Box className={iconClass} />
 }
 
 function formatDate(dateString: string | null | undefined): string {
@@ -136,6 +192,16 @@ export default function PersonDetailPage() {
   const updateMutation = useUpdatePerson()
   const deleteMutation = useDeletePerson()
   const { setDetailLabel } = useBreadcrumb()
+  
+  // Fetch assets assigned to this person
+  const { data: assignedAssets = [] } = useAssetsList(
+    person?.id ? { assignedToId: person.id } : undefined
+  )
+  
+  // Fetch assignment history for this person
+  const { data: assignmentHistory = [] } = useAssignmentsList(
+    person?.id ? { personId: person.id, includeReturned: true } : undefined
+  )
   
   // Set breadcrumb label to person's name
   useEffect(() => {
@@ -383,7 +449,7 @@ export default function PersonDetailPage() {
 
             <div className="grid grid-cols-2 gap-3 text-center">
               <div className="p-3 rounded-lg bg-muted/50">
-                <p className="text-2xl font-bold">{person.assignedAssets}</p>
+                <p className="text-2xl font-bold">{assignedAssets.length}</p>
                 <p className="text-xs text-muted-foreground">Assets</p>
               </div>
               <div className="p-3 rounded-lg bg-muted/50">
@@ -391,6 +457,58 @@ export default function PersonDetailPage() {
                 <p className="text-xs text-muted-foreground">Tasks</p>
               </div>
             </div>
+            
+            {/* Assigned Devices/Assets */}
+            {assignedAssets.length > 0 && (
+              <>
+                <Separator className="my-6" />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <HardDrive className="h-4 w-4" />
+                    <span>Devices & Assets</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {assignedAssets.slice(0, 5).map((asset) => (
+                      <TooltipProvider key={asset.id}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Link 
+                              href={`/assets/inventory/${asset.id}`}
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted/50 hover:bg-muted border text-xs transition-colors"
+                            >
+                              {getAssetIcon(asset.category?.slug)}
+                              <span className="font-medium">{asset.assetTag}</span>
+                            </Link>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            <div className="space-y-1">
+                              <p className="font-medium">{asset.name}</p>
+                              {asset.manufacturer && asset.model && (
+                                <p className="text-xs text-muted-foreground">{asset.manufacturer} {asset.model}</p>
+                              )}
+                              {asset.source === "intune_sync" && (
+                                <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                                  <RefreshCw className="h-3 w-3" />
+                                  <span>Synced from Intune</span>
+                                </div>
+                              )}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ))}
+                    {assignedAssets.length > 5 && (
+                      <Link
+                        href={`/assets/inventory?assignedToId=${person.id}`}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs transition-colors"
+                      >
+                        +{assignedAssets.length - 5} more
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
@@ -553,6 +671,78 @@ export default function PersonDetailPage() {
                   </CardContent>
                 </Card>
               )}
+              
+              {/* Assigned Assets */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <HardDrive className="h-4 w-4" />
+                    Assigned Assets
+                  </CardTitle>
+                  <CardDescription>
+                    Devices and equipment assigned to this person
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {assignedAssets.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Box className="mx-auto h-8 w-8 mb-2" />
+                      <p>No assets assigned</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {assignedAssets.map((asset) => (
+                        <Link
+                          key={asset.id}
+                          href={`/assets/inventory/${asset.id}`}
+                          className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                              {getAssetIcon(asset.category?.slug)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{asset.name}</span>
+                                <Badge variant="outline" className="text-xs font-mono">
+                                  {asset.assetTag}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {asset.manufacturer && asset.model 
+                                  ? `${asset.manufacturer} ${asset.model}`
+                                  : asset.category?.name || "Uncategorized"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {asset.source === "intune_sync" && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge className="gap-1 text-xs bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border-0">
+                                      <RefreshCw className="h-3 w-3" />
+                                      Intune
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Managed by Microsoft Intune
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {asset.assignedAt && (
+                              <span className="text-xs text-muted-foreground">
+                                Since {formatDate(asset.assignedAt)}
+                              </span>
+                            )}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="integrations" className="mt-4 space-y-4">
@@ -720,38 +910,112 @@ export default function PersonDetailPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {isSynced && person.lastSyncedAt && (
-                      <div className="flex gap-3">
-                        <div className="h-2 w-2 rounded-full bg-emerald-500 mt-2" />
-                        <div>
-                          <p className="text-sm">Synced from Entra ID</p>
-                          <p className="text-xs text-muted-foreground">{formatDateTime(person.lastSyncedAt)}</p>
+                    {/* Combine and sort all events */}
+                    {(() => {
+                      // Build event list
+                      const events: Array<{
+                        id: string
+                        type: "sync" | "update" | "create" | "start" | "asset_assigned" | "asset_returned"
+                        date: Date
+                        label: string
+                        sublabel?: string
+                        icon: string
+                      }> = []
+                      
+                      // Sync events
+                      if (isSynced && person.lastSyncedAt) {
+                        events.push({
+                          id: "sync",
+                          type: "sync",
+                          date: new Date(person.lastSyncedAt),
+                          label: "Synced from Entra ID",
+                          icon: "emerald",
+                        })
+                      }
+                      
+                      // Record events
+                      events.push({
+                        id: "update",
+                        type: "update",
+                        date: new Date(person.updatedAt),
+                        label: "Record updated",
+                        icon: "blue",
+                      })
+                      
+                      events.push({
+                        id: "create",
+                        type: "create",
+                        date: new Date(person.createdAt),
+                        label: "Record created",
+                        icon: "gray",
+                      })
+                      
+                      if (person.startDate) {
+                        events.push({
+                          id: "start",
+                          type: "start",
+                          date: new Date(person.startDate),
+                          label: "Employment started",
+                          icon: "green",
+                        })
+                      }
+                      
+                      // Asset assignments
+                      assignmentHistory.forEach((assignment) => {
+                        events.push({
+                          id: `assigned-${assignment.id}`,
+                          type: "asset_assigned",
+                          date: new Date(assignment.assignedAt),
+                          label: `Device assigned: ${assignment.asset.assetTag}`,
+                          sublabel: assignment.asset.name,
+                          icon: "cyan",
+                        })
+                        
+                        if (assignment.returnedAt) {
+                          events.push({
+                            id: `returned-${assignment.id}`,
+                            type: "asset_returned",
+                            date: new Date(assignment.returnedAt),
+                            label: `Device returned: ${assignment.asset.assetTag}`,
+                            sublabel: assignment.asset.name,
+                            icon: "orange",
+                          })
+                        }
+                      })
+                      
+                      // Sort by date descending
+                      events.sort((a, b) => b.date.getTime() - a.date.getTime())
+                      
+                      // Icon colors
+                      const iconColors: Record<string, string> = {
+                        emerald: "bg-emerald-500",
+                        blue: "bg-blue-500",
+                        gray: "bg-gray-400",
+                        green: "bg-green-500",
+                        cyan: "bg-cyan-500",
+                        orange: "bg-orange-500",
+                      }
+                      
+                      return events.slice(0, 20).map((event) => (
+                        <div key={event.id} className="flex gap-3">
+                          <div className={`h-2 w-2 rounded-full ${iconColors[event.icon]} mt-2`} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm">{event.label}</p>
+                              {(event.type === "asset_assigned" || event.type === "asset_returned") && (
+                                <HardDrive className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </div>
+                            {event.sublabel && (
+                              <p className="text-xs text-muted-foreground">{event.sublabel}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {formatDateTime(event.date.toISOString())}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    <div className="flex gap-3">
-                      <div className="h-2 w-2 rounded-full bg-blue-500 mt-2" />
-                      <div>
-                        <p className="text-sm">Record updated</p>
-                        <p className="text-xs text-muted-foreground">{formatDateTime(person.updatedAt)}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="h-2 w-2 rounded-full bg-gray-400 mt-2" />
-                      <div>
-                        <p className="text-sm">Record created</p>
-                        <p className="text-xs text-muted-foreground">{formatDateTime(person.createdAt)}</p>
-                      </div>
-                    </div>
-                    {person.startDate && (
-                      <div className="flex gap-3">
-                        <div className="h-2 w-2 rounded-full bg-green-500 mt-2" />
-                        <div>
-                          <p className="text-sm">Employment started</p>
-                          <p className="text-xs text-muted-foreground">{formatDate(person.startDate)}</p>
-                        </div>
-                      </div>
-                    )}
+                      ))
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -773,7 +1037,7 @@ export default function PersonDetailPage() {
             : "Update employee information"
         }
         schema={editFormSchema}
-        config={formConfig}
+        config={getFormConfigWithSyncIndicators(isSynced, person.syncEnabled || false, isBidirectionalSyncEnabled)}
         fields={editFields}
         mode="edit"
         defaultValues={{
@@ -805,7 +1069,8 @@ export default function PersonDetailPage() {
               <Alert className="border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30">
                 <RefreshCw className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 <AlertDescription className="text-emerald-700 dark:text-emerald-300 text-sm">
-                  Bidirectional sync is enabled. Changes made here will be synced back to Entra ID.
+                  Bidirectional sync is enabled. Fields marked with a sync icon will sync back to Entra ID.
+                  Email cannot be changed here as it&apos;s always managed in Entra ID.
                 </AlertDescription>
               </Alert>
             ) : (
@@ -813,7 +1078,7 @@ export default function PersonDetailPage() {
                 <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
                   This person is synced from Entra ID ({person.entraGroupName || "group"}). 
-                  Synced fields cannot be edited here.
+                  Fields marked with a lock icon are managed by Entra ID and cannot be edited here.
                 </AlertDescription>
               </Alert>
             )

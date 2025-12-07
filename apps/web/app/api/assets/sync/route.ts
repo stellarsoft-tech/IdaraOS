@@ -4,10 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, and } from "drizzle-orm"
+import { eq, and, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { 
   assets, 
+  assetAssignments,
   assetLifecycleEvents,
   persons,
   integrations,
@@ -265,7 +266,9 @@ export async function POST(_request: NextRequest) {
     let createdCount = 0
     let updatedCount = 0
     let skippedCount = 0
+    let assignedCount = 0
     const errors: string[] = []
+    const unmatchedEmails: string[] = []
     
     // Process each device
     for (const device of devices) {
@@ -279,7 +282,15 @@ export async function POST(_request: NextRequest) {
           const person = peopleByEmail.get(device.userPrincipalName.toLowerCase())
           if (person) {
             assignedToId = person.id
-          } else if (syncSettings.syncBehavior?.autoCreatePeople) {
+            assignedCount++
+          } else {
+            // Track unmatched email for debugging
+            if (!unmatchedEmails.includes(device.userPrincipalName.toLowerCase())) {
+              unmatchedEmails.push(device.userPrincipalName.toLowerCase())
+            }
+          }
+          
+          if (!person && syncSettings.syncBehavior?.autoCreatePeople) {
             // Create person record
             try {
               const newPerson = await db
@@ -298,7 +309,11 @@ export async function POST(_request: NextRequest) {
               
               if (newPerson.length > 0) {
                 assignedToId = newPerson[0].id
+                assignedCount++
                 peopleByEmail.set(device.userPrincipalName.toLowerCase(), newPerson[0])
+                // Remove from unmatched since we created
+                const idx = unmatchedEmails.indexOf(device.userPrincipalName.toLowerCase())
+                if (idx > -1) unmatchedEmails.splice(idx, 1)
               }
             } catch {
               // Person creation failed, continue without assignment
@@ -306,17 +321,82 @@ export async function POST(_request: NextRequest) {
           }
         }
         
+        // Determine assignment date from Intune enrollment date
+        const intuneAssignedAt = device.enrolledDateTime 
+          ? new Date(device.enrolledDateTime) 
+          : now
+        
         if (existing) {
           // Update existing asset
+          const previousAssignedToId = existing.assignedToId
+          const assignmentChanged = previousAssignedToId !== assignedToId
+          
           await db
             .update(assets)
             .set({
               ...assetData,
               assignedToId,
-              assignedAt: assignedToId && !existing.assignedToId ? now : existing.assignedAt,
+              // Use Intune enrollment date as assignment date, or keep existing if already set
+              assignedAt: assignedToId && !existing.assignedToId ? intuneAssignedAt : existing.assignedAt,
               updatedAt: now,
             })
             .where(eq(assets.id, existing.id))
+          
+          // Handle assignment changes
+          if (assignmentChanged) {
+            // Close existing assignment if there was one
+            if (previousAssignedToId) {
+              await db
+                .update(assetAssignments)
+                .set({ returnedAt: now })
+                .where(and(
+                  eq(assetAssignments.assetId, existing.id),
+                  eq(assetAssignments.personId, previousAssignedToId),
+                  isNull(assetAssignments.returnedAt)
+                ))
+              
+              // Log return event
+              await db.insert(assetLifecycleEvents).values({
+                orgId,
+                assetId: existing.id,
+                eventType: "returned",
+                eventDate: now,
+                details: {
+                  source: "intune_sync",
+                  previousPersonId: previousAssignedToId,
+                },
+                performedById: session.userId,
+              })
+            }
+            
+            // Create new assignment if there's a new assignee
+            if (assignedToId) {
+              const assignedPerson = peopleByEmail.get(device.userPrincipalName?.toLowerCase() || "")
+              
+              await db.insert(assetAssignments).values({
+                assetId: existing.id,
+                personId: assignedToId,
+                assignedAt: intuneAssignedAt, // Use Intune enrollment date
+                assignedById: session.userId,
+                notes: "Assigned via Intune sync",
+              })
+              
+              // Log assignment event
+              await db.insert(assetLifecycleEvents).values({
+                orgId,
+                assetId: existing.id,
+                eventType: "assigned",
+                eventDate: intuneAssignedAt, // Use Intune enrollment date
+                details: {
+                  source: "intune_sync",
+                  personId: assignedToId,
+                  personName: assignedPerson?.name || device.userDisplayName,
+                  personEmail: device.userPrincipalName,
+                },
+                performedById: session.userId,
+              })
+            }
+          }
           
           updatedCount++
         } else if (!syncSettings.syncBehavior?.updateExistingOnly) {
@@ -326,7 +406,8 @@ export async function POST(_request: NextRequest) {
             .values({
               ...assetData,
               assignedToId,
-              assignedAt: assignedToId ? now : null,
+              // Use Intune enrollment date as assignment date
+              assignedAt: assignedToId ? intuneAssignedAt : null,
               createdAt: now,
               updatedAt: now,
             })
@@ -351,6 +432,34 @@ export async function POST(_request: NextRequest) {
               },
               performedById: session.userId,
             })
+            
+            // Create assignment record if assigned to someone
+            if (assignedToId) {
+              const assignedPerson = peopleByEmail.get(device.userPrincipalName?.toLowerCase() || "")
+              
+              await db.insert(assetAssignments).values({
+                assetId: newAsset[0].id,
+                personId: assignedToId,
+                assignedAt: intuneAssignedAt, // Use Intune enrollment date
+                assignedById: session.userId,
+                notes: "Assigned via Intune sync",
+              })
+              
+              // Log assignment event
+              await db.insert(assetLifecycleEvents).values({
+                orgId,
+                assetId: newAsset[0].id,
+                eventType: "assigned",
+                eventDate: intuneAssignedAt, // Use Intune enrollment date
+                details: {
+                  source: "intune_sync",
+                  personId: assignedToId,
+                  personName: assignedPerson?.name || device.userDisplayName,
+                  personEmail: device.userPrincipalName,
+                },
+                performedById: session.userId,
+              })
+            }
             
             createdCount++
           }
@@ -417,7 +526,7 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json({
       success: errors.length === 0,
       message: errors.length === 0
-        ? `Synced ${createdCount + updatedCount} devices from Intune`
+        ? `Synced ${createdCount + updatedCount} devices from Intune (${assignedCount} assigned to people)`
         : `Sync completed with ${errors.length} errors`,
       syncedCount: createdCount + updatedCount,
       stats: {
@@ -425,6 +534,8 @@ export async function POST(_request: NextRequest) {
         created: createdCount,
         updated: updatedCount,
         skipped: skippedCount,
+        assigned: assignedCount,
+        unmatchedEmails: unmatchedEmails.slice(0, 20), // First 20 unmatched emails for debugging
         errors: errors.slice(0, 10),
       },
     })

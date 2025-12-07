@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, and, desc, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { assetMaintenanceRecords, assets, users, assetLifecycleEvents } from "@/lib/db/schema"
+import { assetMaintenanceRecords, assets, users, persons, assetLifecycleEvents } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
 import { z } from "zod"
 
@@ -21,6 +21,7 @@ const CreateMaintenanceSchema = z.object({
   completedDate: z.string().optional(),
   cost: z.string().optional(),
   vendor: z.string().optional(),
+  assignedToId: z.string().uuid().optional(),
   notes: z.string().optional(),
 })
 
@@ -43,6 +44,13 @@ interface MaintenanceResponse {
     id: string
     name: string
     email: string
+  } | null
+  assignedToId: string | null
+  assignedTo: {
+    id: string
+    name: string
+    email: string
+    slug: string
   } | null
   notes: string | null
   createdAt: string
@@ -114,6 +122,22 @@ export async function GET(request: NextRequest) {
     
     const userById = new Map(performedByUsers.map(u => [u.id, u]))
     
+    // Get assigned to persons
+    const assignedToIds = [...new Set(results.map(r => r.assignedToId).filter(Boolean) as string[])]
+    const assignedToPersons = assignedToIds.length > 0
+      ? await db
+          .select({
+            id: persons.id,
+            name: persons.name,
+            email: persons.email,
+            slug: persons.slug,
+          })
+          .from(persons)
+          .where(inArray(persons.id, assignedToIds))
+      : []
+    
+    const personById = new Map(assignedToPersons.map(p => [p.id, p]))
+    
     // Transform to response
     const response: MaintenanceResponse[] = results.map(r => ({
       id: r.id,
@@ -127,6 +151,8 @@ export async function GET(request: NextRequest) {
       cost: r.cost,
       vendor: r.vendor,
       performedBy: r.performedById ? userById.get(r.performedById) ?? null : null,
+      assignedToId: r.assignedToId,
+      assignedTo: r.assignedToId ? personById.get(r.assignedToId) ?? null : null,
       notes: r.notes,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
@@ -188,6 +214,25 @@ export async function POST(request: NextRequest) {
     
     const asset = assetResult[0]
     
+    // Validate assignedToId if provided
+    if (data.assignedToId) {
+      const personResult = await db
+        .select()
+        .from(persons)
+        .where(and(
+          eq(persons.id, data.assignedToId),
+          eq(persons.orgId, orgId)
+        ))
+        .limit(1)
+      
+      if (personResult.length === 0) {
+        return NextResponse.json(
+          { error: "Assigned person not found" },
+          { status: 400 }
+        )
+      }
+    }
+    
     // Insert maintenance record
     const result = await db
       .insert(assetMaintenanceRecords)
@@ -202,6 +247,7 @@ export async function POST(request: NextRequest) {
         cost: data.cost ?? null,
         vendor: data.vendor ?? null,
         performedById: session.userId,
+        assignedToId: data.assignedToId ?? null,
         notes: data.notes ?? null,
       })
       .returning()

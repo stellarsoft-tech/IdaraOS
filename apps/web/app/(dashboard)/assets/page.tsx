@@ -27,16 +27,21 @@ interface StatsCardProps {
   value: number | string
   subtitle: string
   icon: React.ReactNode
+  iconColor: string
   loading?: boolean
   href?: string
 }
 
-function StatsCard({ title, value, subtitle, icon, loading, href }: StatsCardProps) {
+function StatsCard({ title, value, subtitle, icon, iconColor, loading, href }: StatsCardProps) {
+  const iconBgColor = iconColor.replace("text-", "bg-").replace("/10", "/10")
+  
   const content = (
-    <Card className={href ? "hover:bg-muted/50 transition-colors cursor-pointer" : ""}>
+    <Card className={`relative overflow-hidden ${href ? "hover:border-primary/30 hover:shadow-md transition-all duration-200 cursor-pointer" : ""}`}>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className="text-muted-foreground">{icon}</div>
+        <div className={`h-8 w-8 rounded-lg ${iconBgColor} flex items-center justify-center`}>
+          {icon}
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -51,6 +56,13 @@ function StatsCard({ title, value, subtitle, icon, loading, href }: StatsCardPro
           </>
         )}
       </CardContent>
+      {/* Gradient accent */}
+      <div
+        className={`absolute top-0 right-0 w-24 h-24 opacity-10 ${iconBgColor}`}
+        style={{
+          background: `radial-gradient(circle at top right, currentColor 0%, transparent 70%)`,
+        }}
+      />
     </Card>
   )
   
@@ -70,24 +82,24 @@ interface QuickLinkProps {
 
 function QuickLink({ title, description, href, icon }: QuickLinkProps) {
   return (
-    <Link href={href}>
-      <Card className="hover:bg-muted/50 transition-colors cursor-pointer h-full">
+    <Card className="group hover:border-primary/30 hover:shadow-md transition-all duration-200 h-full">
+      <Link href={href} className="block">
         <CardContent className="p-4">
           <div className="flex items-start gap-4">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              {icon}
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
+              <span className="group-hover:text-primary transition-colors">{icon}</span>
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold truncate">{title}</h3>
-                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 group-hover:text-primary transition-all shrink-0" />
               </div>
               <p className="text-sm text-muted-foreground mt-1">{description}</p>
             </div>
           </div>
         </CardContent>
-      </Card>
-    </Link>
+      </Link>
+    </Card>
   )
 }
 
@@ -161,7 +173,8 @@ export default function AssetsOverviewPage() {
             title="Total Assets"
             value={stats.total}
             subtitle="in your inventory"
-            icon={<HardDrive className="h-4 w-4" />}
+            icon={<HardDrive className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
+            iconColor="bg-blue-500/10 text-blue-600 dark:text-blue-400"
             loading={isLoading}
             href="/assets/inventory"
           />
@@ -169,7 +182,8 @@ export default function AssetsOverviewPage() {
             title="Available"
             value={stats.available}
             subtitle="ready for assignment"
-            icon={<Box className="h-4 w-4" />}
+            icon={<Box className="h-4 w-4 text-green-600 dark:text-green-400" />}
+            iconColor="bg-green-500/10 text-green-600 dark:text-green-400"
             loading={isLoading}
             href="/assets/inventory?status=available"
           />
@@ -177,7 +191,8 @@ export default function AssetsOverviewPage() {
             title="Assigned"
             value={stats.assigned}
             subtitle="currently in use"
-            icon={<CheckCircle className="h-4 w-4" />}
+            icon={<CheckCircle className="h-4 w-4 text-purple-600 dark:text-purple-400" />}
+            iconColor="bg-purple-500/10 text-purple-600 dark:text-purple-400"
             loading={isLoading}
             href="/assets/assignments"
           />
@@ -185,7 +200,8 @@ export default function AssetsOverviewPage() {
             title="Maintenance"
             value={stats.maintenance}
             subtitle="under repair"
-            icon={<Wrench className="h-4 w-4" />}
+            icon={<Wrench className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+            iconColor="bg-amber-500/10 text-amber-600 dark:text-amber-400"
             loading={isLoading}
             href="/assets/maintenance"
           />

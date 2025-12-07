@@ -4,10 +4,14 @@
  * 
  * Creates demo data for development/testing.
  * This is OPTIONAL - production instances start with empty tables.
+ * 
+ * IMPORTANT: This script is IDEMPOTENT - safe to run multiple times.
+ * It will NOT delete existing data, only insert demo data if it doesn't exist.
  */
 
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
+import { eq } from "drizzle-orm"
 import { persons } from "../lib/db/schema/people"
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/idaraos"
@@ -81,21 +85,48 @@ async function seed() {
   ]
   
   try {
-    // Clear existing demo data
-    console.log("  Clearing existing data...")
-    await db.delete(persons)
+    // Check if demo data already exists - use john@example.com as sentinel
+    console.log("  Checking for existing seed data...")
+    const existingDemo = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(eq(persons.email, "john@example.com"))
+      .limit(1)
     
-    // Insert demo users
+    if (existingDemo.length > 0) {
+      console.log("✅ Seed data already exists. Skipping to preserve existing data.")
+      console.log("   (Delete john@example.com manually if you want to re-seed demo data)")
+      await pool.end()
+      return
+    }
+    
+    // Insert demo users (only if they don't exist)
     console.log("  Inserting demo users...")
-    await db.insert(persons).values(demoUsers)
+    let insertedCount = 0
     
-    console.log(`✅ Seed complete! Created ${demoUsers.length} demo users.`)
-    console.log("\n  Demo credentials:")
-    console.log("  - john@example.com (CEO)")
-    console.log("  - jane@example.com (CTO)")
-    console.log("  - bob@example.com (Security Lead)")
-    console.log("  - alice@example.com (HR Manager)")
-    console.log("  - new@example.com (New Employee)")
+    for (const user of demoUsers) {
+      // Check if this specific user already exists
+      const exists = await db
+        .select({ id: persons.id })
+        .from(persons)
+        .where(eq(persons.email, user.email))
+        .limit(1)
+      
+      if (exists.length === 0) {
+        await db.insert(persons).values(user)
+        insertedCount++
+      }
+    }
+    
+    console.log(`✅ Seed complete! Created ${insertedCount} demo users.`)
+    if (insertedCount > 0) {
+      console.log("\n  Demo users created:")
+      console.log("  - john@example.com (CEO)")
+      console.log("  - jane@example.com (CTO)")
+      console.log("  - bob@example.com (Security Lead)")
+      console.log("  - alice@example.com (HR Manager)")
+      console.log("  - new@example.com (New Employee)")
+    }
   } catch (error) {
     console.error("❌ Seed failed:", error)
     process.exit(1)

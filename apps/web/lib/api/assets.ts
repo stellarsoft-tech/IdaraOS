@@ -97,6 +97,8 @@ export interface UpdateAsset {
   warrantyEnd?: string | null
   location?: string | null
   notes?: string | null
+  assignedToId?: string | null
+  assignedAt?: string | null
 }
 
 export interface AssetFilters {
@@ -135,6 +137,8 @@ export interface Assignment {
     name: string
     model: string | null
     status: string
+    source: string
+    syncEnabled: boolean
   }
   personId: string
   person: {
@@ -173,6 +177,13 @@ export interface MaintenanceRecord {
     name: string
     email: string
   } | null
+  assignedToId: string | null
+  assignedTo: {
+    id: string
+    name: string
+    email: string
+    slug: string
+  } | null
   notes: string | null
   createdAt: string
   updatedAt: string
@@ -187,7 +198,20 @@ export interface CreateMaintenance {
   completedDate?: string
   cost?: string
   vendor?: string
+  assignedToId?: string
   notes?: string
+}
+
+export interface UpdateMaintenance {
+  type?: MaintenanceRecord["type"]
+  status?: MaintenanceRecord["status"]
+  description?: string | null
+  scheduledDate?: string | null
+  completedDate?: string | null
+  cost?: string | null
+  vendor?: string | null
+  assignedToId?: string | null
+  notes?: string | null
 }
 
 // ============================================================================
@@ -604,6 +628,58 @@ export function useCreateMaintenance() {
     onSuccess: (record) => {
       queryClient.invalidateQueries({ queryKey: maintenanceKeys.lists() })
       queryClient.invalidateQueries({ queryKey: assetsKeys.detail(record.assetId) })
+      queryClient.invalidateQueries({ queryKey: assetsKeys.lists() })
+    },
+  })
+}
+
+async function updateMaintenanceRecord(id: string, data: UpdateMaintenance): Promise<MaintenanceRecord> {
+  const res = await fetch(`${MAINTENANCE_BASE}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: "Failed to update maintenance record" }))
+    throw new Error(error.error || "Failed to update maintenance record")
+  }
+  
+  return res.json()
+}
+
+async function deleteMaintenanceRecord(id: string): Promise<void> {
+  const res = await fetch(`${MAINTENANCE_BASE}/${id}`, {
+    method: "DELETE",
+  })
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: "Failed to delete maintenance record" }))
+    throw new Error(error.error || "Failed to delete maintenance record")
+  }
+}
+
+export function useUpdateMaintenance() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateMaintenance }) => 
+      updateMaintenanceRecord(id, data),
+    onSuccess: (record) => {
+      queryClient.invalidateQueries({ queryKey: maintenanceKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: assetsKeys.detail(record.assetId) })
+      queryClient.invalidateQueries({ queryKey: assetsKeys.lists() })
+    },
+  })
+}
+
+export function useDeleteMaintenance() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: deleteMaintenanceRecord,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: maintenanceKeys.lists() })
       queryClient.invalidateQueries({ queryKey: assetsKeys.lists() })
     },
   })

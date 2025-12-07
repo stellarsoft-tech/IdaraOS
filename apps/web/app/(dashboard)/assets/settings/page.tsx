@@ -37,6 +37,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { useCategoriesList } from "@/lib/api/assets"
@@ -144,6 +154,7 @@ export default function AssetsSettingsPage() {
   const [autoDeleteOnRemoval, setAutoDeleteOnRemoval] = useState(false)
   const [autoCreatePeople, setAutoCreatePeople] = useState(false)
   const [updateExistingOnly, setUpdateExistingOnly] = useState(false)
+  const [syncConfirmOpen, setSyncConfirmOpen] = useState(false)
   
   // Queries
   const { data: settings, isLoading: settingsLoading } = useQuery({
@@ -394,7 +405,7 @@ export default function AssetsSettingsPage() {
                       </div>
                       <Protected module="assets.settings" action="edit">
                         <Button 
-                          onClick={() => syncMutation.mutate()}
+                          onClick={() => setSyncConfirmOpen(true)}
                           disabled={syncMutation.isPending}
                         >
                           {syncMutation.isPending ? (
@@ -415,6 +426,44 @@ export default function AssetsSettingsPage() {
                     )}
                   </CardContent>
                 </Card>
+                
+                {/* Sync Fields Documentation */}
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Sync Field Information</AlertTitle>
+                  <AlertDescription>
+                    <div className="mt-2 space-y-3">
+                      <div>
+                        <div className="font-medium text-foreground text-sm mb-1">
+                          Fields synced FROM Intune (read-only):
+                        </div>
+                        <ul className="text-sm grid grid-cols-2 gap-1 list-disc list-inside">
+                          <li>Device Name</li>
+                          <li>Serial Number</li>
+                          <li>Manufacturer</li>
+                          <li>Model</li>
+                          <li>Compliance State</li>
+                          <li>Enrollment Type</li>
+                          <li>Enrolled Date</li>
+                          <li>Assigned User</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-medium text-foreground text-sm mb-1">
+                          Fields managed locally (editable):
+                        </div>
+                        <ul className="text-sm grid grid-cols-2 gap-1 list-disc list-inside">
+                          <li>Category</li>
+                          <li>Location</li>
+                          <li>Purchase Cost</li>
+                          <li>Warranty End</li>
+                          <li>Notes</li>
+                          <li>Custom Fields</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
                 
                 <Separator />
                 
@@ -615,6 +664,52 @@ export default function AssetsSettingsPage() {
           </CardContent>
         </Card>
       </div>
+      
+      {/* Sync Confirmation Dialog */}
+      <AlertDialog open={syncConfirmOpen} onOpenChange={setSyncConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sync Devices from Intune?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <div>
+                  This will sync all managed devices from Microsoft Intune based on your current filter settings.
+                </div>
+                <div className="bg-muted rounded-lg p-3 text-sm space-y-2">
+                  <div className="font-medium text-foreground">The sync will:</div>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>Create new assets for devices not yet in the system</li>
+                    <li>Update existing assets with latest Intune data</li>
+                    <li><strong>Update device assignments</strong> based on Intune user principal</li>
+                    <li><strong>Set assignment dates</strong> from Intune enrollment dates</li>
+                    {autoCreatePeople && (
+                      <li>Create new people records for unknown Intune users</li>
+                    )}
+                    {autoDeleteOnRemoval && (
+                      <li className="text-destructive">Delete assets for devices removed from Intune</li>
+                    )}
+                  </ul>
+                </div>
+                <div className="text-sm">
+                  Fields managed by Intune (device name, serial, model, assigned user) will be overwritten with Intune data.
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                syncMutation.mutate()
+                setSyncConfirmOpen(false)
+              }}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Start Sync
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   )
 }

@@ -43,6 +43,13 @@
       "when": 1764900000000,
       "tag": "0005_add_assets_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1765000000000,
+      "tag": "0006_add_maintenance_assigned_to",
+      "breakpoints": true
     }
   ]
 }

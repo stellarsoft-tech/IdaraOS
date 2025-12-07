@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { 
   MoreHorizontal, 
   Plus, 
@@ -9,6 +10,9 @@ import {
   Calendar,
   Clock,
   DollarSign,
+  Pencil,
+  Trash2,
+  User,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -24,19 +28,34 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
+import { usePeopleList } from "@/lib/api/people"
 import { z } from "zod"
 
 // API hooks
 import { 
   useMaintenanceList, 
   useCreateMaintenance,
+  useUpdateMaintenance,
+  useDeleteMaintenance,
   useAssetsList,
   type MaintenanceRecord,
   type CreateMaintenance,
+  type UpdateMaintenance,
 } from "@/lib/api/assets"
 
 // Status badges - using available Badge variants
@@ -60,9 +79,23 @@ const createMaintenanceSchema = z.object({
   status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled"),
   description: z.string().optional(),
   scheduledDate: z.string().optional(),
+  completedDate: z.string().optional(),
   cost: z.string().optional(),
   vendor: z.string().optional(),
+  assignedToId: z.string().optional(),
   notes: z.string().optional(),
+})
+
+const updateMaintenanceSchema = z.object({
+  type: z.enum(["scheduled", "repair", "upgrade"]).optional(),
+  status: z.enum(["scheduled", "in_progress", "completed", "cancelled"]).optional(),
+  description: z.string().optional().nullable(),
+  scheduledDate: z.string().optional().nullable(),
+  completedDate: z.string().optional().nullable(),
+  cost: z.string().optional().nullable(),
+  vendor: z.string().optional().nullable(),
+  assignedToId: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
 })
 
 // Stats card component
@@ -106,18 +139,24 @@ function StatsCard({ title, value, subtitle, icon, loading }: StatsCardProps) {
 
 export default function MaintenancePage() {
   const canAccess = useCanAccess("assets.maintenance")
-  const _canEdit = usePermission("assets.maintenance", "edit")
+  const canEdit = usePermission("assets.maintenance", "edit")
+  const canDelete = usePermission("assets.maintenance", "delete")
   const router = useRouter()
   
   // State
   const [createOpen, setCreateOpen] = useState(false)
+  const [editRecord, setEditRecord] = useState<MaintenanceRecord | null>(null)
+  const [deleteRecord, setDeleteRecord] = useState<MaintenanceRecord | null>(null)
   
   // Fetch data
   const { data: records = [], isLoading, error } = useMaintenanceList()
   const { data: assets = [] } = useAssetsList()
+  const { data: people = [] } = usePeopleList()
   
   // Mutations
   const createMutation = useCreateMaintenance()
+  const updateMutation = useUpdateMaintenance()
+  const deleteMutation = useDeleteMaintenance()
   
   // Calculate stats
   const stats = useMemo(() => {
@@ -132,13 +171,14 @@ export default function MaintenancePage() {
     return { total, scheduled, inProgress, completed, totalCost }
   }, [records])
   
-  // Form config with dynamic assets
+  // Form config with dynamic assets and people
   const formConfig = useMemo(() => ({
     assetId: { 
       component: "select" as const,
       label: "Asset", 
       placeholder: "Select asset", 
       options: assets.map(a => ({ value: a.id, label: `${a.assetTag} - ${a.name}` })),
+      required: true,
     },
     type: { 
       component: "select" as const,
@@ -147,7 +187,8 @@ export default function MaintenancePage() {
         { value: "scheduled", label: "Scheduled Maintenance" },
         { value: "repair", label: "Repair" },
         { value: "upgrade", label: "Upgrade" },
-      ]
+      ],
+      required: true,
     },
     status: { 
       component: "select" as const,
@@ -161,12 +202,26 @@ export default function MaintenancePage() {
     },
     description: { component: "textarea" as const, label: "Description", placeholder: "Work to be done" },
     scheduledDate: { component: "date-picker" as const, label: "Scheduled Date" },
+    completedDate: { component: "date-picker" as const, label: "Completed Date" },
     cost: { component: "input" as const, label: "Estimated Cost", placeholder: "0.00" },
     vendor: { component: "input" as const, label: "Vendor/Service Provider", placeholder: "e.g., Apple Care" },
+    assignedToId: { 
+      component: "select" as const,
+      label: "Assigned To", 
+      placeholder: "Select person",
+      options: [
+        { value: "__none__", label: "Unassigned" },
+        ...people.filter(p => p.status === "active").map(p => ({ 
+          value: p.id, 
+          label: `${p.name} (${p.email})` 
+        })),
+      ],
+    },
     notes: { component: "textarea" as const, label: "Notes", placeholder: "Additional notes" },
-  }), [assets])
+  }), [assets, people])
   
-  const formFields = ["assetId", "type", "status", "description", "scheduledDate", "cost", "vendor", "notes"]
+  const createFields = ["assetId", "type", "status", "description", "scheduledDate", "cost", "vendor", "assignedToId", "notes"]
+  const editFields = ["type", "status", "description", "scheduledDate", "completedDate", "cost", "vendor", "assignedToId", "notes"]
   
   // Table columns
   const columns: ColumnDef<MaintenanceRecord>[] = [
@@ -273,6 +328,26 @@ export default function MaintenancePage() {
       size: 150,
     },
     {
+      id: "assignedTo",
+      header: "Assigned To",
+      accessorKey: "assignedTo",
+      cell: ({ row }) => {
+        const assignedTo = row.original.assignedTo
+        if (!assignedTo) return <span className="text-muted-foreground">—</span>
+        return (
+          <Link 
+            href={`/people/directory/${assignedTo.slug}`}
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <User className="h-3 w-3" />
+            {assignedTo.name}
+          </Link>
+        )
+      },
+      size: 150,
+    },
+    {
       id: "actions",
       header: "Actions",
       cell: ({ row }) => {
@@ -300,6 +375,35 @@ export default function MaintenancePage() {
               >
                 View Asset
               </DropdownMenuItem>
+              {canEdit && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      setEditRecord(record)
+                    }}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                </>
+              )}
+              {canDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      setDeleteRecord(record)
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -312,11 +416,43 @@ export default function MaintenancePage() {
   // Handlers
   const handleCreate = async (values: CreateMaintenance) => {
     try {
-      await createMutation.mutateAsync(values)
+      // Convert __none__ to undefined for assignedToId
+      const submitData = {
+        ...values,
+        assignedToId: values.assignedToId === "__none__" ? undefined : values.assignedToId,
+      }
+      await createMutation.mutateAsync(submitData)
       toast.success("Maintenance ticket created")
       setCreateOpen(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create ticket")
+    }
+  }
+  
+  const handleUpdate = async (values: UpdateMaintenance) => {
+    if (!editRecord) return
+    try {
+      // Convert __none__ to null for assignedToId
+      const submitData = {
+        ...values,
+        assignedToId: values.assignedToId === "__none__" ? null : values.assignedToId,
+      }
+      await updateMutation.mutateAsync({ id: editRecord.id, data: submitData })
+      toast.success("Maintenance ticket updated")
+      setEditRecord(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update ticket")
+    }
+  }
+  
+  const handleDelete = async () => {
+    if (!deleteRecord) return
+    try {
+      await deleteMutation.mutateAsync(deleteRecord.id)
+      toast.success("Maintenance ticket deleted")
+      setDeleteRecord(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete ticket")
     }
   }
   
@@ -441,10 +577,60 @@ export default function MaintenancePage() {
         description="Create a maintenance ticket for an asset"
         schema={createMaintenanceSchema}
         config={formConfig}
-        fields={formFields}
+        fields={createFields}
         mode="create"
         onSubmit={handleCreate}
+        isSubmitting={createMutation.isPending}
       />
+      
+      {/* Edit Drawer */}
+      {editRecord && (
+        <FormDrawer
+          open={!!editRecord}
+          onOpenChange={(open) => !open && setEditRecord(null)}
+          title={`Edit Ticket #${editRecord.id.slice(0, 8)}`}
+          description={`Update maintenance ticket for ${editRecord.asset?.assetTag || "asset"}`}
+          schema={updateMaintenanceSchema}
+          config={formConfig}
+          fields={editFields}
+          mode="edit"
+          defaultValues={{
+            type: editRecord.type,
+            status: editRecord.status,
+            description: editRecord.description || "",
+            scheduledDate: editRecord.scheduledDate || "",
+            completedDate: editRecord.completedDate || "",
+            cost: editRecord.cost || "",
+            vendor: editRecord.vendor || "",
+            assignedToId: editRecord.assignedToId || "__none__",
+            notes: editRecord.notes || "",
+          }}
+          onSubmit={handleUpdate}
+          isSubmitting={updateMutation.isPending}
+        />
+      )}
+      
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteRecord} onOpenChange={(open) => !open && setDeleteRecord(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Maintenance Ticket?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the maintenance
+              ticket for {deleteRecord?.asset?.assetTag} ({deleteRecord?.asset?.name}).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   )
 }

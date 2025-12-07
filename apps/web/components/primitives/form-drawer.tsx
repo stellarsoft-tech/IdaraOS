@@ -19,7 +19,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Loader2 } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Loader2, Lock, RefreshCw } from "lucide-react"
+
+/**
+ * Sync indicator types for bidirectional sync
+ */
+export type SyncIndicatorType = "intune" | "entra" | "readonly" | "bidirectional"
 
 /**
  * Field definition for forms (simplified format)
@@ -35,6 +41,8 @@ export interface FormFieldDef {
   options?: Array<{ value: string; label: string }>
   loadOptions?: (search: string) => Promise<Array<{ value: string; label: string }>>
   disabled?: boolean
+  // Sync indicator - shows where data comes from or syncs to
+  syncIndicator?: SyncIndicatorType
 }
 
 /**
@@ -52,6 +60,8 @@ export interface FieldConfig {
   ref?: string
   disabled?: boolean
   hidden?: boolean
+  // Sync indicator - shows where data comes from or syncs to
+  syncIndicator?: SyncIndicatorType
 }
 
 export type FormConfig = Record<string, FieldConfig>
@@ -143,6 +153,7 @@ export function FormDrawer<T = Record<string, unknown>>({
             type: fieldConfig.type,
             options: fieldConfig.options,
             disabled: isDisabled,
+            syncIndicator: fieldConfig.syncIndicator,
           } as FormFieldDef
         })
     }
@@ -172,60 +183,113 @@ export function FormDrawer<T = Record<string, unknown>>({
   return (
     <Sheet open={open} onOpenChange={handleClose}>
       <SheetContent className="sm:max-w-[540px] w-full p-0 flex flex-col h-full">
-        <SheetHeader className="px-6 pt-6 pb-4 shrink-0">
+        <SheetHeader className="px-6 pt-6 pb-4 shrink-0 border-b">
           <SheetTitle>{title}</SheetTitle>
           {description && <SheetDescription>{description}</SheetDescription>}
         </SheetHeader>
 
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="px-6 pb-6">
-              {infoBanner && (
-                <div className="mb-4">
-                  {infoBanner}
-                </div>
-              )}
-              <Form {...form}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {normalizedFields.map((fieldDef) => (
-                    <FormField
-                      key={fieldDef.name}
-                      control={form.control}
-                      name={fieldDef.name}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {fieldDef.label}
-                            {fieldDef.required && <span className="text-destructive ml-1">*</span>}
-                          </FormLabel>
-                          <FormControl>
-                            {renderFormControl(field, fieldDef)}
-                          </FormControl>
-                          {fieldDef.helpText && (
-                            <FormDescription>{fieldDef.helpText}</FormDescription>
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ))}
-
-                  <div className="flex items-center gap-2 pt-4 pb-2">
-                    <Button type="submit" disabled={submitting}>
-                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {submitLabel || defaultSubmitLabel}
-                    </Button>
-                    <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
-                      Cancel
-                    </Button>
+        <Form {...form}>
+          <form onSubmit={handleSubmit} className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-hidden">
+              <ScrollArea className="h-full">
+                <div className="px-6 py-4">
+                  {infoBanner && (
+                    <div className="mb-4">
+                      {infoBanner}
+                    </div>
+                  )}
+                  <div className="space-y-4">
+                    {normalizedFields.map((fieldDef) => (
+                      <FormField
+                        key={fieldDef.name}
+                        control={form.control}
+                        name={fieldDef.name}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1.5">
+                              {fieldDef.label}
+                              {fieldDef.required && <span className="text-destructive">*</span>}
+                              {fieldDef.syncIndicator && (
+                                <SyncIndicator type={fieldDef.syncIndicator} />
+                              )}
+                            </FormLabel>
+                            <FormControl>
+                              {renderFormControl(field, fieldDef)}
+                            </FormControl>
+                            {fieldDef.helpText && (
+                              <FormDescription>{fieldDef.helpText}</FormDescription>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
                   </div>
-                </form>
-              </Form>
+                </div>
+              </ScrollArea>
             </div>
-          </ScrollArea>
-        </div>
+
+            {/* Sticky footer */}
+            <div className="shrink-0 border-t bg-background px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Button type="submit" disabled={submitting}>
+                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {submitLabel || defaultSubmitLabel}
+                </Button>
+                <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </form>
+        </Form>
       </SheetContent>
     </Sheet>
+  )
+}
+
+/**
+ * Sync indicator component - shows visual cue for synced fields
+ */
+function SyncIndicator({ type }: { type: SyncIndicatorType }) {
+  const config = {
+    intune: {
+      icon: Lock,
+      tooltip: "Synced from Microsoft Intune (read-only)",
+      className: "text-blue-500",
+    },
+    entra: {
+      icon: Lock,
+      tooltip: "Synced from Microsoft Entra ID (read-only)",
+      className: "text-purple-500",
+    },
+    readonly: {
+      icon: Lock,
+      tooltip: "This field is managed by external sync",
+      className: "text-muted-foreground",
+    },
+    bidirectional: {
+      icon: RefreshCw,
+      tooltip: "Changes will sync back to the source system",
+      className: "text-green-500",
+    },
+  }
+
+  const { icon: Icon, tooltip, className } = config[type]
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <Icon className={`h-3.5 w-3.5 ${className}`} />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          {tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
