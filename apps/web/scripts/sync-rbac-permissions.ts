@@ -17,8 +17,12 @@ import { Pool } from "pg"
 import { eq, and } from "drizzle-orm"
 import * as schema from "../lib/db/schema"
 
+if (!process.env.DATABASE_URL) {
+  console.error("Error: DATABASE_URL environment variable is not set. Please provide a valid database connection string.");
+  process.exit(1);
+}
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/idaraos",
+  connectionString: process.env.DATABASE_URL,
 })
 
 const db = drizzle(pool, { schema })
