@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, ilike, or, and, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { assets, assetCategories, persons } from "@/lib/db/schema"
+import { assets, assetCategories, persons, assetLifecycleEvents } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
 import { z } from "zod"
 
@@ -276,6 +276,24 @@ export async function POST(request: NextRequest) {
       })
       .returning()
     const record = result[0]
+    
+    // Create acquired lifecycle event - use purchase date if provided
+    const acquiredDate = data.purchaseDate 
+      ? new Date(data.purchaseDate)
+      : new Date()
+    
+    await db.insert(assetLifecycleEvents).values({
+      orgId,
+      assetId: record.id,
+      eventType: "acquired",
+      eventDate: acquiredDate,
+      details: {
+        source: "manual",
+        purchaseDate: data.purchaseDate,
+        purchaseCost: data.purchaseCost,
+      },
+      performedById: session.userId,
+    })
     
     // Audit log the creation
     const audit = await getAuditLogger()

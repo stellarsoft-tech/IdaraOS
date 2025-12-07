@@ -333,16 +333,21 @@ export async function POST(_request: NextRequest) {
             .returning()
           
           if (newAsset.length > 0) {
-            // Create lifecycle event
+            // Create lifecycle event - use purchase date (Intune enrollment date) if available
+            const acquiredDate = assetData.purchaseDate 
+              ? new Date(assetData.purchaseDate)
+              : now
+            
             await db.insert(assetLifecycleEvents).values({
               orgId,
               assetId: newAsset[0].id,
               eventType: "acquired",
-              eventDate: now,
+              eventDate: acquiredDate,
               details: {
                 source: "intune_sync",
                 intuneDeviceId: device.id,
                 deviceName: device.deviceName,
+                enrolledDateTime: device.enrolledDateTime,
               },
               performedById: session.userId,
             })

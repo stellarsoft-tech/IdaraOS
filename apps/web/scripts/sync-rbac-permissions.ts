@@ -14,7 +14,7 @@
 
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
-import { eq, and, inArray, sql } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 import * as schema from "../lib/db/schema"
 
 const pool = new Pool({

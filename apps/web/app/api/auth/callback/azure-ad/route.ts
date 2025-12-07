@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { users, organizations } from "@/lib/db/schema"
-import { createSessionToken, setSessionCookie } from "@/lib/auth/session"
+import { createSessionToken } from "@/lib/auth/session"
 import { getEntraConfig } from "@/lib/auth/entra-config"
 
 // Demo org - same as other routes

@@ -3,8 +3,6 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { StatusBadge } from "@/components/status-badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { format } from "date-fns"
 import type { Risk } from "./types"
 
 export const columns: ColumnDef<Risk>[] = [
