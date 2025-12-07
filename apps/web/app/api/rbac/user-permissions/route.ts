@@ -42,9 +42,9 @@ export async function GET(_request: NextRequest) {
 
     if (roleIds.length === 0) {
       // User has no roles assigned
+      // Response only returns permissionMap (empty). If roles/permissions are needed for backwards compatibility, 
+      // uncomment below and document the need for those properties.
       return NextResponse.json({
-        roles: [],
-        permissions: [],
         permissionMap: {},
       })
     }
