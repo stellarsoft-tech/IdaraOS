@@ -15,7 +15,14 @@ if (!specPath) {
   process.exit(1);
 }
 
-const fullPath = path.resolve(process.cwd(), '..', specPath);
+const baseDir = path.resolve(process.cwd(), '..');
+const fullPath = path.resolve(baseDir, specPath);
+
+// Path traversal protection: ensure fullPath is inside baseDir
+if (!fullPath.startsWith(baseDir + path.sep)) {
+  console.error('Error: Spec path must be within the allowed directory.');
+  process.exit(1);
+}
 
 try {
   console.log(`Generating from: ${fullPath}`);
