@@ -194,11 +194,22 @@ IdaraOS leverages well-maintained, security-focused libraries:
 IdaraOS is designed to support compliance with:
 
 - **SOC 2**: Audit logging, access controls, encryption
-- **GDPR**: Data portability, consent management, privacy controls
+- **GDPR**: Data portability, consent management, privacy controls (see [GDPR.md](./GDPR.md))
 - **ISO 27001**: Information security management practices
 - **HIPAA**: (With additional configuration) PHI protection capabilities
 
 *Note: Compliance certification requires proper configuration and organizational controls beyond the software itself.*
+
+### GDPR Compliance
+
+For detailed GDPR compliance documentation, including:
+
+- Personal data inventory
+- Data subject rights implementation status
+- Technical measures assessment
+- Implementation roadmap
+
+See **[GDPR Compliance Plan](./GDPR.md)**
 
 ---
 
