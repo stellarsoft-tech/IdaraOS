@@ -3,8 +3,6 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { AlertTriangle, Plus } from "lucide-react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
 
 import { DataTableAdvanced as DataTable } from "@/components/primitives/data-table-advanced"
 import { PageShell } from "@/components/primitives/page-shell"

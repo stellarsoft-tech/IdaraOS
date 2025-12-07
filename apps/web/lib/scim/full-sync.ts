@@ -24,8 +24,7 @@ import {
   userScimGroups, 
   userRoles,
   roles,
-  persons,
-  peopleSettings
+  persons
 } from "@/lib/db/schema"
 import { getEntraConfig, type EntraConfig } from "@/lib/auth/entra-config"
 import { performPeopleSync, getPeopleSyncSettings } from "@/lib/people/sync"

@@ -5,7 +5,7 @@
 
 import { cookies } from "next/headers"
 import { SignJWT, jwtVerify } from "jose"
-import { createHash } from "crypto"
+import { hash, compare } from "bcryptjs"
 
 const SESSION_COOKIE_NAME = "idaraos_session"
 const SESSION_DURATION = 60 * 60 * 24 * 7 // 7 days in seconds
@@ -117,19 +117,18 @@ export async function clearSession(): Promise<void> {
 }
 
 /**
- * Simple password hashing (for demo purposes)
- * In production, use bcrypt or argon2
+ * Hash password using bcrypt
+ * Uses a cost factor of 12 for good security/performance balance
  */
-export function hashPassword(password: string): string {
-  // Simple hash for demo - in production use bcrypt
-  return createHash("sha256").update(password).digest("hex")
+export async function hashPassword(password: string): Promise<string> {
+  return hash(password, 12)
 }
 
 /**
- * Verify password against hash
+ * Verify password against hash using bcrypt
  */
-export function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash
+export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
+  return compare(password, passwordHash)
 }
 
 /**

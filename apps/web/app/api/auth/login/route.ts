@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!verifyPassword(password, user.passwordHash)) {
+    if (!(await verifyPassword(password, user.passwordHash))) {
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }

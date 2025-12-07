@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
-import { hashPassword, getSession } from "@/lib/auth/session"
+import { hashPassword } from "@/lib/auth/session"
 import { z } from "zod"
 
 const SetPasswordSchema = z.object({
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Hash the password
-    const passwordHash = hashPassword(password)
+    const passwordHash = await hashPassword(password)
 
     // Update user with password and activate if invited
     await db

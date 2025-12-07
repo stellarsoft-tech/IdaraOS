@@ -318,7 +318,7 @@ async function seedRBAC() {
 
   if (!adminUser) {
     // Create admin user
-    const passwordHash = hashPassword("Admin123!")
+    const passwordHash = await hashPassword("Admin123!")
     const [created] = await db.insert(schema.users).values({
       orgId: org.id,
       email: "admin@example.com",
@@ -332,7 +332,7 @@ async function seedRBAC() {
     console.log(`  + Created admin user: admin@example.com`)
   } else {
     // Update password to ensure it's set correctly
-    const passwordHash = hashPassword("Admin123!")
+    const passwordHash = await hashPassword("Admin123!")
     await db
       .update(schema.users)
       .set({

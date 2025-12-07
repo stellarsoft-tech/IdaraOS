@@ -9,7 +9,6 @@ import {
   Trash2,
   Users,
   Check,
-  X,
   Loader2,
   Info,
 } from "lucide-react"
@@ -54,7 +53,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
-import { useUser, useCanAccess } from "@/lib/rbac/context"
+import { useCanAccess } from "@/lib/rbac/context"
 import {
   useRoles,
   useRole,

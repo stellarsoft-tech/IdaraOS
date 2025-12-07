@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   Check, 
   ChevronRight, 
-  ExternalLink, 
   Loader2, 
   RefreshCw, 
   Settings, 
