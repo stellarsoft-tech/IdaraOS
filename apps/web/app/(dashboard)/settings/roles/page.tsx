@@ -8,7 +8,6 @@ import {
   Pencil, 
   Trash2,
   Users,
-  Check,
   Loader2,
   Info,
 } from "lucide-react"
