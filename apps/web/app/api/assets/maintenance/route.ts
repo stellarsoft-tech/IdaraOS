@@ -242,8 +242,12 @@ export async function POST(request: NextRequest) {
         type: data.type,
         status: data.status,
         description: data.description ?? null,
-        scheduledDate: data.scheduledDate ?? null,
-        completedDate: data.completedDate ?? null,
+        scheduledDate: data.scheduledDate && data.scheduledDate !== "" 
+          ? data.scheduledDate 
+          : null,
+        completedDate: data.completedDate && data.completedDate !== "" 
+          ? data.completedDate 
+          : null,
         cost: data.cost ?? null,
         vendor: data.vendor ?? null,
         performedById: session.userId,

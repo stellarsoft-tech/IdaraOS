@@ -193,8 +193,19 @@ export async function PATCH(
     if (data.type !== undefined) updateData.type = data.type
     if (data.status !== undefined) updateData.status = data.status
     if (data.description !== undefined) updateData.description = data.description
-    if (data.scheduledDate !== undefined) updateData.scheduledDate = data.scheduledDate
-    if (data.completedDate !== undefined) updateData.completedDate = data.completedDate
+    
+    // Handle date fields: convert empty strings to null, keep valid date strings as-is
+    if (data.scheduledDate !== undefined) {
+      updateData.scheduledDate = data.scheduledDate === "" || data.scheduledDate === null
+        ? null
+        : data.scheduledDate
+    }
+    if (data.completedDate !== undefined) {
+      updateData.completedDate = data.completedDate === "" || data.completedDate === null
+        ? null
+        : data.completedDate
+    }
+    
     if (data.cost !== undefined) updateData.cost = data.cost
     if (data.vendor !== undefined) updateData.vendor = data.vendor
     if (data.assignedToId !== undefined) updateData.assignedToId = data.assignedToId
