@@ -117,11 +117,11 @@ export default function DashboardLayout({
     <BreadcrumbProvider>
       <SidebarProvider className="h-full">
         <AppSidebar />
-        <SidebarInset className="overflow-hidden">
+        <SidebarInset className="overflow-hidden h-full">
           <div className="flex h-full flex-col">
             <TopBar onChatsyToggle={() => setChatsyOpen(!chatsyOpen)} onCommandOpen={() => setCommandOpen(true)} />
-            <div className="flex min-h-0 flex-1">
-              <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">{children}</main>
               <ChatsyDrawer open={chatsyOpen} onClose={() => setChatsyOpen(false)} />
             </div>
           </div>

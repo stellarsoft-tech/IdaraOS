@@ -25,12 +25,14 @@ export default function RootLayout({
   const isVercel = process.env.VERCEL === "1" || process.env.NEXT_PUBLIC_VERCEL_ENV
 
   return (
-    <html lang="en" suppressHydrationWarning className={geist.className}>
-      <body className="font-sans antialiased" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${geist.className} h-full`}>
+      <body className="font-sans antialiased h-full" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <QueryProvider>
             <RBACProvider>
-              {children}
+              <div className="h-full">
+                {children}
+              </div>
               {isVercel && <Analytics />}
               <Toaster />
             </RBACProvider>
