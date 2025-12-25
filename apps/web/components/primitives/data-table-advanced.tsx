@@ -108,6 +108,9 @@ export interface DataTableProps<TData> {
   enableColumnVisibility?: boolean
   enableExport?: boolean
   
+  // Initial column visibility (to hide columns by default)
+  initialColumnVisibility?: VisibilityState
+  
   // Loading state
   loading?: boolean
   
@@ -172,7 +175,8 @@ function DataTableColumnHeader<TData, TValue>({
     }
   }
   
-  const [filterValue, setFilterValue] = React.useState((column.getFilterValue() as string) ?? "")
+  // Local search input for filtering dropdown options (always a string)
+  const [filterValue, setFilterValue] = React.useState("")
   const [selectedOptions, setSelectedOptions] = React.useState<Set<string>>(
     new Set(column.getFilterValue() as string[])
   )
@@ -463,6 +467,7 @@ export function DataTable<TData>({
   enableSelection = false,
   enableColumnVisibility = true,
   enableExport = true,
+  initialColumnVisibility = {},
   loading = false,
   emptyState,
 }: DataTableProps<TData>) {
@@ -629,7 +634,7 @@ export function DataTable<TData>({
   // Internal state (used when not in server mode)
   const [internalSorting, setInternalSorting] = React.useState<SortingState>([])
   const [internalFilters, setInternalFilters] = React.useState<ColumnFiltersState>([])
-  const [internalVisibility, setInternalVisibility] = React.useState<VisibilityState>({})
+  const [internalVisibility, setInternalVisibility] = React.useState<VisibilityState>(initialColumnVisibility)
   const [internalSelection, setInternalSelection] = React.useState<RowSelectionState>({})
   const [internalPage, setInternalPage] = React.useState(0)
   const [internalPageSize, setInternalPageSize] = React.useState(10)

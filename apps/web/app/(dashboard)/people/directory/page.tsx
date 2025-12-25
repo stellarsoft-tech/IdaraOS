@@ -139,6 +139,7 @@ export default function DirectoryPage() {
     staleTime: 60000, // Cache for 1 minute
   })
   const isBidirectionalSyncEnabled = entraSettings?.scimBidirectionalSync ?? false
+  const isEntraConnected = entraSettings?.status === "connected"
   
   // Get users that are not already linked to a person
   const availableUsers = useMemo(() => {
@@ -216,6 +217,31 @@ export default function DirectoryPage() {
       enableColumnFilter: true,
       size: 150,
     },
+    // Entra Created At column - only shown when Entra integration is connected
+    ...(isEntraConnected ? [{
+      id: "entraCreatedAt",
+      header: "Entra Created",
+      accessorKey: "entraCreatedAt",
+      cell: ({ row }: { row: { original: Person } }) => {
+        const person = row.original
+        if (!person.entraCreatedAt) {
+          return <span className="text-muted-foreground text-xs">—</span>
+        }
+        const date = new Date(person.entraCreatedAt)
+        return (
+          <span className="text-sm text-muted-foreground" title={date.toISOString()}>
+            {date.toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
+        )
+      },
+      enableSorting: true,
+      enableColumnFilter: false,
+      size: 130,
+    }] as ColumnDef<Person>[] : []),
     {
       id: "links",
       header: "Links",
@@ -517,6 +543,9 @@ export default function DirectoryPage() {
               enableSorting
               enableExport
               enableColumnVisibility
+              initialColumnVisibility={{
+                entraCreatedAt: false, // Hidden by default, available in column selector
+              }}
               emptyState={
                 <div className="text-center py-12">
                   <Users className="mx-auto h-12 w-12 text-muted-foreground/50" />
