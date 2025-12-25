@@ -240,6 +240,16 @@ jobs:
           echo "  Password: Admin123!"
           echo "  Role: Owner (full access)"
 
+      - name: Sync RBAC permissions
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-dev-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "🔐 Syncing RBAC modules and permissions..."
+          pnpm db:sync-rbac
+          echo "✅ RBAC permissions synced"
+
       - name: Deploy to Container App
         id: deploy
         run: |
@@ -533,6 +543,16 @@ jobs:
           echo "  Password: Admin123!"
           echo "  Role: Owner (full access)"
 
+      - name: Sync RBAC permissions
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-staging-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "🔐 Syncing RBAC modules and permissions..."
+          pnpm db:sync-rbac
+          echo "✅ RBAC permissions synced"
+
       - name: Deploy to Container App
         id: deploy
         run: |
@@ -812,6 +832,16 @@ jobs:
           echo "  Email: admin@example.com"
           echo "  Password: Admin123!"
           echo "  Role: Owner (full access)"
+
+      - name: Sync RBAC permissions
+        run: |
+          PSQL="psql-${{ env.APP_NAME }}-prod-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          DATABASE_URL="postgresql://pgadmin:${{ steps.secrets.outputs.pg_password }}@${PSQL}.postgres.database.azure.com:5432/${{ env.APP_NAME }}?sslmode=require"
+          cd apps/web
+          export DATABASE_URL
+          echo "🔐 Syncing RBAC modules and permissions..."
+          pnpm db:sync-rbac
+          echo "✅ RBAC permissions synced"
 
       - name: Deploy to Container App
         id: deploy
