@@ -147,8 +147,11 @@ const navigationData: NavItem[] = [
     icon: Workflow,
     items: [
       { title: "Overview", url: "/workflows", module: "workflows.overview" },
-      { title: "Tasks & Automations", url: "/workflows/tasks", module: "workflows.tasks" },
-      { title: "Checklists", url: "/workflows/checklists", module: "workflows.checklists" },
+      { title: "Templates", url: "/workflows/templates", module: "workflows.templates" },
+      { title: "Active Workflows", url: "/workflows/instances", module: "workflows.instances" },
+      { title: "Board View", url: "/workflows/board", module: "workflows.board" },
+      { title: "My Tasks", url: "/workflows/tasks", module: "workflows.tasks" },
+      { title: "Settings", url: "/workflows/settings", module: "workflows.settings" },
     ],
   },
   {

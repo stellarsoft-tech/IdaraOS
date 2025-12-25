@@ -50,6 +50,20 @@
       "when": 1765000000000,
       "tag": "0006_add_maintenance_assigned_to",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1766621338093,
+      "tag": "0007_even_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1766622698525,
+      "tag": "0008_cultured_misty_knight",
+      "breakpoints": true
     }
   ]
 }

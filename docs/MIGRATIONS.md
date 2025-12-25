@@ -1,261 +1,192 @@
-# Database Migrations
+# Database Migrations Guide
 
-This document describes the database migration workflow for IdaraOS, which uses [Drizzle ORM](https://orm.drizzle.team/).
+This guide explains how to work with database migrations in IdaraOS.
 
-## Overview
+## Quick Reference
 
-The migration workflow is similar to Entity Framework Core:
+| Task | Command |
+|------|---------|
+| Check migration status | `pnpm docker:db:status` |
+| Generate migration from schema changes | `pnpm docker:db:generate` |
+| Apply pending migrations | `pnpm docker:db:migrate` |
+| Force-apply migrations (fix conflicts) | `pnpm docker:db:migrate:force` |
+| Fix out-of-sync state | `pnpm docker:db:migrate:fix` |
+| Seed initial data | `pnpm docker:db:seed` |
+| Seed RBAC permissions | `pnpm docker:db:seed-rbac` |
 
-1. **Make schema changes** in `apps/web/lib/db/schema/*.ts`
-2. **Generate migration** with `pnpm db:generate`
-3. **Review** the generated SQL in `apps/web/drizzle/`
-4. **Commit** the migration files
-5. **Deploy** - migrations run automatically
+## Schema Change Workflow
 
-## Migration Commands
+### Step 1: Edit Schema Files
 
-### Local Development
-
-| Command | Description |
-|---------|-------------|
-| `pnpm --filter web db:generate` | Generate migration from schema changes |
-| `pnpm --filter web db:status` | Show migration status (applied vs pending) |
-| `pnpm --filter web db:check` | Check if migrations are up to date (CI) |
-| `pnpm --filter web db:run-migrations` | Apply pending migrations |
-| `pnpm --filter web db:baseline` | Mark existing schema as migrated (smart) |
-| `pnpm --filter web db:repair` | Fix incorrectly baselined migrations |
-| `pnpm --filter web db:push` | Push schema directly (dev only, no migration) |
-| `pnpm --filter web db:studio` | Open Drizzle Studio to browse data |
-
-### Docker Development
-
-| Command | Description |
-|---------|-------------|
-| `pnpm docker:db:generate` | Generate migration in container |
-| `pnpm docker:db:status` | Show migration status |
-| `pnpm docker:db:migrate` | Apply pending migrations |
-| `pnpm docker:db:baseline` | Mark existing schema as migrated (smart) |
-| `pnpm docker:db:repair` | Fix incorrectly baselined migrations |
-| `pnpm docker:db:push` | Push schema directly (dev only) |
-| `pnpm docker:db:reset` | Reset database (drops all data!) |
-
-## Workflow
-
-### 1. Making Schema Changes
-
-Edit files in `apps/web/lib/db/schema/`:
+Schema files are located in `apps/web/lib/db/schema/`. Edit the relevant file:
 
 ```typescript
 // apps/web/lib/db/schema/people.ts
-export const persons = pgTable("people_persons", {
+export const people = pgTable("people", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  // Add new column
-  hireDate: date("hire_date"),  // ← New column
-  // ...
+  email: text("email").notNull(),
+  // Add your new field here:
+  phone: text("phone"),  // <-- NEW
 })
 ```
 
-### 2. Generate Migration
+### Step 2: Generate Migration
 
 ```bash
-# Using Docker (recommended)
 pnpm docker:db:generate
-
-# Or locally
-pnpm --filter web db:generate
 ```
 
-This creates a new SQL file in `apps/web/drizzle/`:
-
+This creates a new SQL file in `apps/web/drizzle/` like:
 ```
-apps/web/drizzle/
-├── 0000_cheerful_dust.sql
-├── 0001_add_people_settings.sql
-├── 0002_furry_smasher.sql
-├── 0003_add_people_entra_fields.sql  ← New migration
-└── meta/
-    └── _journal.json
+apps/web/drizzle/0009_add_phone_field.sql
 ```
 
-### 3. Review the Migration
+### Step 3: Review the Migration
 
-Open the generated SQL file and review:
+Always review the generated SQL to ensure it does what you expect:
 
 ```sql
--- apps/web/drizzle/0003_add_people_entra_fields.sql
-ALTER TABLE "people_persons" ADD COLUMN "hire_date" date;
+-- apps/web/drizzle/0009_add_phone_field.sql
+ALTER TABLE "people" ADD COLUMN "phone" text;
 ```
 
-### 4. Commit the Migration
+### Step 4: Apply the Migration
 
 ```bash
-git add apps/web/drizzle/
-git commit -m "Add hire_date column to people_persons"
-```
-
-### 5. Deploy
-
-When you deploy:
-- The `db-init` container runs migrations automatically
-- Migrations are tracked in `drizzle.__drizzle_migrations`
-- Safe to run multiple times (idempotent)
-
-## CI/CD Integration
-
-### Pre-commit Hook
-
-When you modify schema files, you'll see a reminder:
-
-```
-⚠️  Database schema files were modified!
-   Remember to run: pnpm docker:db:generate
-   Then commit the generated migration files.
-```
-
-### CI Pipeline
-
-The CI workflow includes a `migration-check` job that:
-1. Generates migrations to a temp directory
-2. Fails if there are uncommitted schema changes
-3. Ensures migrations are always in sync with schema
-
-## Troubleshooting
-
-### "Column does not exist" errors
-
-This usually means migrations haven't been applied:
-
-```bash
-# Check migration status
-pnpm docker:db:status
-
-# Apply pending migrations
 pnpm docker:db:migrate
 ```
 
-### Database was created with `db:push`
+### Step 5: Update RBAC (if needed)
 
-If your database was created with `db:push` (no migrations), run:
-
-```bash
-# Baseline marks existing schema as migrated (smart - only baselines what exists)
-pnpm --filter web db:baseline
-
-# Then run any pending migrations
-pnpm --filter web db:run-migrations
-```
-
-### Incorrectly baselined migrations
-
-If migrations were marked as applied but their changes don't exist in the database:
+If you added new modules or permissions:
 
 ```bash
-# Repair removes incorrect entries so migrations can run properly
-pnpm --filter web db:repair
-
-# Then run the migrations
-pnpm --filter web db:run-migrations
+pnpm docker:db:seed-rbac
 ```
 
-### Schema drift detected in CI
+## CI/CD Pipeline
 
-If CI fails with "schema drift detected":
+All commands are non-interactive (use `-T` flag for docker exec):
+
+```yaml
+# GitHub Actions example
+jobs:
+  deploy:
+    steps:
+      - name: Run migrations
+        run: pnpm docker:db:migrate
+        
+      - name: Seed RBAC
+        run: pnpm docker:db:seed-rbac
+```
+
+## Troubleshooting
+
+### "Relation already exists" Error
+
+This happens when the database is out of sync with migrations (e.g., someone used `db:push`).
+
+**Fix:**
+```bash
+# Option 1: Force-apply migrations
+pnpm docker:db:migrate:force
+
+# Option 2: Fix migration state
+pnpm docker:db:migrate:fix
+```
+
+### "Migration table doesn't exist"
+
+First time setup - migrations will create the table automatically.
+
+### Checking What Migrations Are Pending
 
 ```bash
-# Generate the missing migration
-pnpm docker:db:generate
-
-# Commit the migration file
-git add apps/web/drizzle/
-git commit -m "Generate migration for schema changes"
+pnpm docker:db:status
 ```
 
-### Reset development database
+Output:
+```
+📁 Local migrations: 9
+✅ Applied: 7
+⏳ Pending: 2
 
-⚠️ **Warning**: This deletes all data!
+Pending migrations:
+  - 0008_add_workflows
+  - 0009_add_phone_field
+```
+
+### Full Database Reset (Dev Only)
+
+If you need to start fresh:
 
 ```bash
 pnpm docker:db:reset
 ```
 
+This will:
+1. Drop all tables
+2. Run all migrations
+3. Seed initial data
+4. Seed RBAC permissions
+
+## Migration Files Structure
+
+```
+apps/web/drizzle/
+├── 0000_initial.sql           # First migration
+├── 0001_add_people.sql        # Subsequent migrations
+├── 0002_add_assets.sql
+├── ...
+└── meta/
+    ├── _journal.json          # Migration tracking
+    └── 0000_snapshot.json     # Schema snapshots
+```
+
 ## Best Practices
 
-### DO ✅
+1. **Always use migrations** - Never use `db:push` in shared environments
+2. **Review generated SQL** - Before applying, ensure it's correct
+3. **Keep migrations small** - One logical change per migration
+4. **Never edit applied migrations** - Create a new migration instead
+5. **Test migrations** - Run in dev before deploying to prod
+6. **Commit migration files** - They're part of your codebase
 
-- Always generate migrations after schema changes
-- Review generated SQL before committing
-- Test migrations on a copy of production data
-- Keep migrations small and focused
-- Include both up and down migrations when possible
+## Dev Mode Shortcuts
 
-### DON'T ❌
+For rapid iteration during development, you can use `db:push` which applies schema changes directly without creating migration files:
 
-- Don't use `db:push` in production
-- Don't manually edit migration files (unless necessary)
-- Don't skip migration commits
-- Don't run destructive migrations without backup
-
-## Architecture
-
-### Migration Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Development                               │
-├─────────────────────────────────────────────────────────────┤
-│  1. Schema Change    →    lib/db/schema/*.ts                │
-│  2. Generate         →    pnpm db:generate                  │
-│  3. Review           →    drizzle/*.sql                     │
-│  4. Commit           →    git add & commit                  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    CI Pipeline                               │
-├─────────────────────────────────────────────────────────────┤
-│  migration-check job: Verify no uncommitted schema changes  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Deployment                                │
-├─────────────────────────────────────────────────────────────┤
-│  db-init container:                                         │
-│    1. Check for existing tables                             │
-│    2. Baseline if needed (db:push migration)                │
-│    3. Run pending migrations                                │
-│    4. Seed data                                             │
-└─────────────────────────────────────────────────────────────┘
+```bash
+pnpm docker:db:push
 ```
 
-### Migration Tracking
+⚠️ **Warning:** Only use `db:push` for local development. Always use proper migrations for shared environments.
 
-Migrations are tracked in the `drizzle.__drizzle_migrations` table:
+## Common Commands Reference
 
-```sql
-SELECT * FROM drizzle.__drizzle_migrations;
+### Using dev.ps1 (PowerShell)
+
+```powershell
+cd deployment/docker
+
+.\dev.ps1 db:generate        # Generate migration
+.\dev.ps1 db:migrate         # Apply migrations
+.\dev.ps1 db:migrate:force   # Force-apply
+.\dev.ps1 db:migrate:fix     # Fix state
+.\dev.ps1 db:status          # Check status
+.\dev.ps1 db:seed            # Seed data
+.\dev.ps1 db:seed-rbac       # Seed RBAC
 ```
 
-| id | hash | created_at |
-|----|------|------------|
-| 1 | 0000_cheerful_dust | 1764631349766 |
-| 2 | 0001_add_people_settings | 1764633148959 |
-| 3 | 0002_furry_smasher | 1764641493891 |
+### Using pnpm (Cross-platform)
 
-## Comparison with Entity Framework
-
-| Entity Framework | Drizzle ORM |
-|-----------------|-------------|
-| `Add-Migration` | `pnpm db:generate` |
-| `Update-Database` | `pnpm db:run-migrations` |
-| `Script-Migration` | SQL files in `drizzle/` |
-| `__EFMigrationsHistory` | `drizzle.__drizzle_migrations` |
-| Model snapshot | `drizzle/meta/_journal.json` |
-
-## Related Documentation
-
-- [Drizzle ORM Documentation](https://orm.drizzle.team/)
-- [Drizzle Kit CLI](https://orm.drizzle.team/kit-docs/overview)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
+```bash
+pnpm docker:db:generate
+pnpm docker:db:migrate
+pnpm docker:db:migrate:force
+pnpm docker:db:migrate:fix
+pnpm docker:db:status
+pnpm docker:db:seed
+pnpm docker:db:seed-rbac
+```

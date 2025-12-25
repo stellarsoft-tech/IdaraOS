@@ -56,6 +56,14 @@ export const MODULE_REGISTRY = [
   { slug: "security.risks", name: "Risk Register", description: "Manage security risks", category: "Security", icon: "AlertTriangle", sortOrder: "301" },
   { slug: "security.controls", name: "Controls Library", description: "Manage security controls", category: "Security", icon: "CheckSquare", sortOrder: "302" },
   
+  // Workflows
+  { slug: "workflows.overview", name: "Workflows Overview", description: "View workflows dashboard", category: "Workflows", icon: "Workflow", sortOrder: "400" },
+  { slug: "workflows.templates", name: "Workflow Templates", description: "Manage workflow templates", category: "Workflows", icon: "FileCode2", sortOrder: "401" },
+  { slug: "workflows.instances", name: "Workflow Instances", description: "View and manage running workflows", category: "Workflows", icon: "Play", sortOrder: "402" },
+  { slug: "workflows.tasks", name: "Workflow Tasks", description: "View and complete assigned tasks", category: "Workflows", icon: "CheckSquare", sortOrder: "403" },
+  { slug: "workflows.board", name: "Workflow Board", description: "Kanban board view of workflows", category: "Workflows", icon: "Kanban", sortOrder: "404" },
+  { slug: "workflows.settings", name: "Workflow Settings", description: "Configure workflow module settings", category: "Workflows", icon: "Settings", sortOrder: "405" },
+  
   // Settings
   { slug: "settings.organization", name: "Organization Settings", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900" },
   { slug: "settings.users", name: "Users & Access", description: "Manage system users and invitations", category: "Settings", icon: "Users", sortOrder: "901" },

@@ -165,10 +165,35 @@ export const routes: Record<string, RouteConfig> = {
     path: "/workflows",
     label: "Workflows",
   },
-  "workflows.checklists": {
-    path: "/workflows/checklists",
-    label: "Checklists",
+  "workflows.templates": {
+    path: "/workflows/templates",
+    label: "Templates",
     parent: "workflows",
+    description: "Workflow template library",
+  },
+  "workflows.instances": {
+    path: "/workflows/instances",
+    label: "Active Workflows",
+    parent: "workflows",
+    description: "Running workflow instances",
+  },
+  "workflows.board": {
+    path: "/workflows/board",
+    label: "Board",
+    parent: "workflows",
+    description: "Kanban board view",
+  },
+  "workflows.tasks": {
+    path: "/workflows/tasks",
+    label: "My Tasks",
+    parent: "workflows",
+    description: "All tasks assigned to you",
+  },
+  "workflows.settings": {
+    path: "/workflows/settings",
+    label: "Settings",
+    parent: "workflows",
+    description: "Configure workflow settings",
   },
   
   // Settings

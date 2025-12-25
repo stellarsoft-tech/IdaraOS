@@ -2,6 +2,7 @@
 # IdaraOS - Development Dockerfile
 # =============================================================================
 # Lightweight development image with volume mounts for hot reloading
+# Packages are installed at runtime with a cached pnpm store
 # =============================================================================
 
 FROM node:22-alpine
@@ -12,14 +13,11 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Install development tools
 RUN apk add --no-cache git
 
+# Set pnpm store location (will be volume-mounted for caching)
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
 WORKDIR /app
-
-# Copy package files for dependency installation
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
-
-# Install all dependencies (will be cached in image)
-RUN pnpm install --frozen-lockfile
 
 # Set development environment
 ENV NODE_ENV=development
@@ -33,5 +31,8 @@ EXPOSE 3000
 # Working directory for next dev
 WORKDIR /app/apps/web
 
-# Run Next.js dev server directly
-CMD ["npx", "next", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+# Copy startup script
+COPY deployment/docker/start-dev.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]

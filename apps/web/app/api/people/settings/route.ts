@@ -77,6 +77,12 @@ export async function GET() {
         syncedPeopleCount: "0",
         lastSyncError: null,
         
+        // Workflow settings
+        autoOnboardingWorkflow: false,
+        defaultOnboardingWorkflowTemplateId: null,
+        autoOffboardingWorkflow: false,
+        defaultOffboardingWorkflowTemplateId: null,
+        
         // Core integration status (read-only info)
         entraConnected: isEntraConnected,
         coreScimEnabled: isCoreScimEnabled,
@@ -120,6 +126,11 @@ export async function PUT(request: NextRequest) {
       autoDeleteOnRemoval,
       defaultStatus,
       scimEnabled,
+      // Workflow settings
+      autoOnboardingWorkflow,
+      defaultOnboardingWorkflowTemplateId,
+      autoOffboardingWorkflow,
+      defaultOffboardingWorkflowTemplateId,
     } = body
 
     // Validate sync mode
@@ -152,6 +163,11 @@ export async function PUT(request: NextRequest) {
       autoDeleteOnRemoval: autoDeleteOnRemoval ?? false,
       defaultStatus: defaultStatus || "active",
       scimEnabled: scimEnabled ?? false,
+      // Workflow settings
+      autoOnboardingWorkflow: autoOnboardingWorkflow ?? false,
+      defaultOnboardingWorkflowTemplateId: defaultOnboardingWorkflowTemplateId || null,
+      autoOffboardingWorkflow: autoOffboardingWorkflow ?? false,
+      defaultOffboardingWorkflowTemplateId: defaultOffboardingWorkflowTemplateId || null,
       updatedAt: new Date(),
     }
 

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import {
-  ColumnDef,
+  type ColumnDef,
   ColumnFiltersState,
   SortingState,
   VisibilityState,
@@ -14,6 +14,9 @@ import {
   useReactTable,
   RowSelectionState,
 } from "@tanstack/react-table"
+
+// Re-export ColumnDef for convenience
+export type { ColumnDef } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import {
   ChevronDown,
@@ -109,8 +112,8 @@ export function DataTable<TData>({
   toolbar,
   bulkActions,
   enableVirtualization = false,
-  enableColumnFilters = true,
-  enableSorting = true,
+  enableColumnFilters: _enableColumnFilters = true,
+  enableSorting: _enableSorting = true,
   enableSelection = false,
   enableColumnVisibility = true,
   enableExport = true,

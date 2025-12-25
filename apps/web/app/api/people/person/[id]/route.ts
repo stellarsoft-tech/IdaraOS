@@ -12,7 +12,8 @@ import { persons, users } from "@/lib/db/schema"
 import { UpdatePersonSchema } from "@/lib/generated/people/person/types"
 import { getEntraConfig } from "@/lib/auth/entra-config"
 import { syncPersonToEntra } from "@/lib/auth/entra-sync"
-import { getAuditLogger } from "@/lib/api/context"
+import { getAuditLogger, requireSession } from "@/lib/api/context"
+import { triggerPersonWorkflow } from "@/lib/workflows/engine"
 
 // UUID regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -455,6 +456,36 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       } catch (syncError) {
         console.error("[People API] Error syncing to Entra:", syncError)
         // Don't fail the request, just log the error
+      }
+    }
+    
+    // Trigger workflow if status changed to onboarding or offboarding
+    if (data.status && data.status !== existing.status) {
+      if (data.status === "onboarding" || data.status === "offboarding") {
+        try {
+          // Get session for the user who made the change
+          let changedById: string | undefined
+          try {
+            const session = await requireSession()
+            changedById = session.userId
+          } catch {
+            // If no session, workflow will be created without a startedBy
+          }
+          
+          const workflowResult = await triggerPersonWorkflow({
+            personId: record.id,
+            orgId: record.orgId,
+            newStatus: data.status,
+            changedById,
+          })
+          
+          if (workflowResult?.triggered) {
+            console.log(`[People API] Triggered ${data.status} workflow for ${record.email}`)
+          }
+        } catch (workflowError) {
+          console.error("[People API] Error triggering workflow:", workflowError)
+          // Don't fail the request, just log the error
+        }
       }
     }
     

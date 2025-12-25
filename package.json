@@ -28,22 +28,25 @@
     "docker:shell:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web sh",
     "docker:shell:db": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec db sh",
 
-    "docker:db:migrate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:run-migrations",
-    "docker:db:generate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:generate",
-    "docker:db:status": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:status",
-    "docker:db:check": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:check",
-    "docker:db:baseline": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:baseline",
-    "docker:db:repair": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:repair",
-    "docker:db:push": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:push",
+    "docker:db:migrate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:migrate",
+    "docker:db:migrate:force": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:migrate:force",
+    "docker:db:migrate:status": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:migrate:status",
+    "docker:db:migrate:fix": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:migrate:fix",
+    "docker:db:generate": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:generate",
+    "docker:db:status": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:migrate:status",
+    "docker:db:push": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:push",
     "docker:db:studio": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:studio",
-    "docker:db:seed": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed",
-    "docker:db:seed-rbac": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed-rbac",
+    "docker:db:seed": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:seed",
+    "docker:db:seed-rbac": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:seed-rbac",
     "docker:db:psql": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec db psql -U idaraos -d idaraos",
-    "docker:db:reset": "cd deployment/docker && docker compose -f docker-compose.dev.yml down -v && docker compose -f docker-compose.dev.yml up -d",
+    "docker:db:reset": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T db psql -U idaraos -c \"DROP SCHEMA public CASCADE; CREATE SCHEMA public;\" && cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:migrate && cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:seed && cd deployment/docker && docker compose -f docker-compose.dev.yml exec -T web pnpm --filter web db:seed-rbac",
 
     "docker:rebuild:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate web",
     "docker:rebuild:all": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate",
-    "docker:prune": "docker system prune -f"
+    "docker:prune": "docker system prune -f",
+
+    "docker:install": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web sh -c \"cd /app && pnpm install\" && docker compose -f docker-compose.dev.yml restart web",
+    "docker:db:sync": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:push && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed-rbac"
   },
   "devDependencies": {
     "husky": "^9.1.7",

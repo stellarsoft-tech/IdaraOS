@@ -106,28 +106,97 @@ For Microsoft Entra ID integration, you'll also need:
 
 ## Development Commands
 
-Run from the project root:
+### Using the Dev Script (Recommended for Windows)
+
+```powershell
+cd deployment/docker
+
+# Start everything
+.\dev.ps1 start
+
+# After adding a new npm package to package.json
+.\dev.ps1 install
+
+# After changing database schema files
+.\dev.ps1 db:push
+
+# View logs
+.\dev.ps1 logs
+
+# Full reset (nuclear option)
+.\dev.ps1 reset
+```
+
+Run `.\dev.ps1` without arguments to see all available commands.
+
+### Using pnpm (Cross-platform)
+
+From the project root:
 
 ```bash
-# Start development server (if not using Docker)
+# === STARTUP ===
+pnpm docker:dev:detach           # Start all services in background
+pnpm docker:logs:web             # Watch web container logs
+
+# === AFTER ADDING NPM PACKAGES ===
+pnpm docker:install              # Install packages & restart web
+
+# === AFTER CHANGING DATABASE SCHEMA ===
+pnpm docker:db:push              # Push schema changes to database
+pnpm docker:db:sync              # Push schema + reseed RBAC
+
+# === UTILITIES ===
+pnpm docker:restart:web          # Quick restart of web container
+pnpm docker:shell:web            # Open shell in web container
+pnpm docker:ps                   # Show container status
+
+# === RESET ===
+pnpm docker:db:reset             # Reset database (drop all data)
+pnpm docker:down:volumes         # Stop & remove all volumes
+```
+
+### Common Workflows
+
+**I added a new npm package:**
+```bash
+pnpm docker:install
+```
+
+**I changed the database schema:**
+```bash
+pnpm docker:db:push
+```
+
+**I added new RBAC permissions:**
+```bash
+pnpm docker:db:seed-rbac
+```
+
+**Something is broken, help!**
+```bash
+# Full reset - stops everything, clears volumes, rebuilds
+cd deployment/docker
+.\dev.ps1 reset
+```
+
+### Non-Docker Development
+
+```bash
+# Start development server
 pnpm dev
 
-# Run linting
+# Linting
 pnpm lint
-
-# Fix linting issues
 pnpm lint --fix
 
 # Type checking
 pnpm typecheck
 
-# Run tests
-pnpm test
-
-# Database migrations
-pnpm db:generate  # Generate migration from schema changes
-pnpm db:migrate   # Apply migrations
-pnpm db:studio    # Open Drizzle Studio (database GUI)
+# Database
+pnpm db:push      # Push schema (dev)
+pnpm db:generate  # Generate migration
+pnpm db:migrate   # Run migrations
+pnpm db:studio    # Open Drizzle Studio GUI
 ```
 
 ---

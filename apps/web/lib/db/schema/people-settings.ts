@@ -112,6 +112,32 @@ export const peopleSettings = pgTable("people_settings", {
   lastSyncErrorAt: timestamp("last_sync_error_at", { withTimezone: true }),
   
   // ===================
+  // Workflow Settings
+  // ===================
+  
+  /**
+   * Enable automatic onboarding workflow creation
+   * When a person is created or status changes to "onboarding"
+   */
+  autoOnboardingWorkflow: boolean("auto_onboarding_workflow").notNull().default(false),
+  
+  /**
+   * Default workflow template for onboarding
+   */
+  defaultOnboardingWorkflowTemplateId: uuid("default_onboarding_workflow_template_id"),
+  
+  /**
+   * Enable automatic offboarding workflow creation
+   * When a person's status changes to "offboarding"
+   */
+  autoOffboardingWorkflow: boolean("auto_offboarding_workflow").notNull().default(false),
+  
+  /**
+   * Default workflow template for offboarding
+   */
+  defaultOffboardingWorkflowTemplateId: uuid("default_offboarding_workflow_template_id"),
+  
+  // ===================
   // General Settings
   // ===================
   

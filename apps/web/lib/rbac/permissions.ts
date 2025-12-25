@@ -132,6 +132,74 @@ export const permissions: Record<string, LegacyPermission> = {
     scope: "org",
   },
   
+  // Workflows module
+  "workflows.overview": {
+    resource: "workflows.overview",
+    actions: ["read"],
+    roles: ["User", "HR", "IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.templates": {
+    resource: "workflows.templates",
+    actions: ["read"],
+    roles: ["User", "HR", "IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.templates.write": {
+    resource: "workflows.templates",
+    actions: ["create", "edit"],
+    roles: ["HR", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.templates.delete": {
+    resource: "workflows.templates",
+    actions: ["delete"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.instances": {
+    resource: "workflows.instances",
+    actions: ["read"],
+    roles: ["User", "HR", "IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.instances.write": {
+    resource: "workflows.instances",
+    actions: ["create", "edit"],
+    roles: ["HR", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.tasks": {
+    resource: "workflows.tasks",
+    actions: ["read"],
+    roles: ["User", "HR", "IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.tasks.write": {
+    resource: "workflows.tasks",
+    actions: ["edit"],
+    roles: ["User", "HR", "IT", "Admin", "Owner"], // Users can complete their own tasks
+    scope: "org",
+  },
+  "workflows.board": {
+    resource: "workflows.board",
+    actions: ["read"],
+    roles: ["User", "HR", "IT", "Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.settings": {
+    resource: "workflows.settings",
+    actions: ["read"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "workflows.settings.write": {
+    resource: "workflows.settings",
+    actions: ["write"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  
   // Settings module
   "settings.organization": {
     resource: "settings.organization",

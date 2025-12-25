@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { 
   AlertTriangle,
   Check, 
@@ -11,7 +12,8 @@ import {
   Users, 
   Link2,
   Link2Off,
-  Info
+  Info,
+  Workflow,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
@@ -28,6 +30,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { useWorkflowTemplatesList } from "@/lib/api/workflows"
 
 // Types
 interface PeopleSettings {
@@ -574,6 +584,9 @@ export default function PeopleSettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Workflow Settings */}
+        <WorkflowSettingsCard canEdit={canEdit} />
+
         {/* General Settings (placeholder for future) */}
         <Card>
           <CardHeader>
@@ -597,6 +610,151 @@ export default function PeopleSettingsPage() {
         </Card>
       </div>
     </PageShell>
+  )
+}
+
+/**
+ * Workflow Settings Card - Configure onboarding/offboarding workflow templates
+ */
+function WorkflowSettingsCard({ canEdit }: { canEdit: boolean }) {
+  const { data: templates = [], isLoading: templatesLoading } = useWorkflowTemplatesList({
+    moduleScope: "people",
+    activeOnly: true,
+  })
+  
+  // Filter templates by trigger type
+  const onboardingTemplates = templates.filter(t => t.triggerType === "onboarding")
+  const offboardingTemplates = templates.filter(t => t.triggerType === "offboarding")
+  
+  // State for selected templates (would be saved to people_settings)
+  const [onboardingTemplateId, setOnboardingTemplateId] = useState<string>("")
+  const [offboardingTemplateId, setOffboardingTemplateId] = useState<string>("")
+  const [_isSavingWorkflow, setIsSavingWorkflow] = useState(false)
+  
+  const _handleSaveWorkflowSettings = async () => {
+    setIsSavingWorkflow(true)
+    try {
+      // TODO: Save to people_settings table
+      // For now, just show a success message
+      toast.success("Workflow settings saved (feature coming soon)")
+    } catch {
+      toast.error("Failed to save workflow settings")
+    } finally {
+      setIsSavingWorkflow(false)
+    }
+  }
+  
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+            <Workflow className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <CardTitle>Workflow Automation</CardTitle>
+            <CardDescription>
+              Configure automatic workflows for onboarding and offboarding
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            When a person&apos;s status changes to &quot;Onboarding&quot; or &quot;Offboarding&quot;, 
+            the selected workflow will automatically start for them.
+          </AlertDescription>
+        </Alert>
+        
+        {/* Onboarding Workflow */}
+        <div className="space-y-2">
+          <Label htmlFor="onboarding-workflow" className="font-medium">
+            Onboarding Workflow
+          </Label>
+          <Select
+            value={onboardingTemplateId}
+            onValueChange={setOnboardingTemplateId}
+            disabled={!canEdit}
+          >
+            <SelectTrigger id="onboarding-workflow">
+              <SelectValue placeholder="Select a template..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">None (disabled)</SelectItem>
+              {templatesLoading ? (
+                <SelectItem value="loading" disabled>Loading...</SelectItem>
+              ) : onboardingTemplates.length === 0 ? (
+                <SelectItem value="none" disabled>No onboarding templates available</SelectItem>
+              ) : (
+                onboardingTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                    {template.stepsCount > 0 && (
+                      <span className="text-muted-foreground ml-2">
+                        ({template.stepsCount} steps)
+                      </span>
+                    )}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Starts when a person&apos;s status is set to &quot;Onboarding&quot;
+          </p>
+        </div>
+        
+        {/* Offboarding Workflow */}
+        <div className="space-y-2">
+          <Label htmlFor="offboarding-workflow" className="font-medium">
+            Offboarding Workflow
+          </Label>
+          <Select
+            value={offboardingTemplateId}
+            onValueChange={setOffboardingTemplateId}
+            disabled={!canEdit}
+          >
+            <SelectTrigger id="offboarding-workflow">
+              <SelectValue placeholder="Select a template..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">None (disabled)</SelectItem>
+              {templatesLoading ? (
+                <SelectItem value="loading" disabled>Loading...</SelectItem>
+              ) : offboardingTemplates.length === 0 ? (
+                <SelectItem value="none" disabled>No offboarding templates available</SelectItem>
+              ) : (
+                offboardingTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                    {template.stepsCount > 0 && (
+                      <span className="text-muted-foreground ml-2">
+                        ({template.stepsCount} steps)
+                      </span>
+                    )}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Starts when a person&apos;s status is set to &quot;Offboarding&quot;
+          </p>
+        </div>
+        
+        {/* Create Template Link */}
+        <div className="pt-2 border-t">
+          <Button variant="link" className="px-0 h-auto" asChild>
+            <Link href="/workflows/templates">
+              Create new workflow template
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

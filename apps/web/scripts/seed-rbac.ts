@@ -76,6 +76,13 @@ const SYSTEM_ROLES: Record<string, {
       "security.overview": { view: true, create: true, edit: true, delete: true },
       "security.risks": { view: true, create: true, edit: true, delete: true },
       "security.controls": { view: true, create: true, edit: true, delete: true },
+      // Workflows - Full access
+      "workflows.overview": { view: true, create: true, edit: true, delete: true },
+      "workflows.templates": { view: true, create: true, edit: true, delete: true },
+      "workflows.instances": { view: true, create: true, edit: true, delete: true },
+      "workflows.tasks": { view: true, create: true, edit: true, delete: true },
+      "workflows.board": { view: true, create: true, edit: true, delete: true },
+      "workflows.settings": { view: true, create: true, edit: true, delete: true },
       // Settings - Limited
       "settings.organization": { view: true, create: true, edit: true, delete: false },
       "settings.users": { view: true, create: true, edit: true, delete: true },
@@ -110,6 +117,12 @@ const SYSTEM_ROLES: Record<string, {
       // Security - View only
       "security.overview": { view: true, create: false, edit: false, delete: false },
       "security.risks": { view: true, create: false, edit: false, delete: false },
+      // Workflows - View and manage instances/tasks
+      "workflows.overview": { view: true, create: false, edit: false, delete: false },
+      "workflows.templates": { view: true, create: true, edit: true, delete: false },
+      "workflows.instances": { view: true, create: true, edit: true, delete: false },
+      "workflows.tasks": { view: true, create: true, edit: true, delete: false },
+      "workflows.board": { view: true, create: false, edit: true, delete: false },
       // Settings - View only
       "settings.organization": { view: true, create: false, edit: false, delete: false },
       "settings.users": { view: true, create: false, edit: false, delete: false },
@@ -132,6 +145,10 @@ const SYSTEM_ROLES: Record<string, {
       "assets.inventory": { view: true, create: false, edit: false, delete: false },
       "assets.categories": { view: true, create: false, edit: false, delete: false },
       "assets.assignments": { view: true, create: false, edit: false, delete: false },
+      // Workflows - View and complete own tasks
+      "workflows.overview": { view: true, create: false, edit: false, delete: false },
+      "workflows.tasks": { view: true, create: false, edit: true, delete: false }, // Can complete assigned tasks
+      "workflows.board": { view: true, create: false, edit: false, delete: false },
       // Settings - View org only
       "settings.organization": { view: true, create: false, edit: false, delete: false },
     },
