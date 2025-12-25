@@ -13,7 +13,8 @@ import {
   workflowTemplateSteps, 
   workflowTemplateEdges,
   workflowInstances,
-  users 
+  users,
+  persons,
 } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
 import { z } from "zod"
@@ -31,30 +32,33 @@ const _UpdateTemplateSchema = z.object({
 })
 
 // Step schema for saving the full template
+// Note: id can be any string (temp IDs from designer like "step-123") - backend generates real UUIDs
 const StepSchema = z.object({
-  id: z.string().uuid().optional(), // Optional for new steps
-  parentStepId: z.string().uuid().nullable().optional(),
+  id: z.string().optional(), // Optional for new steps, accepts any string (temp ID)
+  parentStepId: z.string().nullable().optional(),
   name: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   stepType: z.enum(["task", "notification", "gateway", "group"]).default("task"),
   orderIndex: z.number().default(0),
   positionX: z.number().default(0),
   positionY: z.number().default(0),
   assigneeType: z.enum(["specific_user", "role", "dynamic_manager", "dynamic_creator", "unassigned"]).default("unassigned"),
-  assigneeConfig: z.record(z.unknown()).optional(),
-  dueOffsetDays: z.number().optional(),
+  assigneeConfig: z.record(z.unknown()).optional().nullable(),
+  defaultAssigneeId: z.string().uuid().nullable().optional(),
+  dueOffsetDays: z.number().optional().nullable(),
   dueOffsetFrom: z.string().default("workflow_start"),
   isRequired: z.boolean().default(true),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional().nullable(),
 })
 
+// Edge schema - accepts temp IDs from designer
 const EdgeSchema = z.object({
-  id: z.string().uuid().optional(), // Optional for new edges
-  sourceStepId: z.string().uuid(),
-  targetStepId: z.string().uuid(),
+  id: z.string().optional(), // Optional for new edges, accepts any string
+  sourceStepId: z.string(), // Reference to step (can be temp ID)
+  targetStepId: z.string(), // Reference to step (can be temp ID)
   conditionType: z.enum(["always", "if_approved", "if_rejected", "conditional"]).default("always"),
-  conditionConfig: z.record(z.unknown()).optional(),
-  label: z.string().optional(),
+  conditionConfig: z.record(z.unknown()).optional().nullable(),
+  label: z.string().optional().nullable(),
 })
 
 // Full template save schema (includes steps and edges)
@@ -66,6 +70,7 @@ const SaveTemplateSchema = z.object({
   status: z.enum(["draft", "active", "archived"]).optional(),
   isActive: z.boolean().optional(),
   defaultDueDays: z.number().optional(),
+  defaultOwnerId: z.string().uuid().nullable().optional(),
   settings: z.record(z.unknown()).optional(),
   steps: z.array(StepSchema).optional(),
   edges: z.array(EdgeSchema).optional(),
@@ -130,6 +135,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       createdBy = creators[0] || null
     }
     
+    // Get default owner info
+    let defaultOwner = null
+    if (template.defaultOwnerId) {
+      const owners = await db
+        .select({
+          id: persons.id,
+          name: persons.name,
+        })
+        .from(persons)
+        .where(eq(persons.id, template.defaultOwnerId))
+        .limit(1)
+      defaultOwner = owners[0] ? { id: owners[0].id, name: owners[0].name || "Unknown" } : null
+    }
+    
     // Get instance count
     const instancesResult = await db
       .select({ id: workflowInstances.id })
@@ -147,6 +166,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       status: template.status,
       isActive: template.isActive,
       defaultDueDays: template.defaultDueDays ?? undefined,
+      defaultOwnerId: template.defaultOwnerId ?? undefined,
+      defaultOwner,
       settings: template.settings,
       createdById: template.createdById ?? undefined,
       createdBy,
@@ -253,6 +274,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (data.status !== undefined) updateData.status = data.status
     if (data.isActive !== undefined) updateData.isActive = data.isActive
     if (data.defaultDueDays !== undefined) updateData.defaultDueDays = data.defaultDueDays
+    if (data.defaultOwnerId !== undefined) updateData.defaultOwnerId = data.defaultOwnerId
     if (data.settings !== undefined) updateData.settings = data.settings
     
     // Update template
@@ -290,6 +312,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
               positionY: step.positionY,
               assigneeType: step.assigneeType,
               assigneeConfig: step.assigneeConfig ?? null,
+              defaultAssigneeId: step.defaultAssigneeId ?? null,
               dueOffsetDays: step.dueOffsetDays ?? null,
               dueOffsetFrom: step.dueOffsetFrom,
               isRequired: step.isRequired,

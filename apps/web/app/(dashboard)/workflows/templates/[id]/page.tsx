@@ -1,14 +1,16 @@
 "use client"
 
-import { use } from "react"
+import { use, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { 
   Pencil, 
   Trash2, 
   Archive,
+  ArchiveRestore,
   ArrowLeft,
   PlayCircle,
+  User,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -26,15 +28,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess } from "@/lib/rbac/context"
-import { WorkflowDesigner } from "@/components/workflows"
+import { useBreadcrumbLabel } from "@/components/breadcrumb-context"
+import { 
+  WorkflowDesigner, 
+  EditTemplateDialog,
+  moduleScopeOptions,
+  triggerTypeOptions,
+  type EditTemplateFormData,
+} from "@/components/workflows"
 import { 
   useWorkflowTemplateDetail,
   useUpdateWorkflowTemplate,
   useDeleteWorkflowTemplate,
 } from "@/lib/api/workflows"
-import { useState } from "react"
+import { usePeopleList } from "@/lib/api/people"
 
 const statusColors: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -52,11 +66,16 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
   const canAccess = useCanAccess("workflows.templates")
   
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
   
   // Queries
   const { data: template, isLoading, error } = useWorkflowTemplateDetail(id)
+  const { data: people = [] } = usePeopleList()
   const updateMutation = useUpdateWorkflowTemplate()
   const deleteMutation = useDeleteWorkflowTemplate()
+  
+  // Set breadcrumb to template name
+  useBreadcrumbLabel(template?.name)
   
   // Handlers
   const handleActivate = async () => {
@@ -87,6 +106,20 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
     }
   }
   
+  const handleUnarchive = async () => {
+    if (!template) return
+    
+    try {
+      await updateMutation.mutateAsync({
+        id: template.id,
+        data: { status: "draft" },
+      })
+      toast.success("Template unarchived")
+    } catch {
+      toast.error("Failed to unarchive template")
+    }
+  }
+  
   const handleDelete = async () => {
     if (!template) return
     
@@ -97,6 +130,28 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to delete template"
       toast.error(message)
+    }
+  }
+  
+  const handleEditSave = async (formData: EditTemplateFormData) => {
+    if (!template) return
+    
+    try {
+      await updateMutation.mutateAsync({
+        id: template.id,
+        data: {
+          name: formData.name,
+          description: formData.description || undefined,
+          moduleScope: formData.moduleScope,
+          triggerType: formData.triggerType,
+          status: formData.status,
+          defaultOwnerId: formData.defaultOwnerId,
+        },
+      })
+      toast.success("Template updated")
+      setShowEditDialog(false)
+    } catch {
+      toast.error("Failed to update template")
     }
   }
   
@@ -143,6 +198,24 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
     <PageShell
       title={template.name}
       description={template.description}
+      compact
+      backButton={
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <Link href="/workflows/templates">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back to Templates</TooltipContent>
+        </Tooltip>
+      }
+      statusBadge={
+        <Badge className={statusColors[template.status]}>
+          {template.status.charAt(0).toUpperCase() + template.status.slice(1)}
+        </Badge>
+      }
       action={
         <div className="flex items-center gap-2">
           {template.status === "draft" && (
@@ -160,61 +233,57 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
         </div>
       }
     >
-      <div className="space-y-6">
-        {/* Back link */}
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link href="/workflows/templates">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Templates
-          </Link>
-        </Button>
-        
-        {/* Template Info */}
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          {/* Template Info */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="md:col-span-2">
+              <CardHeader>
                 <CardTitle className="text-base">Template Details</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Badge className={statusColors[template.status]}>
-                    {template.status.charAt(0).toUpperCase() + template.status.slice(1)}
-                  </Badge>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-sm text-muted-foreground">Module</span>
-                  <p className="font-medium">
-                    {template.moduleScope 
-                      ? template.moduleScope.charAt(0).toUpperCase() + template.moduleScope.slice(1)
-                      : "Global"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Trigger</span>
-                  <p className="font-medium">
-                    {template.triggerType 
-                      ? template.triggerType.charAt(0).toUpperCase() + template.triggerType.slice(1).replace(/_/g, " ")
-                      : "Manual"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Steps</span>
-                  <p className="font-medium">{template.stepsCount}</p>
-                </div>
-                <div>
-                  <span className="text-sm text-muted-foreground">Instances</span>
-                  <p className="font-medium">{template.instancesCount}</p>
-                </div>
-                {template.defaultDueDays && (
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm text-muted-foreground">Default Duration</span>
-                    <p className="font-medium">{template.defaultDueDays} days</p>
+                    <span className="text-sm text-muted-foreground">Module</span>
+                    <p className="font-medium">
+                      {moduleScopeOptions.find(o => o.value === template.moduleScope)?.label || "Global"}
+                    </p>
                   </div>
-                )}
-              </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Trigger</span>
+                    <p className="font-medium">
+                      {triggerTypeOptions.find(o => o.value === template.triggerType)?.label || "Manual"}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Steps</span>
+                    <p className="font-medium">{template.stepsCount}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-muted-foreground">Instances</span>
+                    <p className="font-medium">{template.instancesCount}</p>
+                  </div>
+                  {template.defaultDueDays && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Default Duration</span>
+                      <p className="font-medium">{template.defaultDueDays} days</p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-sm text-muted-foreground">Default Owner</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      {template.defaultOwner ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-3 w-3 text-primary" />
+                          </div>
+                          <span className="font-medium">{template.defaultOwner.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Not assigned</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               
               {template.createdBy && (
                 <>
@@ -237,6 +306,15 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
               <CardTitle className="text-base">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start"
+                onClick={() => setShowEditDialog(true)}
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit Details
+              </Button>
+              
               <Button variant="outline" className="w-full justify-start" asChild>
                 <Link href={`/workflows/templates/${id}/designer`}>
                   <Pencil className="h-4 w-4 mr-2" />
@@ -244,7 +322,7 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
                 </Link>
               </Button>
               
-              {template.status !== "archived" && (
+              {template.status !== "archived" ? (
                 <Button 
                   variant="outline" 
                   className="w-full justify-start"
@@ -253,6 +331,16 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
                 >
                   <Archive className="h-4 w-4 mr-2" />
                   Archive Template
+                </Button>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleUnarchive}
+                  disabled={updateMutation.isPending}
+                >
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                  Unarchive Template
                 </Button>
               )}
               
@@ -360,6 +448,23 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Edit Template Dialog */}
+      <EditTemplateDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        initialData={{
+          name: template.name,
+          description: template.description || "",
+          moduleScope: template.moduleScope || "people",
+          triggerType: template.triggerType || "manual",
+          status: template.status as "draft" | "active" | "archived",
+          defaultOwnerId: template.defaultOwnerId ?? null,
+        }}
+        onSave={handleEditSave}
+        isSaving={updateMutation.isPending}
+        people={people}
+      />
     </PageShell>
   )
 }

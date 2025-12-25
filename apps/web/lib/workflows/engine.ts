@@ -135,6 +135,7 @@ export async function triggerPersonWorkflow(
       totalSteps: templateSteps.length,
       completedSteps: 0,
       startedById: changedById || null,
+      ownerId: template.defaultOwnerId || null, // Carry over owner from template
       metadata: {
         personName: person.name,
         personEmail: person.email,
@@ -165,6 +166,7 @@ export async function triggerPersonWorkflow(
         description: step.description,
         orderIndex: step.orderIndex,
         status: index === 0 ? "in_progress" as const : "pending" as const,
+        assignedPersonId: step.defaultAssigneeId,
         dueAt: stepDueAt,
         metadata: {
           stepType: step.stepType,

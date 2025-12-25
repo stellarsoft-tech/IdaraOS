@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, and, asc } from "drizzle-orm"
+import { eq, and, asc, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { 
   workflowInstances, 
@@ -23,6 +23,7 @@ import { z } from "zod"
 const UpdateInstanceSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "cancelled", "on_hold"]).optional(),
   dueAt: z.string().datetime().optional(),
+  ownerId: z.string().uuid().nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
 })
 
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       .where(eq(workflowInstanceSteps.instanceId, id))
       .orderBy(asc(workflowInstanceSteps.orderIndex))
     
-    // Get assignees
+    // Get assignees (users)
     const assigneeIds = [...new Set(steps.map(s => s.step.assigneeId).filter(Boolean) as string[])]
     const completedByIds = [...new Set(steps.map(s => s.step.completedById).filter(Boolean) as string[])]
     const allUserIds = [...new Set([...assigneeIds, ...completedByIds])]
@@ -98,6 +99,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       userById.set(user.id, user)
     }
     
+    // Get assigned persons (from people directory)
+    const assignedPersonIds = [...new Set(steps.map(s => s.step.assignedPersonId).filter(Boolean) as string[])]
+    const personById = new Map<string, { id: string; name: string; email: string; avatar: string | null }>()
+    
+    if (assignedPersonIds.length > 0) {
+      const personsList = await db
+        .select({
+          id: persons.id,
+          name: persons.name,
+          email: persons.email,
+          avatar: persons.avatar,
+        })
+        .from(persons)
+        .where(inArray(persons.id, assignedPersonIds))
+      
+      for (const person of personsList) {
+        personById.set(person.id, person)
+      }
+    }
+    
     // Get started by user
     let startedBy = null
     if (instance.startedById) {
@@ -111,6 +132,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         .where(eq(users.id, instance.startedById))
         .limit(1)
       startedBy = starters[0] || null
+    }
+    
+    // Get owner info
+    let owner = null
+    if (instance.ownerId) {
+      const owners = await db
+        .select({
+          id: persons.id,
+          name: persons.name,
+          email: persons.email,
+        })
+        .from(persons)
+        .where(eq(persons.id, instance.ownerId))
+        .limit(1)
+      owner = owners[0] ? { id: owners[0].id, name: owners[0].name || "Unknown", email: owners[0].email } : null
     }
     
     // Get entity info (for person type)
@@ -154,6 +190,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       progress: instance.totalSteps > 0 ? Math.round((instance.completedSteps / instance.totalSteps) * 100) : 0,
       startedById: instance.startedById ?? undefined,
       startedBy,
+      ownerId: instance.ownerId ?? undefined,
+      owner,
       metadata: instance.metadata,
       createdAt: instance.createdAt.toISOString(),
       updatedAt: instance.updatedAt.toISOString(),
@@ -168,6 +206,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         status: step.status,
         assigneeId: step.assigneeId ?? undefined,
         assignee: step.assigneeId ? userById.get(step.assigneeId) : null,
+        assignedPersonId: step.assignedPersonId ?? undefined,
+        assignedPerson: step.assignedPersonId ? personById.get(step.assignedPersonId) : null,
         dueAt: step.dueAt?.toISOString() ?? undefined,
         startedAt: step.startedAt?.toISOString() ?? undefined,
         completedAt: step.completedAt?.toISOString() ?? undefined,
@@ -258,6 +298,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     
     if (data.dueAt !== undefined) {
       updateData.dueAt = new Date(data.dueAt)
+    }
+    
+    if (data.ownerId !== undefined) {
+      updateData.ownerId = data.ownerId
     }
     
     if (data.metadata !== undefined) {

@@ -173,3 +173,60 @@
 .animate-infinite-scroll {
   animation: infinite-scroll 40s linear infinite;
 }
+
+/* React Flow Workflow Designer Theme Overrides */
+.workflow-designer .react-flow__node {
+  /* Nodes inherit from step-node component */
+}
+
+.workflow-designer .react-flow__edge-path {
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.workflow-designer .react-flow__edge.selected .react-flow__edge-path,
+.workflow-designer .react-flow__edge:focus .react-flow__edge-path,
+.workflow-designer .react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--primary);
+}
+
+.workflow-designer .react-flow__edge-text {
+  fill: var(--foreground);
+}
+
+.workflow-designer .react-flow__edge-textbg {
+  fill: var(--card);
+}
+
+.workflow-designer .react-flow__arrowhead polyline {
+  fill: var(--border);
+  stroke: var(--border);
+}
+
+.workflow-designer .react-flow__edge.selected .react-flow__arrowhead polyline,
+.workflow-designer .react-flow__edge:focus .react-flow__arrowhead polyline,
+.workflow-designer .react-flow__edge:hover .react-flow__arrowhead polyline {
+  fill: var(--primary);
+  stroke: var(--primary);
+}
+
+.workflow-designer .react-flow__attribution {
+  display: none;
+}
+
+.workflow-designer .react-flow__minimap {
+  border-radius: var(--radius);
+}
+
+.workflow-designer .react-flow__controls {
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.workflow-designer .react-flow__controls button {
+  border-color: var(--border);
+}
+
+.workflow-designer .react-flow__controls button svg {
+  fill: currentColor;
+}

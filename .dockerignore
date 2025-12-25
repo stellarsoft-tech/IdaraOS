@@ -55,7 +55,7 @@ pnpm-debug.log*
 Thumbs.db
 
 # Deployment configs (not needed in image, except scripts)
-deployment
+deployment/**
 !deployment/docker/init-db.sh
 !deployment/docker/start-dev.sh
 .github

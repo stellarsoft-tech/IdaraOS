@@ -22,6 +22,8 @@
 # - Database is initialized automatically on first run
 # - Changes to code are reflected immediately without rebuilding
 # - Automatic HTTPS with self-signed certificates via Caddy
+# - node_modules persisted in named volumes (installed on first run)
+# - pnpm store cached for fast subsequent package installs
 # =============================================================================
 
 name: idaraos-dev
@@ -108,12 +110,12 @@ services:
     volumes:
       # Mount entire repository for live code changes
       - ../../:/app
-      # Use named volumes to preserve container's node_modules (don't overwrite with host's)
+      # Persist node_modules in named volumes (prevents host from overwriting)
       - web_node_modules:/app/node_modules
       - web_app_node_modules:/app/apps/web/node_modules
       # Exclude .next build cache (will be regenerated in container)
       - web_next_cache:/app/apps/web/.next
-      # Cache pnpm store for faster installs
+      # Cache pnpm store for fast package installs
       - pnpm_store:/root/.local/share/pnpm/store
     depends_on:
       db:

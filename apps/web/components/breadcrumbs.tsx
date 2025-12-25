@@ -43,6 +43,9 @@ const routeLabels: Record<string, string> = {
   contracts: "Contracts",
   assessments: "Assessments",
   workflows: "Workflows",
+  templates: "Templates",
+  instances: "Instances",
+  board: "Board",
   tasks: "Tasks & Automations",
   checklists: "Checklists",
   settings: "Settings",
@@ -50,12 +53,18 @@ const routeLabels: Record<string, string> = {
   integrations: "Integrations",
   "audit-log": "Audit Log",
   branding: "Branding",
+  designer: "Designer",
+}
+
+// Check if a segment looks like a UUID
+function isUuid(segment: string): boolean {
+  return /^[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}$/i.test(segment)
 }
 
 export function Breadcrumbs() {
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
-  const { detailLabel } = useBreadcrumb()
+  const { detailLabel, parentLabel } = useBreadcrumb()
 
   if (segments.length === 0 || (segments.length === 1 && segments[0] === "dashboard")) {
     return (
@@ -70,11 +79,19 @@ export function Breadcrumbs() {
   const breadcrumbs = segments.map((segment, index) => {
     const href = "/" + segments.slice(0, index + 1).join("/")
     const isLast = index === segments.length - 1
+    const isSecondToLast = index === segments.length - 2
     
-    // Use custom detail label for the last segment if provided
+    // Use custom labels based on position
     let label: string
     if (isLast && detailLabel) {
+      // Use detail label for the last segment
       label = detailLabel
+    } else if (isSecondToLast && parentLabel && isUuid(segment)) {
+      // Use parent label for UUID segments that are second to last
+      label = parentLabel
+    } else if (isUuid(segment)) {
+      // For UUID segments without a custom label, show truncated version
+      label = segment.substring(0, 8) + "..."
     } else {
       label = routeLabels[segment] || segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
     }

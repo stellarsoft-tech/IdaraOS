@@ -61,6 +61,11 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { useBreadcrumbLabel } from "@/components/breadcrumb-context"
@@ -366,12 +371,19 @@ export default function AssetDetailPage({ params }: PageProps) {
     <PageShell
       title={asset.name}
       description={`${asset.assetTag} • ${asset.category?.name || "Uncategorized"}`}
+      compact
+      backButton={
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.push("/assets/inventory")}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back to Inventory</TooltipContent>
+        </Tooltip>
+      }
       action={
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => router.push("/assets/inventory")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
           {canEdit && (
             <>
               {isAssigned ? (
@@ -395,9 +407,9 @@ export default function AssetDetailPage({ params }: PageProps) {
             <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
-        </Button>
+            </Button>
           )}
-      </div>
+        </div>
       }
     >
       <div className="space-y-6">

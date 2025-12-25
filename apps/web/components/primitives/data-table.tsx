@@ -78,6 +78,7 @@ export interface DataTableProps<TData> {
   
   // Slots
   toolbar?: React.ReactNode
+  toolbarEnd?: React.ReactNode
   bulkActions?: React.ReactNode
   
   // Features
@@ -110,6 +111,7 @@ export function DataTable<TData>({
   getRowId,
   onRowClick,
   toolbar,
+  toolbarEnd,
   bulkActions,
   enableVirtualization = false,
   enableColumnFilters: _enableColumnFilters = true,
@@ -312,6 +314,9 @@ export function DataTable<TData>({
         </div>
         
         <div className="flex items-center gap-2">
+          {/* Custom toolbar end */}
+          {toolbarEnd}
+          
           {/* Column visibility */}
           {enableColumnVisibility && (
             <DropdownMenu>

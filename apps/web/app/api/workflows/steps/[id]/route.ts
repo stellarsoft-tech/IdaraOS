@@ -11,7 +11,8 @@ import {
   workflowInstanceSteps,
   workflowInstances,
   workflowTemplateSteps,
-  users 
+  users,
+  persons,
 } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
 import { z } from "zod"
@@ -20,6 +21,7 @@ import { z } from "zod"
 const UpdateStepSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "skipped", "blocked"]).optional(),
   assigneeId: z.string().uuid().nullable().optional(),
+  assignedPersonId: z.string().uuid().nullable().optional(),
   notes: z.string().optional(),
   metadata: z.record(z.unknown()).optional(),
 })
@@ -124,6 +126,22 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       assignee = assignees[0] || null
     }
     
+    // Get assigned person
+    let assignedPerson = null
+    if (step.assignedPersonId) {
+      const assignedPersons = await db
+        .select({
+          id: persons.id,
+          name: persons.name,
+          email: persons.email,
+          avatar: persons.avatar,
+        })
+        .from(persons)
+        .where(eq(persons.id, step.assignedPersonId))
+        .limit(1)
+      assignedPerson = assignedPersons[0] || null
+    }
+    
     // Get completed by user
     let completedBy = null
     if (step.completedById) {
@@ -150,6 +168,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       status: step.status,
       assigneeId: step.assigneeId ?? undefined,
       assignee,
+      assignedPersonId: step.assignedPersonId ?? undefined,
+      assignedPerson,
       dueAt: step.dueAt?.toISOString() ?? undefined,
       startedAt: step.startedAt?.toISOString() ?? undefined,
       completedAt: step.completedAt?.toISOString() ?? undefined,
@@ -240,12 +260,25 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       )
     }
     
-    // Check instance is not completed/cancelled
-    if (instance.status === "completed" || instance.status === "cancelled") {
+    // Check if instance is cancelled (never allow updates)
+    if (instance.status === "cancelled") {
       return NextResponse.json(
-        { error: "Cannot update steps on a completed or cancelled workflow" },
+        { error: "Cannot update steps on a cancelled workflow" },
         { status: 400 }
       )
+    }
+    
+    // If instance is completed but user is trying to move a step away from completed,
+    // we need to re-open the workflow first
+    if (instance.status === "completed" && data.status && data.status !== "completed") {
+      await db
+        .update(workflowInstances)
+        .set({
+          status: "in_progress",
+          completedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(workflowInstances.id, instance.id))
     }
     
     // Build update
@@ -275,6 +308,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     
     if (data.assigneeId !== undefined) {
       updateData.assigneeId = data.assigneeId
+    }
+    
+    if (data.assignedPersonId !== undefined) {
+      updateData.assignedPersonId = data.assignedPersonId
     }
     
     if (data.notes !== undefined) {

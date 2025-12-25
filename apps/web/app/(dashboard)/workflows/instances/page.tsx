@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { 
-  Search,
   XCircle,
   AlertCircle,
   MoreHorizontal,
@@ -16,7 +15,6 @@ import { PageShell } from "@/components/primitives/page-shell"
 import { DataTable } from "@/components/primitives/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -91,6 +89,23 @@ const columns: ColumnDef<WorkflowInstance>[] = [
         {row.original.template?.name || "Unknown"}
       </span>
     ),
+  },
+  {
+    accessorKey: "owner",
+    header: "Owner",
+    cell: ({ row }) => {
+      if (!row.original.owner) {
+        return <span className="text-muted-foreground text-sm">—</span>
+      }
+      return (
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium">
+            {row.original.owner.name.charAt(0)}
+          </div>
+          <span className="text-sm truncate max-w-[100px]">{row.original.owner.name}</span>
+        </div>
+      )
+    },
   },
   {
     accessorKey: "dueAt",
@@ -174,33 +189,16 @@ const columns: ColumnDef<WorkflowInstance>[] = [
 export default function WorkflowInstancesPage() {
   const canAccess = useCanAccess("workflows.instances")
   
-  // State
-  const [search, setSearch] = useState("")
+  // State for filters
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [templateFilter, setTemplateFilter] = useState<string>("all")
   
   // Queries
   const { data: instances = [], isLoading } = useWorkflowInstancesList({
-    search: search || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
     templateId: templateFilter !== "all" ? templateFilter : undefined,
   })
   const { data: templates = [] } = useWorkflowTemplatesList({ activeOnly: true })
-  
-  // Filter instances
-  const filteredInstances = useMemo(() => {
-    let result = instances
-    
-    if (search) {
-      const searchLower = search.toLowerCase()
-      result = result.filter(i => 
-        i.name.toLowerCase().includes(searchLower) ||
-        i.entity?.name?.toLowerCase().includes(searchLower)
-      )
-    }
-    
-    return result
-  }, [instances, search])
   
   if (!canAccess) {
     return (
@@ -218,45 +216,6 @@ export default function WorkflowInstancesPage() {
       title="Active Workflows"
       description="View and manage running workflow instances."
     >
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search workflows..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-            <SelectItem value="on_hold">On Hold</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={templateFilter} onValueChange={setTemplateFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Template" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Templates</SelectItem>
-            {templates.map(t => (
-              <SelectItem key={t.id} value={t.id}>
-                {t.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      
       {/* Data Table */}
       {isLoading ? (
         <div className="space-y-4">
@@ -264,14 +223,12 @@ export default function WorkflowInstancesPage() {
             <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
-      ) : filteredInstances.length === 0 ? (
+      ) : instances.length === 0 && statusFilter === "all" && templateFilter === "all" ? (
         <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg">
           <Workflow className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No workflows found</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            {search || statusFilter !== "all" || templateFilter !== "all"
-              ? "Try adjusting your filters"
-              : "No workflow instances have been created yet"}
+            No workflow instances have been created yet
           </p>
           <Button asChild>
             <Link href="/workflows/templates">View Templates</Link>
@@ -280,9 +237,48 @@ export default function WorkflowInstancesPage() {
       ) : (
         <DataTable
           columns={columns}
-          data={filteredInstances}
+          data={instances}
           searchKey="name"
-          searchPlaceholder="Filter workflows..."
+          searchPlaceholder="Search workflows..."
+          toolbarEnd={
+            <>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="on_hold">On Hold</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={templateFilter} onValueChange={setTemplateFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Template" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Templates</SelectItem>
+                  {templates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          }
+          emptyState={
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Workflow className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No workflows found</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Try adjusting your filters
+              </p>
+            </div>
+          }
         />
       )}
     </PageShell>

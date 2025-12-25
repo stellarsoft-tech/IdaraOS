@@ -26,6 +26,7 @@ interface WorkflowTaskListProps {
   onStepComplete?: (stepId: string, completed: boolean) => void
   showCompleted?: boolean
   className?: string
+  readOnly?: boolean
 }
 
 function isOverdue(dueAt?: string): boolean {
@@ -54,11 +55,14 @@ function TaskRow({
 }) {
   const isCompleted = step.status === "completed"
   const overdue = !isCompleted && isOverdue(step.dueAt)
+  const isInteractive = !!onClick
 
   return (
     <div
       className={cn(
-        "flex items-center gap-3 py-2 px-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md cursor-pointer group",
+        "flex items-center gap-3 py-2 px-3 rounded-md group",
+        isInteractive && "hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer",
+        !isInteractive && "cursor-default",
         depth > 0 && "ml-6"
       )}
       onClick={onClick}
@@ -67,8 +71,8 @@ function TaskRow({
       <div onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={isCompleted}
-          onCheckedChange={(checked) => onComplete?.(checked as boolean)}
-          disabled={step.status === "skipped" || step.status === "blocked"}
+          onCheckedChange={onComplete ? (checked) => onComplete(checked as boolean) : undefined}
+          disabled={!onComplete || step.status === "skipped" || step.status === "blocked"}
         />
       </div>
 
@@ -133,19 +137,19 @@ function TaskRow({
           </TooltipProvider>
         )}
 
-        {/* Assignee */}
-        {step.assignee ? (
+        {/* Assignee - check assignedPerson first (from people directory), then assignee (from users) */}
+        {(step.assignedPerson || step.assignee) ? (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Avatar className="h-6 w-6">
                   <AvatarFallback className="text-[10px]">
-                    {step.assignee.name.charAt(0)}
+                    {(step.assignedPerson?.name || step.assignee?.name || "?").charAt(0)}
                   </AvatarFallback>
                 </Avatar>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{step.assignee.name}</p>
+                <p>{step.assignedPerson?.name || step.assignee?.name}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -172,6 +176,7 @@ export function WorkflowTaskList({
   onStepComplete,
   showCompleted = true,
   className,
+  readOnly = false,
 }: WorkflowTaskListProps) {
   // Filter and group steps
   const groups = useMemo(() => {
@@ -223,8 +228,10 @@ export function WorkflowTaskList({
       const unassigned: WorkflowInstanceStep[] = []
 
       for (const step of filtered) {
-        if (step.assignee) {
-          const key = step.assignee.id
+        // Check assignedPerson first (from people directory), then assignee (from users)
+        const assigneeInfo = step.assignedPerson || step.assignee
+        if (assigneeInfo) {
+          const key = assigneeInfo.id
           if (!byAssignee.has(key)) {
             byAssignee.set(key, [])
           }
@@ -238,14 +245,17 @@ export function WorkflowTaskList({
 
       // Sort assignees alphabetically
       const sortedAssignees = [...byAssignee.entries()].sort((a, b) => {
-        const nameA = a[1][0].assignee?.name || ""
-        const nameB = b[1][0].assignee?.name || ""
+        const stepA = a[1][0]
+        const stepB = b[1][0]
+        const nameA = stepA.assignedPerson?.name || stepA.assignee?.name || ""
+        const nameB = stepB.assignedPerson?.name || stepB.assignee?.name || ""
         return nameA.localeCompare(nameB)
       })
 
       for (const [assigneeId, assigneeSteps] of sortedAssignees) {
+        const firstStep = assigneeSteps[0]
         groups.push({
-          label: assigneeSteps[0].assignee?.name || "Unknown",
+          label: firstStep.assignedPerson?.name || firstStep.assignee?.name || "Unknown",
           steps: assigneeSteps,
           id: assigneeId,
         })
@@ -320,8 +330,8 @@ export function WorkflowTaskList({
                   <TaskRow
                     key={step.id}
                     step={step}
-                    onClick={() => onStepClick?.(step)}
-                    onComplete={(completed) =>
+                    onClick={readOnly ? undefined : () => onStepClick?.(step)}
+                    onComplete={readOnly ? undefined : (completed) =>
                       onStepComplete?.(step.id, completed)
                     }
                   />

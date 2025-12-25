@@ -15,6 +15,11 @@ export interface UserInfo {
   email: string
 }
 
+export interface OwnerInfo {
+  id: string
+  name: string
+}
+
 export interface WorkflowTemplate {
   id: string
   orgId: string
@@ -25,6 +30,8 @@ export interface WorkflowTemplate {
   status: "draft" | "active" | "archived"
   isActive: boolean
   defaultDueDays?: number
+  defaultOwnerId?: string
+  defaultOwner?: OwnerInfo | null
   settings?: Record<string, unknown>
   createdById?: string
   createdBy?: UserInfo | null
@@ -103,9 +110,18 @@ export interface WorkflowInstance {
   progress: number
   startedById?: string
   startedBy?: UserInfo | null
+  ownerId?: string
+  owner?: OwnerInfo | null
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
+}
+
+export interface PersonInfo {
+  id: string
+  name: string
+  email: string
+  avatar?: string | null
 }
 
 export interface WorkflowInstanceStep {
@@ -119,6 +135,8 @@ export interface WorkflowInstanceStep {
   status: "pending" | "in_progress" | "completed" | "skipped" | "blocked"
   assigneeId?: string
   assignee?: UserInfo | null
+  assignedPersonId?: string
+  assignedPerson?: PersonInfo | null
   dueAt?: string
   startedAt?: string
   completedAt?: string
@@ -162,6 +180,7 @@ export interface UpdateTemplate {
   status?: WorkflowTemplate["status"]
   isActive?: boolean
   defaultDueDays?: number
+  defaultOwnerId?: string | null
   settings?: Record<string, unknown>
 }
 
@@ -176,6 +195,7 @@ export interface SaveTemplateStep {
   positionY?: number
   assigneeType?: WorkflowTemplateStep["assigneeType"]
   assigneeConfig?: Record<string, unknown>
+  defaultAssigneeId?: string | null
   dueOffsetDays?: number
   dueOffsetFrom?: string
   isRequired?: boolean
@@ -208,12 +228,14 @@ export interface CreateInstance {
 export interface UpdateInstance {
   status?: WorkflowInstance["status"]
   dueAt?: string
+  ownerId?: string | null
   metadata?: Record<string, unknown>
 }
 
 export interface UpdateStep {
   status?: WorkflowInstanceStep["status"]
   assigneeId?: string | null
+  assignedPersonId?: string | null
   notes?: string
   metadata?: Record<string, unknown>
 }
@@ -534,8 +556,9 @@ export function useCancelWorkflowInstance() {
   
   return useMutation({
     mutationFn: cancelInstance,
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: workflowInstancesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: workflowInstancesKeys.detail(id) })
     },
   })
 }

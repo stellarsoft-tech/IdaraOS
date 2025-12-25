@@ -44,8 +44,7 @@
     "docker:rebuild:web": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate web",
     "docker:rebuild:all": "cd deployment/docker && docker compose -f docker-compose.dev.yml up -d --build --force-recreate",
     "docker:prune": "docker system prune -f",
-
-    "docker:install": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web sh -c \"cd /app && pnpm install\" && docker compose -f docker-compose.dev.yml restart web",
+    "docker:install": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web sh -c \"cd /app && pnpm install\"",
     "docker:db:sync": "cd deployment/docker && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:push && docker compose -f docker-compose.dev.yml exec web pnpm --filter web db:seed-rbac"
   },
   "devDependencies": {

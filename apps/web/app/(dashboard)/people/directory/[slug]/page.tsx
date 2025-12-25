@@ -302,11 +302,18 @@ export default function PersonDetailPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/people/directory">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                  <Link href="/people/directory">
+                    <ArrowLeft className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back to Directory</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{person.name}</h1>

@@ -50,12 +50,19 @@ interface UserInfo {
   email: string
 }
 
+// Owner info type
+interface OwnerInfo {
+  id: string
+  name: string
+}
+
 // Transform DB record to API response
 function toApiResponse(
   record: typeof workflowInstances.$inferSelect,
   template?: TemplateInfo | null,
   entity?: EntityInfo | null,
-  startedBy?: UserInfo | null
+  startedBy?: UserInfo | null,
+  owner?: OwnerInfo | null
 ) {
   return {
     id: record.id,
@@ -75,6 +82,8 @@ function toApiResponse(
     progress: record.totalSteps > 0 ? Math.round((record.completedSteps / record.totalSteps) * 100) : 0,
     startedById: record.startedById ?? undefined,
     startedBy: startedBy || null,
+    ownerId: record.ownerId ?? undefined,
+    owner: owner || null,
     metadata: record.metadata,
     createdAt: record.createdAt.toISOString(),
     updatedAt: record.updatedAt.toISOString(),
@@ -189,13 +198,32 @@ export async function GET(request: NextRequest) {
       userById.set(user.id, user)
     }
     
+    // Get owners for all instances
+    const ownerIds = [...new Set(results.map(i => i.ownerId).filter(Boolean) as string[])]
+    
+    const ownersList = ownerIds.length > 0
+      ? await db
+          .select({
+            id: persons.id,
+            name: persons.name,
+          })
+          .from(persons)
+          .where(inArray(persons.id, ownerIds))
+      : []
+    
+    const ownerById = new Map<string, OwnerInfo>()
+    for (const owner of ownersList) {
+      ownerById.set(owner.id, { id: owner.id, name: owner.name || "Unknown" })
+    }
+    
     return NextResponse.json(
       results.map(instance => 
         toApiResponse(
           instance, 
           templateById.get(instance.templateId),
           entityById.get(instance.entityId),
-          instance.startedById ? userById.get(instance.startedById) : null
+          instance.startedById ? userById.get(instance.startedById) : null,
+          instance.ownerId ? ownerById.get(instance.ownerId) : null
         )
       )
     )

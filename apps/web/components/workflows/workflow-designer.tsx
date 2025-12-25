@@ -50,6 +50,12 @@ import type {
   SaveTemplateEdge,
 } from "@/lib/api/workflows"
 
+interface PersonOption {
+  id: string
+  name: string
+  email: string
+}
+
 interface WorkflowDesignerProps {
   templateId?: string
   initialSteps?: WorkflowTemplateStep[]
@@ -58,6 +64,8 @@ interface WorkflowDesignerProps {
   isLoading?: boolean
   readOnly?: boolean
   className?: string
+  /** List of people that can be selected as default assignees */
+  people?: PersonOption[]
 }
 
 type WorkflowNode = Node<StepNodeData>
@@ -156,6 +164,7 @@ export function WorkflowDesigner({
   isLoading = false,
   readOnly = false,
   className,
+  people = [],
 }: WorkflowDesignerProps) {
   // Convert initial data
   const initialNodes = useMemo(
@@ -173,7 +182,7 @@ export function WorkflowDesigner({
   
   // Selection state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) as WorkflowNode | undefined
+  const selectedNode = nodes.find((n: Node) => n.id === selectedNodeId) as WorkflowNode | undefined
   
   // Panel state
   const [isPanelOpen, setIsPanelOpen] = useState(false)
@@ -182,7 +191,7 @@ export function WorkflowDesigner({
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       if (readOnly) return
-      setEdges((eds) =>
+      setEdges((eds: Edge[]) =>
         addEdge(
           {
             ...connection,
@@ -235,7 +244,7 @@ export function WorkflowDesigner({
         } as StepNodeData,
       }
 
-      setNodes((nds) => [...nds, newNode])
+      setNodes((nds: WorkflowNode[]) => [...nds, newNode])
       setSelectedNodeId(newId)
       setIsPanelOpen(true)
     },
@@ -246,8 +255,8 @@ export function WorkflowDesigner({
   const deleteSelectedNode = useCallback(() => {
     if (!selectedNodeId || readOnly) return
 
-    setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId))
-    setEdges((eds) =>
+    setNodes((nds: WorkflowNode[]) => nds.filter((n) => n.id !== selectedNodeId))
+    setEdges((eds: Edge[]) =>
       eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId)
     )
     setSelectedNodeId(null)
@@ -259,7 +268,7 @@ export function WorkflowDesigner({
     (updates: Partial<StepNodeData>) => {
       if (!selectedNodeId || readOnly) return
 
-      setNodes((nds) =>
+      setNodes((nds: WorkflowNode[]) =>
         nds.map((node) =>
           node.id === selectedNodeId
             ? { ...node, data: { ...node.data, ...updates } }
@@ -315,7 +324,7 @@ export function WorkflowDesigner({
   )
 
   return (
-    <div className={cn("relative h-full w-full", className)}>
+    <div className={cn("relative h-full w-full workflow-designer", className)}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -331,33 +340,38 @@ export function WorkflowDesigner({
         defaultEdgeOptions={{
           type: "smoothstep",
         }}
-        className="bg-slate-50 dark:bg-slate-900"
+        className="!bg-background"
       >
-        <Background gap={20} size={1} />
-        <Controls />
+        <Background 
+          gap={20} 
+          size={1} 
+          className="[&>pattern>circle]:fill-muted-foreground/20" 
+        />
+        <Controls className="!bg-card !border-border !shadow-sm [&>button]:!bg-card [&>button]:!border-border [&>button]:!text-foreground [&>button:hover]:!bg-accent" />
         <MiniMap
-          className="!bg-white dark:!bg-slate-800"
-          nodeColor={(node) => {
+          className="!bg-card !border-border"
+          maskColor="hsl(var(--background) / 0.8)"
+          nodeColor={(node: Node) => {
             const data = node.data as StepNodeData | undefined
             switch (data?.stepType) {
               case "task":
-                return "#3b82f6"
+                return "hsl(217 91% 60%)" // Blue
               case "notification":
-                return "#f59e0b"
+                return "hsl(38 92% 50%)" // Amber
               case "gateway":
-                return "#8b5cf6"
+                return "hsl(271 81% 56%)" // Purple
               case "group":
-                return "#64748b"
+                return "hsl(215 16% 47%)" // Slate
               default:
-                return "#94a3b8"
+                return "hsl(215 16% 47%)"
             }
           }}
         />
 
         {/* Toolbar Panel */}
         {!readOnly && (
-          <Panel position="top-left" className="flex gap-2">
-            <div className="flex gap-1 bg-white dark:bg-slate-800 rounded-lg shadow-sm border p-1">
+          <Panel position="top-left" className="flex items-center gap-2">
+            <div className="flex gap-1 bg-card rounded-lg shadow-sm border border-border p-1">
               {stepTypeOptions.map(({ value, label, icon: Icon }) => (
                 <Button
                   key={value}
@@ -378,7 +392,7 @@ export function WorkflowDesigner({
                 onClick={handleSave}
                 disabled={isLoading}
                 size="sm"
-                className="h-8"
+                className="h-8 shadow-sm"
               >
                 <Save className="h-4 w-4 mr-1" />
                 Save
@@ -390,9 +404,9 @@ export function WorkflowDesigner({
 
       {/* Properties Panel */}
       {isPanelOpen && selectedNode && (
-        <div className="absolute right-0 top-0 h-full w-80 bg-white dark:bg-slate-800 border-l shadow-lg overflow-y-auto">
-          <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b bg-white dark:bg-slate-800">
-            <h3 className="font-semibold text-sm">Step Properties</h3>
+        <div className="absolute right-0 top-0 h-full w-80 bg-card border-l border-border shadow-lg overflow-y-auto">
+          <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b border-border bg-card z-10">
+            <h3 className="font-semibold text-sm text-foreground">Step Properties</h3>
             <Button
               variant="ghost"
               size="icon"
@@ -452,7 +466,7 @@ export function WorkflowDesigner({
 
             {/* Assignee Type */}
             <div className="space-y-2">
-              <Label>Assignee</Label>
+              <Label>Assignee Type</Label>
               <Select
                 value={selectedNode.data.assigneeType}
                 onValueChange={(value) =>
@@ -472,6 +486,37 @@ export function WorkflowDesigner({
                 </SelectContent>
               </Select>
             </div>
+            
+            {/* Default Assignee (Person) */}
+            {people && people.length > 0 && (
+              <div className="space-y-2">
+                <Label>Default Assignee</Label>
+                <Select
+                  value={selectedNode.data.defaultAssigneeId ?? "__none__"}
+                  onValueChange={(value) =>
+                    updateNodeData({ defaultAssigneeId: value === "__none__" ? null : value })
+                  }
+                  disabled={readOnly}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select person..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">
+                      <span className="text-muted-foreground">Unassigned</span>
+                    </SelectItem>
+                    {people.map((person) => (
+                      <SelectItem key={person.id} value={person.id}>
+                        {person.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  This person will be assigned by default when the workflow runs.
+                </p>
+              </div>
+            )}
 
             {/* Due Offset */}
             <div className="space-y-2">

@@ -21,6 +21,8 @@ export interface StepNodeData extends Record<string, unknown> {
   stepType: "task" | "notification" | "gateway" | "group"
   assigneeType: "specific_user" | "role" | "dynamic_manager" | "dynamic_creator" | "unassigned"
   assigneeConfig?: Record<string, unknown>
+  defaultAssigneeId?: string | null
+  defaultAssignee?: { id: string; name: string; email: string } | null
   dueOffsetDays?: number
   isRequired: boolean
   isSelected?: boolean
@@ -30,26 +32,31 @@ export interface StepNodeData extends Record<string, unknown> {
 const stepTypeConfig: Record<StepNodeData["stepType"], {
   icon: typeof CheckSquare
   className: string
+  headerClassName: string
   label: string
 }> = {
   task: {
     icon: CheckSquare,
-    className: "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950",
+    className: "border-blue-500/50 bg-card shadow-blue-500/10",
+    headerClassName: "text-blue-600 dark:text-blue-400",
     label: "Task",
   },
   notification: {
     icon: Bell,
-    className: "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950",
+    className: "border-amber-500/50 bg-card shadow-amber-500/10",
+    headerClassName: "text-amber-600 dark:text-amber-400",
     label: "Notification",
   },
   gateway: {
     icon: GitBranch,
-    className: "border-purple-300 bg-purple-50 dark:border-purple-700 dark:bg-purple-950",
+    className: "border-purple-500/50 bg-card shadow-purple-500/10",
+    headerClassName: "text-purple-600 dark:text-purple-400",
     label: "Gateway",
   },
   group: {
     icon: Layers,
-    className: "border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800",
+    className: "border-border bg-card",
+    headerClassName: "text-muted-foreground",
     label: "Group",
   },
 }
@@ -94,9 +101,9 @@ function StepNodeComponent({ data, selected }: StepNodeProps) {
   return (
     <div
       className={cn(
-        "relative rounded-lg border-2 shadow-sm transition-all min-w-[180px] max-w-[240px]",
+        "relative rounded-lg border-2 shadow-md transition-all min-w-[180px] max-w-[240px]",
         typeConfig.className,
-        selected && "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900",
+        selected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
         !data.isRequired && "border-dashed opacity-80"
       )}
     >
@@ -104,40 +111,40 @@ function StepNodeComponent({ data, selected }: StepNodeProps) {
       <Handle
         type="target"
         position={Position.Top}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white dark:!border-slate-900"
+        className="!w-3 !h-3 !bg-primary !border-2 !border-background"
       />
       
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-inherit">
-        <TypeIcon className="h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400" />
-        <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+        <TypeIcon className={cn("h-4 w-4 shrink-0", typeConfig.headerClassName)} />
+        <span className={cn("text-xs font-medium uppercase tracking-wide", typeConfig.headerClassName)}>
           {typeConfig.label}
         </span>
         {!data.isRequired && (
-          <span className="text-xs text-slate-400 ml-auto">(Optional)</span>
+          <span className="text-xs text-muted-foreground ml-auto">(Optional)</span>
         )}
       </div>
       
       {/* Content */}
       <div className="px-3 py-2">
-        <h3 className="font-medium text-sm text-slate-900 dark:text-slate-100 line-clamp-2">
+        <h3 className="font-medium text-sm text-foreground line-clamp-2">
           {data.name}
         </h3>
         {data.description && (
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
             {data.description}
           </p>
         )}
       </div>
       
       {/* Footer */}
-      <div className="flex items-center justify-between px-3 py-2 border-t border-inherit bg-white/50 dark:bg-black/20 rounded-b-lg">
-        <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/50 rounded-b-[calc(0.5rem-2px)]">
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <AssigneeIcon className="h-3 w-3" />
           <span>{assigneeConfig.label}</span>
         </div>
         {data.dueOffsetDays !== undefined && data.dueOffsetDays > 0 && (
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-muted-foreground">
             +{data.dueOffsetDays}d
           </span>
         )}
@@ -147,7 +154,7 @@ function StepNodeComponent({ data, selected }: StepNodeProps) {
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!w-3 !h-3 !bg-slate-400 !border-2 !border-white dark:!border-slate-900"
+        className="!w-3 !h-3 !bg-primary !border-2 !border-background"
       />
     </div>
   )

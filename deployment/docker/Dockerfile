@@ -4,6 +4,12 @@
 # Build optimized for Azure Container Apps deployment
 # Produces a minimal (~150MB) production image with standalone output
 # =============================================================================
+# Best Practices (2025):
+# - Multi-stage builds for minimal production image
+# - Layer caching: package files → install → source code → build
+# - Packages installed during build (not runtime)
+# - Rebuilding required when adding new packages (standard practice)
+# =============================================================================
 
 # -----------------------------------------------------------------------------
 # Stage 1: Dependencies - Install all dependencies
@@ -16,10 +22,12 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Copy package files for dependency installation
+# This layer is cached unless package files change (optimal for layer caching)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 
 # Install all dependencies
+# This layer is cached unless package files change
 RUN pnpm install --frozen-lockfile
 
 # -----------------------------------------------------------------------------
@@ -32,13 +40,15 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy package files and source code
+# Copy package files first (for potential re-install if needed)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web ./apps/web
 
-# Copy dependencies from deps stage (after source to overlay node_modules)
+# Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+
+# Copy source code last (changes frequently, doesn't invalidate dependency cache)
+COPY apps/web ./apps/web
 
 # Set environment for build
 ENV NEXT_TELEMETRY_DISABLED=1

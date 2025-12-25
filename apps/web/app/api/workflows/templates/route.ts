@@ -10,7 +10,8 @@ import { db } from "@/lib/db"
 import { 
   workflowTemplates, 
   workflowTemplateSteps,
-  users 
+  users,
+  persons,
 } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
 import { z } from "zod"
@@ -24,6 +25,7 @@ const CreateTemplateSchema = z.object({
   status: z.enum(["draft", "active", "archived"]).default("draft"),
   isActive: z.boolean().default(true),
   defaultDueDays: z.number().optional(),
+  defaultOwnerId: z.string().uuid().optional().nullable(),
   settings: z.record(z.unknown()).optional(),
 })
 
@@ -34,10 +36,17 @@ interface UserInfo {
   email: string
 }
 
+// Owner info type
+interface OwnerInfo {
+  id: string
+  name: string
+}
+
 // Transform DB record to API response
 function toApiResponse(
   record: typeof workflowTemplates.$inferSelect,
   createdBy?: UserInfo | null,
+  defaultOwner?: OwnerInfo | null,
   stepsCount?: number,
   instancesCount?: number
 ) {
@@ -51,6 +60,8 @@ function toApiResponse(
     status: record.status,
     isActive: record.isActive,
     defaultDueDays: record.defaultDueDays ?? undefined,
+    defaultOwnerId: record.defaultOwnerId ?? undefined,
+    defaultOwner: defaultOwner || null,
     settings: record.settings,
     createdById: record.createdById ?? undefined,
     createdBy: createdBy || null,
@@ -132,6 +143,25 @@ export async function GET(request: NextRequest) {
       creatorById.set(user.id, user)
     }
     
+    // Get default owners for all templates
+    const ownerIds = [...new Set(results.map(t => t.defaultOwnerId).filter(Boolean) as string[])]
+    
+    const owners = ownerIds.length > 0
+      ? await db
+          .select({
+            id: persons.id,
+            name: persons.name,
+          })
+          .from(persons)
+          .where(or(...ownerIds.map(id => eq(persons.id, id))))
+      : []
+
+    // Create lookup map for owners
+    const ownerById = new Map<string, OwnerInfo>()
+    for (const owner of owners) {
+      ownerById.set(owner.id, { id: owner.id, name: owner.name || "Unknown" })
+    }
+    
     // Get step counts for all templates
     const templateIds = results.map(t => t.id)
     const stepCounts = templateIds.length > 0
@@ -155,6 +185,7 @@ export async function GET(request: NextRequest) {
         toApiResponse(
           template, 
           template.createdById ? creatorById.get(template.createdById) : null,
+          template.defaultOwnerId ? ownerById.get(template.defaultOwnerId) : null,
           stepsCountByTemplate.get(template.id) || 0,
           0 // TODO: Add instance counts if needed
         )
@@ -211,6 +242,7 @@ export async function POST(request: NextRequest) {
         status: data.status,
         isActive: data.isActive,
         defaultDueDays: data.defaultDueDays ?? null,
+        defaultOwnerId: data.defaultOwnerId ?? null,
         settings: data.settings ?? null,
         createdById: session.userId,
       })
@@ -229,7 +261,7 @@ export async function POST(request: NextRequest) {
       })
     }
     
-    return NextResponse.json(toApiResponse(record), { status: 201 })
+    return NextResponse.json(toApiResponse(record, null, null), { status: 201 })
   } catch (error) {
     // Handle authentication errors
     if (error instanceof Error && error.message === "Authentication required") {

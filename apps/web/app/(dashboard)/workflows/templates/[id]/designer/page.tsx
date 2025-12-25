@@ -10,8 +10,14 @@ import { PageShell } from "@/components/primitives/page-shell"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess } from "@/lib/rbac/context"
+import { useBreadcrumbLabels } from "@/components/breadcrumb-context"
 import { WorkflowDesigner } from "@/components/workflows"
 import { 
   useWorkflowTemplateDetail,
@@ -19,6 +25,7 @@ import {
   type SaveTemplateStep,
   type SaveTemplateEdge,
 } from "@/lib/api/workflows"
+import { usePeopleList } from "@/lib/api/people"
 
 const statusColors: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -39,6 +46,10 @@ export default function WorkflowDesignerPage({ params }: PageProps) {
   
   // Queries
   const { data: template, isLoading, error } = useWorkflowTemplateDetail(id)
+  const { data: people = [] } = usePeopleList()
+  
+  // Set breadcrumb to show template name and "Designer"
+  useBreadcrumbLabels(template?.name, "Designer")
   const updateMutation = useUpdateWorkflowTemplate()
   
   // Handle save
@@ -96,48 +107,52 @@ export default function WorkflowDesignerPage({ params }: PageProps) {
   
   return (
     <PageShell
-      title={`Designer: ${template.name}`}
-      action={
-        <div className="flex items-center gap-2">
-          <Badge className={statusColors[template.status]}>
-            {template.status.charAt(0).toUpperCase() + template.status.slice(1)}
-          </Badge>
-          <Button variant="outline" asChild>
-            <Link href={`/workflows/templates/${id}`}>
-              <Eye className="h-4 w-4 mr-2" />
-              View Details
-            </Link>
-          </Button>
-        </div>
+      title={template.name}
+      compact
+      backButton={
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <Link href={`/workflows/templates/${id}`}>
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Back to Template</TooltipContent>
+        </Tooltip>
       }
-    >
-      <div className="space-y-4">
-        {/* Back link */}
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
+      statusBadge={
+        <Badge className={statusColors[template.status]}>
+          {template.status.charAt(0).toUpperCase() + template.status.slice(1)}
+        </Badge>
+      }
+      action={
+        <Button variant="outline" asChild>
           <Link href={`/workflows/templates/${id}`}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Template
+            <Eye className="h-4 w-4 mr-2" />
+            View Details
           </Link>
         </Button>
-        
-        {/* Designer */}
-        <div className="h-[calc(100vh-260px)] min-h-[500px] border rounded-lg overflow-hidden">
-          <WorkflowDesigner
-            templateId={template.id}
-            initialSteps={template.steps}
-            initialEdges={template.edges}
-            onSave={handleSave}
-            isLoading={updateMutation.isPending}
-            readOnly={template.status === "archived"}
-          />
-        </div>
-        
-        {template.status === "archived" && (
-          <p className="text-sm text-muted-foreground text-center">
-            This template is archived and cannot be edited. Unarchive it to make changes.
-          </p>
-        )}
+      }
+    >
+      {/* Designer */}
+      <div className="h-[calc(100vh-180px)] min-h-[500px] border rounded-lg overflow-hidden">
+        <WorkflowDesigner
+          templateId={template.id}
+          initialSteps={template.steps}
+          initialEdges={template.edges}
+          onSave={handleSave}
+          isLoading={updateMutation.isPending}
+          readOnly={template.status === "archived"}
+          people={people}
+        />
       </div>
+      
+      {template.status === "archived" && (
+        <p className="text-sm text-muted-foreground text-center">
+          This template is archived and cannot be edited. Unarchive it to make changes.
+        </p>
+      )}
     </PageShell>
   )
 }

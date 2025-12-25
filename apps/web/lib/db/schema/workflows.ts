@@ -74,6 +74,9 @@ export const workflowTemplates = pgTable(
     status: text("status", { enum: workflowTemplateStatusValues }).notNull().default("draft"),
     isActive: boolean("is_active").notNull().default(true),
     
+    // Default owner - person from directory who owns instances created from this template
+    defaultOwnerId: uuid("default_owner_id").references(() => persons.id, { onDelete: "set null" }),
+    
     // Default settings for instances
     defaultDueDays: integer("default_due_days"), // Days from start to complete entire workflow
     
@@ -135,6 +138,8 @@ export const workflowTemplateSteps = pgTable(
       roleName?: string
       [key: string]: unknown
     }>(),
+    // Default assignee - a specific person from the directory
+    defaultAssigneeId: uuid("default_assignee_id").references(() => persons.id, { onDelete: "set null" }),
     
     // Due date configuration
     dueOffsetDays: integer("due_offset_days"), // Days from workflow start or previous step
@@ -227,6 +232,9 @@ export const workflowInstances = pgTable(
     // Status tracking
     status: text("status", { enum: workflowInstanceStatusValues }).notNull().default("pending"),
     
+    // Owner - person responsible for this workflow instance (can be overridden from template default)
+    ownerId: uuid("owner_id").references(() => persons.id, { onDelete: "set null" }),
+    
     // Timing
     startedAt: timestamp("started_at", { withTimezone: true }),
     dueAt: timestamp("due_at", { withTimezone: true }),
@@ -254,6 +262,7 @@ export const workflowInstances = pgTable(
     index("idx_workflow_instances_entity").on(table.entityType, table.entityId),
     index("idx_workflow_instances_status").on(table.status),
     index("idx_workflow_instances_due").on(table.dueAt),
+    index("idx_workflow_instances_owner").on(table.ownerId),
   ]
 )
 
@@ -283,8 +292,9 @@ export const workflowInstanceSteps = pgTable(
     // Status tracking
     status: text("status", { enum: workflowInstanceStepStatusValues }).notNull().default("pending"),
     
-    // Assignment
+    // Assignment - can be either a user (for system users) or a person (from directory)
     assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    assignedPersonId: uuid("assigned_person_id").references(() => persons.id, { onDelete: "set null" }),
     
     // Timing
     dueAt: timestamp("due_at", { withTimezone: true }),
@@ -312,6 +322,7 @@ export const workflowInstanceSteps = pgTable(
     index("idx_workflow_instance_steps_parent").on(table.parentStepId),
     index("idx_workflow_instance_steps_status").on(table.status),
     index("idx_workflow_instance_steps_assignee").on(table.assigneeId),
+    index("idx_workflow_instance_steps_assigned_person").on(table.assignedPersonId),
     index("idx_workflow_instance_steps_due").on(table.dueAt),
   ]
 )
@@ -324,6 +335,11 @@ export const workflowTemplatesRelations = relations(workflowTemplates, ({ one, m
   createdBy: one(users, {
     fields: [workflowTemplates.createdById],
     references: [users.id],
+  }),
+  defaultOwner: one(persons, {
+    fields: [workflowTemplates.defaultOwnerId],
+    references: [persons.id],
+    relationName: "templateDefaultOwner",
   }),
   steps: many(workflowTemplateSteps),
   edges: many(workflowTemplateEdges),
@@ -348,6 +364,11 @@ export const workflowTemplateStepsRelations = relations(workflowTemplateSteps, (
   }),
   incomingEdges: many(workflowTemplateEdges, {
     relationName: "targetStep",
+  }),
+  defaultAssignee: one(persons, {
+    fields: [workflowTemplateSteps.defaultAssigneeId],
+    references: [persons.id],
+    relationName: "stepDefaultAssignee",
   }),
   instanceSteps: many(workflowInstanceSteps),
 }))
@@ -378,6 +399,11 @@ export const workflowInstancesRelations = relations(workflowInstances, ({ one, m
     fields: [workflowInstances.startedById],
     references: [users.id],
   }),
+  owner: one(persons, {
+    fields: [workflowInstances.ownerId],
+    references: [persons.id],
+    relationName: "instanceOwner",
+  }),
   steps: many(workflowInstanceSteps),
 }))
 
@@ -402,6 +428,11 @@ export const workflowInstanceStepsRelations = relations(workflowInstanceSteps, (
     fields: [workflowInstanceSteps.assigneeId],
     references: [users.id],
     relationName: "stepAssignee",
+  }),
+  assignedPerson: one(persons, {
+    fields: [workflowInstanceSteps.assignedPersonId],
+    references: [persons.id],
+    relationName: "stepAssignedPerson",
   }),
   completedBy: one(users, {
     fields: [workflowInstanceSteps.completedById],

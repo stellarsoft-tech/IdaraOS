@@ -1,21 +1,20 @@
 # =============================================================================
 # IdaraOS - Development Dockerfile
 # =============================================================================
-# Lightweight development image with volume mounts for hot reloading
-# Packages are installed at runtime with a cached pnpm store
+# Development image for hot reloading with volume mounts
+# =============================================================================
+# Note: For development with volume mounts, packages are installed at runtime
+# because host volumes override build-time node_modules. The pnpm store is
+# cached in a named volume for fast subsequent installs.
+#
+# For production: Use Dockerfile (multi-stage build with build-time install)
 # =============================================================================
 
 FROM node:22-alpine
 
-# Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Install development tools
-RUN apk add --no-cache git
-
-# Set pnpm store location (will be volume-mounted for caching)
-ENV PNPM_HOME="/root/.local/share/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
+# Install pnpm globally and development tools
+RUN corepack enable && corepack prepare pnpm@latest --activate \
+    && apk add --no-cache git
 
 WORKDIR /app
 
@@ -31,8 +30,6 @@ EXPOSE 3000
 # Working directory for next dev
 WORKDIR /app/apps/web
 
-# Copy startup script
-COPY deployment/docker/start-dev.sh /start.sh
-RUN chmod +x /start.sh
-
-CMD ["/start.sh"]
+# Startup: Install packages if needed, then start dev server
+# The pnpm store is cached via volume mount for fast subsequent installs
+CMD ["sh", "-c", "cd /app && if [ ! -d 'node_modules/.pnpm' ]; then echo '📦 Installing packages (first run)...' && pnpm install; else echo '📦 Checking packages...' && pnpm install --prefer-offline 2>/dev/null || true; fi && echo '🚀 Starting Next.js dev server...' && cd /app/apps/web && exec npx next dev --hostname 0.0.0.0 --port 3000"]

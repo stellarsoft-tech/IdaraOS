@@ -11,6 +11,7 @@ import {
   Archive,
   Eye,
   Layers,
+  User,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -47,33 +48,25 @@ import {
 import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess } from "@/lib/rbac/context"
 import { 
+  EditTemplateDialog,
+  moduleScopeOptions,
+  triggerTypeOptions,
+  type EditTemplateFormData,
+} from "@/components/workflows"
+import { 
   useWorkflowTemplatesList, 
   useCreateWorkflowTemplate,
   useUpdateWorkflowTemplate,
   useDeleteWorkflowTemplate,
   type WorkflowTemplate,
 } from "@/lib/api/workflows"
+import { usePeopleList } from "@/lib/api/people"
 
 const statusColors: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   active: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
   archived: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300",
 }
-
-const moduleScopeOptions = [
-  { value: "people", label: "People & HR" },
-  { value: "assets", label: "Assets" },
-  { value: "security", label: "Security" },
-  { value: "global", label: "Global" },
-]
-
-const triggerTypeOptions = [
-  { value: "onboarding", label: "Onboarding" },
-  { value: "offboarding", label: "Offboarding" },
-  { value: "manual", label: "Manual" },
-  { value: "asset_provisioning", label: "Asset Provisioning" },
-  { value: "review", label: "Review" },
-]
 
 interface TemplateCardProps {
   template: WorkflowTemplate
@@ -158,6 +151,13 @@ function TemplateCard({ template, onEdit, onDelete, onArchive }: TemplateCardPro
           <span>{template.stepsCount} steps</span>
           <span>{template.instancesCount} instances</span>
         </div>
+        {template.defaultOwner && (
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t text-sm">
+            <User className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">Owner:</span>
+            <span className="font-medium">{template.defaultOwner.name}</span>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -194,6 +194,7 @@ export default function WorkflowTemplatesPage() {
     search: search || undefined,
     status: statusFilter !== "all" ? statusFilter : undefined,
   })
+  const { data: people = [] } = usePeopleList()
   const createMutation = useCreateWorkflowTemplate()
   const updateMutation = useUpdateWorkflowTemplate()
   const deleteMutation = useDeleteWorkflowTemplate()
@@ -256,17 +257,10 @@ export default function WorkflowTemplatesPage() {
   
   const handleEdit = (template: WorkflowTemplate) => {
     setEditingTemplate(template)
-    setFormData({
-      name: template.name,
-      description: template.description || "",
-      moduleScope: template.moduleScope || "",
-      triggerType: template.triggerType || "",
-      status: template.status,
-    })
   }
   
-  const handleUpdate = async () => {
-    if (!editingTemplate || !formData.name.trim()) return
+  const handleUpdate = async (formData: EditTemplateFormData) => {
+    if (!editingTemplate) return
     
     try {
       await updateMutation.mutateAsync({
@@ -277,12 +271,12 @@ export default function WorkflowTemplatesPage() {
           moduleScope: formData.moduleScope || undefined,
           triggerType: formData.triggerType || undefined,
           status: formData.status,
+          defaultOwnerId: formData.defaultOwnerId,
         },
       })
       
       toast.success("Template updated successfully")
       setEditingTemplate(null)
-      resetForm()
     } catch {
       toast.error("Failed to update template")
     }
@@ -443,7 +437,7 @@ export default function WorkflowTemplatesPage() {
                   value={formData.moduleScope}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, moduleScope: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select module" />
                   </SelectTrigger>
                   <SelectContent>
@@ -461,7 +455,7 @@ export default function WorkflowTemplatesPage() {
                   value={formData.triggerType}
                   onValueChange={(value) => setFormData(prev => ({ ...prev, triggerType: value }))}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select trigger" />
                   </SelectTrigger>
                   <SelectContent>
@@ -487,99 +481,23 @@ export default function WorkflowTemplatesPage() {
       </Dialog>
       
       {/* Edit Dialog */}
-      <Dialog open={!!editingTemplate} onOpenChange={() => setEditingTemplate(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Template</DialogTitle>
-            <DialogDescription>
-              Update the template details.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-name">Name *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={formData.description}
-                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Module</Label>
-                <Select
-                  value={formData.moduleScope}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, moduleScope: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select module" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {moduleScopeOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Trigger</Label>
-                <Select
-                  value={formData.triggerType}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, triggerType: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select trigger" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {triggerTypeOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "draft" | "active" | "archived") => 
-                  setFormData(prev => ({ ...prev, status: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTemplate(null)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {editingTemplate && (
+        <EditTemplateDialog
+          open={!!editingTemplate}
+          onOpenChange={(open) => !open && setEditingTemplate(null)}
+          initialData={{
+            name: editingTemplate.name,
+            description: editingTemplate.description || "",
+            moduleScope: editingTemplate.moduleScope || "people",
+            triggerType: editingTemplate.triggerType || "manual",
+            status: editingTemplate.status,
+            defaultOwnerId: editingTemplate.defaultOwnerId ?? null,
+          }}
+          onSave={handleUpdate}
+          isSaving={updateMutation.isPending}
+          people={people}
+        />
+      )}
       
       {/* Delete Confirmation */}
       <Dialog open={!!deletingTemplate} onOpenChange={() => setDeletingTemplate(null)}>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +19,8 @@ import {
   MoreHorizontal,
   User,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  GripVertical,
 } from "lucide-react"
 import { StepStatusBadge, type StepStatus } from "./step-status-badge"
 import type { WorkflowInstanceStep, WorkflowInstanceDetail } from "@/lib/api/workflows"
@@ -29,7 +30,9 @@ interface WorkflowKanbanProps {
   onStepClick?: (step: WorkflowInstanceStep) => void
   onCompleteStep?: (stepId: string) => void
   onStartStep?: (stepId: string) => void
+  onStatusChange?: (stepId: string, newStatus: WorkflowInstanceStep["status"]) => void
   className?: string
+  readOnly?: boolean
 }
 
 // Column configuration
@@ -62,57 +65,87 @@ function StepCard({
   onClick,
   onComplete,
   onStart,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   step: WorkflowInstanceStep
   onClick?: () => void
   onComplete?: () => void
   onStart?: () => void
+  isDragging?: boolean
+  onDragStart?: () => void
+  onDragEnd?: () => void
 }) {
   const overdue = step.status !== "completed" && isOverdue(step.dueAt)
+  const isDraggable = !!onDragStart
+  // Only show actions menu if there are actual available actions
+  const canStart = step.status === "pending" && onStart
+  const canComplete = step.status !== "completed" && onComplete
+  const hasActions = canStart || canComplete
 
   return (
     <Card
       className={cn(
-        "cursor-pointer hover:shadow-md transition-shadow",
-        overdue && "border-red-300 dark:border-red-700"
+        "transition-all",
+        onClick ? "cursor-pointer hover:shadow-md" : "cursor-default",
+        overdue && "border-red-300 dark:border-red-700",
+        isDragging && "opacity-50 ring-2 ring-primary"
       )}
       onClick={onClick}
+      draggable={isDraggable}
+      onDragStart={isDraggable ? (e) => {
+        e.dataTransfer.setData("stepId", step.id)
+        e.dataTransfer.setData("currentStatus", step.status)
+        e.dataTransfer.effectAllowed = "move"
+        onDragStart?.()
+      } : undefined}
+      onDragEnd={isDraggable ? () => {
+        onDragEnd?.()
+      } : undefined}
     >
       <CardContent className="p-3 space-y-2">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
-          <h4 className="font-medium text-sm line-clamp-2">{step.name}</h4>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {step.status === "pending" && onStart && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onStart()
-                  }}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Start Task
-                </DropdownMenuItem>
-              )}
-              {step.status !== "completed" && onComplete && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onComplete()
-                  }}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Mark Complete
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-start gap-1">
+            {isDraggable && (
+              <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5 cursor-grab" />
+            )}
+            <h4 className="font-medium text-sm line-clamp-2">{step.name}</h4>
+          </div>
+          {hasActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canStart && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onStart!()
+                    }}
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    Start Task
+                  </DropdownMenuItem>
+                )}
+                {canComplete && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onComplete!()
+                    }}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Mark Complete
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {/* Description */}
@@ -124,16 +157,16 @@ function StepCard({
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-2 pt-1">
-          {/* Assignee */}
-          {step.assignee ? (
+          {/* Assignee - check assignedPerson first (from people directory), then assignee (from users) */}
+          {(step.assignedPerson || step.assignee) ? (
             <div className="flex items-center gap-1.5">
               <Avatar className="h-5 w-5">
                 <AvatarFallback className="text-[10px]">
-                  {step.assignee.name.charAt(0)}
+                  {(step.assignedPerson?.name || step.assignee?.name || "?").charAt(0)}
                 </AvatarFallback>
               </Avatar>
               <span className="text-xs text-muted-foreground truncate max-w-[80px]">
-                {step.assignee.name}
+                {step.assignedPerson?.name || step.assignee?.name}
               </span>
             </div>
           ) : (
@@ -143,8 +176,8 @@ function StepCard({
             </div>
           )}
 
-          {/* Due date */}
-          {step.dueAt && (
+          {/* Due date - only show for non-completed items */}
+          {step.dueAt && step.status !== "completed" && (
             <div
               className={cn(
                 "flex items-center gap-1 text-xs",
@@ -170,8 +203,13 @@ export function WorkflowKanban({
   onStepClick,
   onCompleteStep,
   onStartStep,
+  onStatusChange,
   className,
+  readOnly = false,
 }: WorkflowKanbanProps) {
+  const [draggingStepId, setDraggingStepId] = useState<string | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<StepStatus | null>(null)
+
   // Group steps by status
   const stepsByStatus = useMemo(() => {
     const grouped: Record<StepStatus, WorkflowInstanceStep[]> = {
@@ -196,6 +234,32 @@ export function WorkflowKanban({
 
     return grouped
   }, [instance.steps])
+
+  const handleDragOver = useCallback((e: React.DragEvent, status: StepStatus) => {
+    if (readOnly) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    setDragOverStatus(status)
+  }, [readOnly])
+
+  const handleDragLeave = useCallback(() => {
+    if (readOnly) return
+    setDragOverStatus(null)
+  }, [readOnly])
+
+  const handleDrop = useCallback((e: React.DragEvent, targetStatus: StepStatus) => {
+    if (readOnly) return
+    e.preventDefault()
+    const stepId = e.dataTransfer.getData("stepId")
+    const currentStatus = e.dataTransfer.getData("currentStatus")
+    
+    setDraggingStepId(null)
+    setDragOverStatus(null)
+    
+    if (stepId && currentStatus !== targetStatus && onStatusChange) {
+      onStatusChange(stepId, targetStatus)
+    }
+  }, [onStatusChange, readOnly])
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -233,20 +297,36 @@ export function WorkflowKanban({
               </div>
             </div>
 
-            {/* Column Content */}
-            <div className="space-y-2 min-h-[200px] bg-slate-50 dark:bg-slate-900 rounded-lg p-2">
+            {/* Column Content - Drop Zone */}
+            <div 
+              className={cn(
+                "space-y-2 min-h-[200px] rounded-lg p-2 transition-colors",
+                dragOverStatus === status 
+                  ? "bg-primary/10 ring-2 ring-primary ring-dashed" 
+                  : "bg-slate-50 dark:bg-slate-900"
+              )}
+              onDragOver={(e) => handleDragOver(e, status)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, status)}
+            >
               {stepsByStatus[status].length === 0 ? (
-                <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
-                  No tasks
+                <div className={cn(
+                  "flex items-center justify-center h-20 text-sm text-muted-foreground border-2 border-dashed rounded-lg",
+                  !readOnly && dragOverStatus === status && "border-primary text-primary"
+                )}>
+                  {!readOnly && dragOverStatus === status ? "Drop here" : "No tasks"}
                 </div>
               ) : (
                 stepsByStatus[status].map((step) => (
                   <StepCard
                     key={step.id}
                     step={step}
-                    onClick={() => onStepClick?.(step)}
-                    onComplete={() => onCompleteStep?.(step.id)}
-                    onStart={() => onStartStep?.(step.id)}
+                    onClick={readOnly ? undefined : () => onStepClick?.(step)}
+                    onComplete={readOnly ? undefined : () => onCompleteStep?.(step.id)}
+                    onStart={readOnly ? undefined : () => onStartStep?.(step.id)}
+                    isDragging={!readOnly && draggingStepId === step.id}
+                    onDragStart={readOnly ? undefined : () => setDraggingStepId(step.id)}
+                    onDragEnd={readOnly ? undefined : () => setDraggingStepId(null)}
                   />
                 ))
               )}
@@ -272,7 +352,7 @@ export function WorkflowKanban({
                   <StepCard
                     key={step.id}
                     step={step}
-                    onClick={() => onStepClick?.(step)}
+                    onClick={readOnly ? undefined : () => onStepClick?.(step)}
                   />
                 ))}
               </div>
@@ -289,7 +369,7 @@ export function WorkflowKanban({
                   <StepCard
                     key={step.id}
                     step={step}
-                    onClick={() => onStepClick?.(step)}
+                    onClick={readOnly ? undefined : () => onStepClick?.(step)}
                   />
                 ))}
               </div>
