@@ -69,7 +69,7 @@
       "idx": 9,
       "version": "7",
       "when": 1766700000000,
-      "tag": "0009_add_workflow_modules",
+      "tag": "0009_add_workflow_tables",
       "breakpoints": true
     }
   ]
