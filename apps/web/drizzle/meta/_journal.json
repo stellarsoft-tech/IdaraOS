@@ -71,6 +71,13 @@
       "when": 1766700000000,
       "tag": "0009_add_workflow_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1766800000000,
+      "tag": "0010_add_workflow_tables_v2",
+      "breakpoints": true
     }
   ]
 }

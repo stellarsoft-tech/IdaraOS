@@ -201,62 +201,18 @@ async function runMigrations(force: boolean = false): Promise<void> {
 }
 
 // ============================================================================
-// Fix Out-of-Sync Migrations
+// Fix Out-of-Sync Migrations (DISABLED - was causing issues)
 // ============================================================================
 
-async function fixMigrations(existingPool?: Pool): Promise<void> {
+async function fixMigrations(_existingPool?: Pool): Promise<void> {
+  // This function was incorrectly marking NEW migrations as applied
+  // without actually running them. Now disabled - use db:baseline instead.
   console.log()
-  console.log("🔧 Attempting to fix migration state...")
+  console.log("⚠️  db:repair is disabled - it was marking migrations as applied without running them")
   console.log()
-
-  const pool = existingPool ?? createPool()
-  const db = drizzle(pool)
-
-  try {
-    // Read journal
-    const journalContent = fs.readFileSync(JOURNAL_PATH, "utf-8")
-    const journal: Journal = JSON.parse(journalContent)
-
-    // Ensure migrations table exists
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
-        id SERIAL PRIMARY KEY,
-        hash text NOT NULL,
-        created_at bigint
-      )
-    `)
-
-    // Get applied migrations
-    const result = await db.execute(sql`
-      SELECT hash FROM drizzle.__drizzle_migrations
-    `)
-    const applied = new Set((result.rows as { hash: string }[]).map(r => r.hash))
-
-    // Mark all local migrations as applied
-    let fixed = 0
-    for (const entry of journal.entries) {
-      if (!applied.has(entry.tag)) {
-        await db.execute(sql`
-          INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
-          VALUES (${entry.tag}, ${entry.when})
-        `)
-        console.log(`  ✓ Marked as applied: ${entry.tag}`)
-        fixed++
-      }
-    }
-
-    if (fixed === 0) {
-      console.log("  No migrations needed to be fixed.")
-    } else {
-      console.log()
-      console.log(`✅ Fixed ${fixed} migration(s)`)
-    }
-    
-  } finally {
-    if (!existingPool) {
-      await pool.end()
-    }
-  }
+  console.log("  ℹ️  For existing db:push databases, use: pnpm db:baseline")
+  console.log("  ℹ️  To check migration status, use: pnpm db:migrate:status")
+  console.log()
 }
 
 // ============================================================================

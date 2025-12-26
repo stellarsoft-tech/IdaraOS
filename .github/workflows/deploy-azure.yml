@@ -125,21 +125,14 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          # Step 1: Repair any incorrectly baselined migrations
-          # This checks if tracked migrations actually exist in the database
-          # and removes incorrect entries so they can be applied properly
-          echo "🔧 Step 1: Checking for incorrectly baselined migrations..."
-          pnpm db:repair || echo "ℹ️  Repair skipped (no migrations table yet)"
-          echo ""
-          
-          # Step 2: Smart baseline for existing databases
+          # Step 1: Smart baseline for existing databases (db:push)
           # This only marks migrations as applied if their changes actually exist
-          echo "📋 Step 2: Running smart baseline..."
+          echo "📋 Step 1: Running smart baseline..."
           pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
           echo ""
           
-          # Step 3: Apply any pending migrations
-          echo "🔄 Step 3: Applying pending migrations..."
+          # Step 2: Apply any pending migrations
+          echo "🔄 Step 2: Applying pending migrations..."
           pnpm db:run-migrations
           
           echo ""
@@ -435,18 +428,13 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          # Step 1: Repair any incorrectly baselined migrations
-          echo "🔧 Step 1: Checking for incorrectly baselined migrations..."
-          pnpm db:repair || echo "ℹ️  Repair skipped (no migrations table yet)"
-          echo ""
-          
-          # Step 2: Smart baseline for existing databases
-          echo "📋 Step 2: Running smart baseline..."
+          # Step 1: Smart baseline for existing databases (db:push)
+          echo "📋 Step 1: Running smart baseline..."
           pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
           echo ""
           
-          # Step 3: Apply any pending migrations
-          echo "🔄 Step 3: Applying pending migrations..."
+          # Step 2: Apply any pending migrations
+          echo "🔄 Step 2: Applying pending migrations..."
           pnpm db:run-migrations
           
           echo ""
@@ -725,18 +713,13 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          # Step 1: Repair any incorrectly baselined migrations
-          echo "🔧 Step 1: Checking for incorrectly baselined migrations..."
-          pnpm db:repair || echo "ℹ️  Repair skipped (no migrations table yet)"
-          echo ""
-          
-          # Step 2: Smart baseline for existing databases
-          echo "📋 Step 2: Running smart baseline..."
+          # Step 1: Smart baseline for existing databases (db:push)
+          echo "📋 Step 1: Running smart baseline..."
           pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
           echo ""
           
-          # Step 3: Apply any pending migrations
-          echo "🔄 Step 3: Applying pending migrations..."
+          # Step 2: Apply any pending migrations
+          echo "🔄 Step 2: Applying pending migrations..."
           pnpm db:run-migrations
           
           echo ""
