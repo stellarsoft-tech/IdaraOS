@@ -863,7 +863,7 @@ export default function AssetDetailPage({ params }: PageProps) {
             <div className="space-y-2">
               <Label>Select Person</Label>
               <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a person..." />
                 </SelectTrigger>
                 <SelectContent>

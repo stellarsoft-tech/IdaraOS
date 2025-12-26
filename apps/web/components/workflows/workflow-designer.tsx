@@ -451,7 +451,7 @@ export function WorkflowDesigner({
                 }
                 disabled={readOnly}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -474,7 +474,7 @@ export function WorkflowDesigner({
                 }
                 disabled={readOnly}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -498,7 +498,7 @@ export function WorkflowDesigner({
                   }
                   disabled={readOnly}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select person..." />
                   </SelectTrigger>
                   <SelectContent>

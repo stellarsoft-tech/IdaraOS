@@ -144,23 +144,24 @@ CREATE INDEX IF NOT EXISTS "idx_workflow_instance_steps_due" ON "workflow_instan
 -- ============================================================================
 
 -- Insert workflow modules (if they don't already exist)
-INSERT INTO rbac_modules (id, slug, name, description, category, icon, sort_order, created_at, updated_at)
+-- Note: rbac_modules table has created_at but NOT updated_at per schema
+INSERT INTO rbac_modules (id, slug, name, description, category, icon, sort_order, created_at)
 VALUES 
-  (gen_random_uuid(), 'workflows.overview', 'Workflows Overview', 'View workflows dashboard', 'Workflows', 'Workflow', '400', NOW(), NOW()),
-  (gen_random_uuid(), 'workflows.templates', 'Workflow Templates', 'Manage workflow templates', 'Workflows', 'FileCode2', '401', NOW(), NOW()),
-  (gen_random_uuid(), 'workflows.instances', 'Workflow Instances', 'View and manage running workflows', 'Workflows', 'Play', '402', NOW(), NOW()),
-  (gen_random_uuid(), 'workflows.tasks', 'Workflow Tasks', 'View and complete assigned tasks', 'Workflows', 'CheckSquare', '403', NOW(), NOW()),
-  (gen_random_uuid(), 'workflows.board', 'Workflow Board', 'Kanban board view of workflows', 'Workflows', 'Kanban', '404', NOW(), NOW()),
-  (gen_random_uuid(), 'workflows.settings', 'Workflow Settings', 'Configure workflow module settings', 'Workflows', 'Settings', '405', NOW(), NOW())
+  (gen_random_uuid(), 'workflows.overview', 'Workflows Overview', 'View workflows dashboard', 'Workflows', 'Workflow', '400', NOW()),
+  (gen_random_uuid(), 'workflows.templates', 'Workflow Templates', 'Manage workflow templates', 'Workflows', 'FileCode2', '401', NOW()),
+  (gen_random_uuid(), 'workflows.instances', 'Workflow Instances', 'View and manage running workflows', 'Workflows', 'Play', '402', NOW()),
+  (gen_random_uuid(), 'workflows.tasks', 'Workflow Tasks', 'View and complete assigned tasks', 'Workflows', 'CheckSquare', '403', NOW()),
+  (gen_random_uuid(), 'workflows.board', 'Workflow Board', 'Kanban board view of workflows', 'Workflows', 'Kanban', '404', NOW()),
+  (gen_random_uuid(), 'workflows.settings', 'Workflow Settings', 'Configure workflow module settings', 'Workflows', 'Settings', '405', NOW())
 ON CONFLICT (slug) DO NOTHING;
 
 -- Create permissions for all workflow modules (module × action combinations)
-INSERT INTO rbac_permissions (id, module_id, action_id, created_at, updated_at)
+-- Note: rbac_permissions table has created_at but NOT updated_at per schema
+INSERT INTO rbac_permissions (id, module_id, action_id, created_at)
 SELECT 
   gen_random_uuid(),
   m.id,
   a.id,
-  NOW(),
   NOW()
 FROM rbac_modules m
 CROSS JOIN rbac_actions a
@@ -171,9 +172,9 @@ WHERE m.slug LIKE 'workflows.%'
   );
 
 -- Grant all workflow permissions to Owner role for all organizations
-INSERT INTO rbac_role_permissions (id, role_id, permission_id, created_at)
+-- Note: rbac_role_permissions has composite primary key (role_id, permission_id), no id column
+INSERT INTO rbac_role_permissions (role_id, permission_id, created_at)
 SELECT 
-  gen_random_uuid(),
   r.id,
   p.id,
   NOW()
@@ -188,9 +189,8 @@ WHERE r.slug = 'owner'
   );
 
 -- Grant all workflow permissions to Admin role for all organizations
-INSERT INTO rbac_role_permissions (id, role_id, permission_id, created_at)
+INSERT INTO rbac_role_permissions (role_id, permission_id, created_at)
 SELECT 
-  gen_random_uuid(),
   r.id,
   p.id,
   NOW()

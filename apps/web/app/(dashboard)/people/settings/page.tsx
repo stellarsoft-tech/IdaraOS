@@ -276,45 +276,6 @@ export default function PeopleSettingsPage() {
     <PageShell
       title="People Settings"
       description="Configure People & HR module settings including Entra sync"
-      action={
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={handleSave} 
-            disabled={!canEdit || isSaving || !hasUnsavedChanges}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Check className="mr-2 h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-          {isEntraConnected && (
-            <Button
-              variant="outline"
-              onClick={handleSync}
-              disabled={isSyncing || hasUnsavedChanges || (syncMode === "independent" && !groupPattern.trim()) || (syncMode === "linked" && !syncPeopleEnabled)}
-            >
-              {isSyncing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Sync Now
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      }
     >
       <div className="space-y-6">
         {/* Entra Sync Settings */}
@@ -587,6 +548,40 @@ export default function PeopleSettingsPage() {
               </>
             )}
           </CardContent>
+          {isEntraConnected && canEdit && (
+            <CardFooter className="border-t pt-4 flex gap-2">
+              <Button 
+                onClick={handleSave} 
+                disabled={isSaving || !hasUnsavedChanges}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Entra Settings"
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSync}
+                disabled={isSyncing || hasUnsavedChanges || (syncMode === "independent" && !groupPattern.trim()) || (syncMode === "linked" && !syncPeopleEnabled)}
+              >
+                {isSyncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Sync Now
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          )}
         </Card>
 
         {/* Workflow Settings */}
