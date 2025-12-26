@@ -73,6 +73,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissions] = React.useState<UserPermissions | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<Error | null>(null)
+  const [isRedirecting, setIsRedirecting] = React.useState(false)
 
   // Check if current path is public
   const isPublicPath = isPathPublic(pathname)
@@ -84,11 +85,20 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const data = await response.json()
         setPermissions(data)
+      } else if (response.status === 401) {
+        // Session invalid - clear cookie and redirect
+        setIsRedirecting(true)
+        try {
+          await fetch("/api/auth/logout", { method: "POST" })
+        } catch {
+          // Ignore errors
+        }
+        window.location.href = "/login"
       }
     } catch (err) {
       console.error("Error fetching permissions:", err)
     }
-  }, [])
+  }, [router])
 
   // Fetch current user on mount
   React.useEffect(() => {
@@ -103,9 +113,22 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
         const response = await fetch("/api/auth/me")
 
         if (!response.ok) {
-          // Not authenticated - redirect to login
+          // Not authenticated or user doesn't exist - clear and redirect
           if (response.status === 401) {
-            router.push("/login")
+            console.log("Session invalid, clearing session and redirecting to login...")
+            setIsRedirecting(true)
+            // Clear any stale state
+            setUser(null)
+            setPermissions(null)
+            // Call logout API to clear the session cookie, then redirect
+            // This prevents redirect loop with middleware
+            try {
+              await fetch("/api/auth/logout", { method: "POST" })
+            } catch {
+              // Ignore errors, still redirect
+            }
+            // Use hard redirect to fully clear app state
+            window.location.href = "/login"
             return
           }
           throw new Error("Failed to fetch user")
@@ -126,7 +149,17 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
         console.error("Error fetching current user:", err)
         setError(err instanceof Error ? err : new Error("Unknown error"))
         // Redirect to login on error
-        router.push("/login")
+        setIsRedirecting(true)
+        setUser(null)
+        setPermissions(null)
+        // Call logout API to clear the session cookie, then redirect
+        try {
+          await fetch("/api/auth/logout", { method: "POST" })
+        } catch {
+          // Ignore errors, still redirect
+        }
+        // Use hard redirect to fully clear app state
+        window.location.href = "/login"
       } finally {
         setIsLoading(false)
       }
@@ -184,13 +217,29 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
     await fetchPermissions()
   }, [fetchPermissions])
 
-  // Show nothing while checking auth on protected pages
-  if (isLoading && !isPublicPath) {
+  // Show loading while checking auth on protected pages
+  // Also show loading while redirecting to prevent flash of unauthenticated content
+  if ((isLoading || isRedirecting) && !isPublicPath) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="flex flex-col items-center gap-2">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-muted-foreground">
+            {isRedirecting ? "Redirecting..." : "Loading..."}
+          </p>
+        </div>
+      </div>
+    )
+  }
+  
+  // If not loading, not redirecting, not public path, and no user - something went wrong
+  // Show loading spinner while we figure out what to do (should trigger redirect on next effect)
+  if (!isPublicPath && !user && !isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Redirecting to login...</p>
         </div>
       </div>
     )

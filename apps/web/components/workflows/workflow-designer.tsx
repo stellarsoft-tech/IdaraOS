@@ -40,7 +40,8 @@ import {
   Bell,
   GitBranch,
   Layers,
-  X
+  X,
+  User
 } from "lucide-react"
 import { workflowNodeTypes, type StepNodeData, defaultStepNodeData } from "./step-node"
 import type { 
@@ -83,6 +84,8 @@ function stepToNode(step: WorkflowTemplateStep): WorkflowNode {
       stepType: step.stepType,
       assigneeType: step.assigneeType,
       assigneeConfig: step.assigneeConfig,
+      defaultAssigneeId: step.defaultAssigneeId,
+      defaultAssignee: step.defaultAssignee,
       dueOffsetDays: step.dueOffsetDays,
       isRequired: step.isRequired,
       metadata: step.metadata,
@@ -123,6 +126,7 @@ function nodeToStep(node: WorkflowNode): SaveTemplateStep {
     positionY: node.position.y,
     assigneeType: node.data.assigneeType,
     assigneeConfig: node.data.assigneeConfig,
+    defaultAssigneeId: node.data.defaultAssigneeId,
     dueOffsetDays: node.data.dueOffsetDays,
     isRequired: node.data.isRequired,
     metadata: node.data.metadata,
@@ -488,15 +492,31 @@ export function WorkflowDesigner({
             </div>
             
             {/* Default Assignee (Person) */}
-            {people && people.length > 0 && (
-              <div className="space-y-2">
-                <Label>Default Assignee</Label>
+            <div className="space-y-2">
+              <Label>Default Assignee</Label>
+              {readOnly ? (
+                // Read-only: show assignee info
+                <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {selectedNode.data.defaultAssignee?.name ?? "Unassigned"}
+                  </span>
+                </div>
+              ) : people && people.length > 0 ? (
+                // Editable: show dropdown
                 <Select
                   value={selectedNode.data.defaultAssigneeId ?? "__none__"}
-                  onValueChange={(value) =>
-                    updateNodeData({ defaultAssigneeId: value === "__none__" ? null : value })
-                  }
-                  disabled={readOnly}
+                  onValueChange={(value) => {
+                    if (value === "__none__") {
+                      updateNodeData({ defaultAssigneeId: null, defaultAssignee: null })
+                    } else {
+                      const person = people.find(p => p.id === value)
+                      updateNodeData({ 
+                        defaultAssigneeId: value,
+                        defaultAssignee: person ? { id: person.id, name: person.name, email: person.email } : null
+                      })
+                    }
+                  }}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select person..." />
@@ -512,11 +532,21 @@ export function WorkflowDesigner({
                     ))}
                   </SelectContent>
                 </Select>
+              ) : (
+                // No people list available
+                <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">
+                    {selectedNode.data.defaultAssignee?.name ?? "No people available"}
+                  </span>
+                </div>
+              )}
+              {!readOnly && (
                 <p className="text-xs text-muted-foreground">
                   This person will be assigned by default when the workflow runs.
                 </p>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Due Offset */}
             <div className="space-y-2">

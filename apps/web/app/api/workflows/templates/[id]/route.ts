@@ -107,10 +107,32 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     const template = templates[0]
     
-    // Get steps
+    // Get steps with default assignee info
     const steps = await db
-      .select()
+      .select({
+        id: workflowTemplateSteps.id,
+        templateId: workflowTemplateSteps.templateId,
+        parentStepId: workflowTemplateSteps.parentStepId,
+        name: workflowTemplateSteps.name,
+        description: workflowTemplateSteps.description,
+        stepType: workflowTemplateSteps.stepType,
+        orderIndex: workflowTemplateSteps.orderIndex,
+        positionX: workflowTemplateSteps.positionX,
+        positionY: workflowTemplateSteps.positionY,
+        assigneeType: workflowTemplateSteps.assigneeType,
+        assigneeConfig: workflowTemplateSteps.assigneeConfig,
+        defaultAssigneeId: workflowTemplateSteps.defaultAssigneeId,
+        dueOffsetDays: workflowTemplateSteps.dueOffsetDays,
+        dueOffsetFrom: workflowTemplateSteps.dueOffsetFrom,
+        isRequired: workflowTemplateSteps.isRequired,
+        metadata: workflowTemplateSteps.metadata,
+        createdAt: workflowTemplateSteps.createdAt,
+        updatedAt: workflowTemplateSteps.updatedAt,
+        defaultAssigneeName: persons.name,
+        defaultAssigneeEmail: persons.email,
+      })
       .from(workflowTemplateSteps)
+      .leftJoin(persons, eq(workflowTemplateSteps.defaultAssigneeId, persons.id))
       .where(eq(workflowTemplateSteps.templateId, id))
       .orderBy(asc(workflowTemplateSteps.orderIndex))
     
@@ -187,6 +209,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         positionY: step.positionY,
         assigneeType: step.assigneeType,
         assigneeConfig: step.assigneeConfig,
+        defaultAssigneeId: step.defaultAssigneeId ?? undefined,
+        defaultAssignee: step.defaultAssigneeId && step.defaultAssigneeName ? {
+          id: step.defaultAssigneeId,
+          name: step.defaultAssigneeName,
+          email: step.defaultAssigneeEmail ?? "",
+        } : undefined,
         dueOffsetDays: step.dueOffsetDays ?? undefined,
         dueOffsetFrom: step.dueOffsetFrom ?? "workflow_start",
         isRequired: step.isRequired,

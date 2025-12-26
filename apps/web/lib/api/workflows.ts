@@ -53,6 +53,12 @@ export interface WorkflowTemplateStep {
   positionY: number
   assigneeType: "specific_user" | "role" | "dynamic_manager" | "dynamic_creator" | "unassigned"
   assigneeConfig?: Record<string, unknown>
+  defaultAssigneeId?: string
+  defaultAssignee?: {
+    id: string
+    name: string
+    email: string
+  }
   dueOffsetDays?: number
   dueOffsetFrom: string
   isRequired: boolean

@@ -5,85 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1764631349766,
-      "tag": "0000_cheerful_dust",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1764633148959,
-      "tag": "0001_add_people_settings",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1764641493891,
-      "tag": "0002_furry_smasher",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1764700000000,
-      "tag": "0003_add_people_entra_fields",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1764800000000,
-      "tag": "0004_add_audit_logs",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1764900000000,
-      "tag": "0005_add_assets_tables",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1765000000000,
-      "tag": "0006_add_maintenance_assigned_to",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1766621338093,
-      "tag": "0007_even_vector",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1766622698525,
-      "tag": "0008_cultured_misty_knight",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1766700000000,
-      "tag": "0009_add_workflow_tables",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1766800000000,
-      "tag": "0010_add_workflow_tables_v2",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1766900000000,
-      "tag": "0011_add_people_workflow_settings",
+      "when": 1766789375815,
+      "tag": "0000_spicy_queen_noir",
       "breakpoints": true
     }
   ]

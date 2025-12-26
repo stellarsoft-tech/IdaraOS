@@ -335,9 +335,18 @@ export async function POST(request: NextRequest) {
       }
       
       // Resolve assignee based on assignee type
+      // assigneeId = system user ID, assignedPersonId = directory person ID
       let assigneeId: string | null = null
-      if (templateStep.assigneeType === "specific_user" && templateStep.assigneeConfig) {
-        assigneeId = (templateStep.assigneeConfig as { userId?: string }).userId ?? null
+      let assignedPersonId: string | null = null
+      
+      if (templateStep.assigneeType === "specific_user") {
+        // Use defaultAssigneeId if set (person from directory)
+        if (templateStep.defaultAssigneeId) {
+          assignedPersonId = templateStep.defaultAssigneeId
+        } else if (templateStep.assigneeConfig) {
+          // Fallback to assigneeConfig.userId (system user)
+          assigneeId = (templateStep.assigneeConfig as { userId?: string }).userId ?? null
+        }
       } else if (templateStep.assigneeType === "dynamic_creator") {
         assigneeId = session.userId
       }
@@ -354,6 +363,7 @@ export async function POST(request: NextRequest) {
           orderIndex: templateStep.orderIndex,
           status: "pending",
           assigneeId,
+          assignedPersonId,
           dueAt: stepDueAt ?? null,
           metadata: templateStep.metadata,
         })

@@ -141,7 +141,9 @@ function StepNodeComponent({ data, selected }: StepNodeProps) {
       <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/50 rounded-b-[calc(0.5rem-2px)]">
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <AssigneeIcon className="h-3 w-3" />
-          <span>{assigneeConfig.label}</span>
+          <span className="truncate max-w-[120px]">
+            {data.defaultAssignee?.name ?? assigneeConfig.label}
+          </span>
         </div>
         {data.dueOffsetDays !== undefined && data.dueOffsetDays > 0 && (
           <span className="text-xs text-muted-foreground">

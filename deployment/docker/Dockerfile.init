@@ -1,151 +1,69 @@
 # =============================================================================
-# IdaraOS - Database Initialization Dockerfile
+# IdaraOS - Database Initialization Container
 # =============================================================================
-# This Dockerfile is used to run database migrations and seeding
-# It runs once and exits after completion
 #
-# Migration Strategy:
-# - Uses proper Drizzle ORM migrations from apps/web/drizzle/*.sql
-# - Migrations are tracked in drizzle.__drizzle_migrations table
-# - Safe to run multiple times (idempotent)
-# - Supports both fresh installs and upgrades
-# - Handles databases created with db:push (baseline support)
+# WORKFLOW:
+# ---------
+# LOCAL DEV (prototyping):  pnpm db:push (fast, no migrations)
+# LOCAL DEV (testing):      pnpm db:migrate:run
+# CI/CD & PRODUCTION:       This container runs db:migrate:run
 #
-# Best Practices (similar to Entity Framework):
-# 1. Schema changes go in lib/db/schema/*.ts
-# 2. Run `pnpm db:generate` to create migration SQL files
-# 3. Commit the generated migration files to git
-# 4. This init container applies migrations on deployment
+# ADDING SCHEMA CHANGES:
+# ----------------------
+# 1. Edit apps/web/lib/db/schema/*.ts
+# 2. Run: pnpm --filter web db:generate
+# 3. Review generated SQL in apps/web/drizzle/
+# 4. Commit: *.sql + meta/_journal.json + meta/*_snapshot.json
+# 5. Deploy - this container applies migrations automatically
+#
 # =============================================================================
 
 FROM node:22-alpine
 
-# Install pnpm globally
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy package files for dependency installation
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 
-# Install all dependencies (including dev dependencies for drizzle-kit)
 RUN pnpm install --frozen-lockfile
 
-# Copy the application source code
 COPY apps/web ./apps/web
 
-# Set environment
 ENV NODE_ENV=development
 
-# Run migrations and seeding
-CMD ["sh", "-exc", "\
+CMD ["sh", "-c", "\
 echo '=========================================='; \
-echo 'IdaraOS Database Initialization'; \
+echo 'IdaraOS Database Migrations'; \
 echo '=========================================='; \
-echo ''; \
-echo 'DATABASE_URL is set:' $(if [ -n \"$DATABASE_URL\" ]; then echo 'YES'; else echo 'NO'; fi); \
-echo ''; \
 cd /app/apps/web; \
-echo 'Working directory:' $(pwd); \
+\
 echo ''; \
-echo 'Migration files in drizzle/:'; \
-ls -la drizzle/*.sql 2>/dev/null || echo '  No migration files found'; \
+echo '📋 Checking migration status...'; \
+pnpm db:migrate:status 2>/dev/null || echo 'First run - no migrations applied yet'; \
+\
 echo ''; \
-echo 'Migration journal:'; \
-cat drizzle/meta/_journal.json 2>/dev/null | head -30 || echo '  No journal found'; \
-echo ''; \
-echo '=========================================='; \
-echo 'Step 1: Check database state'; \
-echo '=========================================='; \
+echo '📋 Running pending migrations...'; \
+pnpm db:migrate:run; \
 \
-# Check if database has existing tables (was created with db:push) \
-HAS_TABLES=$(node -e \" \
-  const { Pool } = require('pg'); \
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL }); \
-  (async () => { \
-    try { \
-      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'core_organizations') as has_tables\\\"); \
-      console.log(result.rows[0].has_tables ? 'true' : 'false'); \
-    } catch (e) { console.log('false'); } \
-    finally { await pool.end(); } \
-  })(); \
-\" 2>/dev/null || echo 'false'); \
-echo \"Has existing tables: $HAS_TABLES\"; \
-\
-# Check if migrations table exists \
-HAS_MIGRATIONS=$(node -e \" \
-  const { Pool } = require('pg'); \
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL }); \
-  (async () => { \
-    try { \
-      const result = await pool.query(\\\"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations') as has_migrations\\\"); \
-      console.log(result.rows[0].has_migrations ? 'true' : 'false'); \
-    } catch (e) { console.log('false'); } \
-    finally { await pool.end(); } \
-  })(); \
-\" 2>/dev/null || echo 'false'); \
-echo \"Has migrations table: $HAS_MIGRATIONS\"; \
-echo ''; \
-\
-echo '=========================================='; \
-echo 'Step 2: Running database migrations'; \
-echo '=========================================='; \
-\
-# Always run baseline first - it will intelligently check what needs to be baselined \
-# and what needs to be run as actual migrations \
-echo 'Running smart baseline check...'; \
-pnpm db:baseline 2>&1 || echo 'Baseline completed with warnings'; \
-echo ''; \
-\
-# Now run any pending migrations \
-echo 'Running migration runner...'; \
-pnpm db:run-migrations 2>&1; \
-MIGRATION_RESULT=$?; \
-\
-if [ $MIGRATION_RESULT -ne 0 ]; then \
-  echo ''; \
-  echo '⚠️  Migration runner encountered an issue.'; \
-  echo '   Checking migration status...'; \
-  pnpm db:status 2>&1 || true; \
-  echo ''; \
-  echo '   If there are schema changes not in migrations:'; \
-  echo '   1. Run: pnpm db:generate'; \
-  echo '   2. Commit the new migration file'; \
-  echo '   3. Redeploy'; \
-  echo ''; \
-  echo '   Attempting db:push as fallback (dev only)...'; \
-  npx drizzle-kit push --force 2>&1 || true; \
+if [ $? -ne 0 ]; then \
+  echo '❌ Migration failed!'; \
+  exit 1; \
 fi; \
 \
-echo '✅ Database schema is ready'; \
 echo ''; \
+echo '📋 Seeding database...'; \
+pnpm db:seed 2>&1 || true; \
 \
-echo '=========================================='; \
-echo 'Step 3: Seeding database'; \
-echo '=========================================='; \
-pnpm db:seed 2>&1 || echo 'Seed skipped or already applied'; \
 echo ''; \
+echo '📋 Seeding RBAC...'; \
+pnpm db:seed-rbac 2>&1 || true; \
 \
-echo '=========================================='; \
-echo 'Step 4: Seeding RBAC permissions'; \
-echo '=========================================='; \
-pnpm db:seed-rbac 2>&1 || echo 'RBAC seed skipped or already applied'; \
 echo ''; \
-\
 echo '=========================================='; \
-echo '✅ Database initialization complete!'; \
+echo '✅ Database ready!'; \
 echo '=========================================='; \
 echo ''; \
-echo 'Login credentials:'; \
-echo '  Email: admin@example.com'; \
-echo '  Password: Admin123!'; \
-echo '  Role: Owner (full access)'; \
-echo ''; \
-echo 'Migration workflow reminder:'; \
-echo '  1. Make schema changes in lib/db/schema/*.ts'; \
-echo '  2. Run: pnpm db:generate'; \
-echo '  3. Review the generated SQL in drizzle/'; \
-echo '  4. Commit the migration files'; \
-echo '  5. Deploy - migrations run automatically'; \
-echo '=========================================='"]
+echo 'Credentials: admin@example.com / Admin123!'; \
+"]

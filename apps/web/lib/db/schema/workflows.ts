@@ -279,7 +279,7 @@ export const workflowInstanceSteps = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     instanceId: uuid("instance_id").notNull().references(() => workflowInstances.id, { onDelete: "cascade" }),
-    templateStepId: uuid("template_step_id").notNull().references(() => workflowTemplateSteps.id, { onDelete: "restrict" }),
+    templateStepId: uuid("template_step_id").references(() => workflowTemplateSteps.id, { onDelete: "set null" }),
     
     // Hierarchy (copied from template)
     parentStepId: uuid("parent_step_id").references((): AnyPgColumn => workflowInstanceSteps.id, { onDelete: "cascade" }),

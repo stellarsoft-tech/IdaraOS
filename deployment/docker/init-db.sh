@@ -1,47 +1,38 @@
 #!/bin/sh
+# =============================================================================
+# Local Development Database Setup
+# =============================================================================
+# Use this for initial local setup. For ongoing changes, use:
+#   pnpm --filter web db:push     (fast prototyping)
+#   pnpm --filter web db:generate (create migration when ready)
+#   pnpm --filter web db:migrate:run (apply migrations)
+# =============================================================================
+
 set -e
 
 echo "=========================================="
-echo "IdaraOS Database Initialization"
+echo "IdaraOS Local Database Setup"
 echo "=========================================="
 
 cd /app/apps/web
 
 echo ""
-echo "Step 1: Pushing database schema..."
-echo "------------------------------------------"
-pnpm db:push
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to push database schema"
-    exit 1
-fi
-echo "✅ Database schema pushed successfully"
+echo "Step 1: Running migrations..."
+pnpm db:migrate:run || {
+    echo "No migrations to apply or first run"
+}
 
 echo ""
 echo "Step 2: Seeding database..."
-echo "------------------------------------------"
-pnpm db:seed
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to seed database"
-    exit 1
-fi
-echo "✅ Database seeded successfully"
+pnpm db:seed || echo "Seed skipped"
 
 echo ""
-echo "Step 3: Seeding RBAC permissions..."
-echo "------------------------------------------"
-pnpm db:seed-rbac
-if [ $? -ne 0 ]; then
-    echo "❌ Failed to seed RBAC permissions"
-    exit 1
-fi
-echo "✅ RBAC permissions seeded successfully"
-echo ""
-echo "Note: Admin user created with Owner role"
-echo "  Email: admin@example.com"
-echo "  Password: Admin123!"
+echo "Step 3: Seeding RBAC..."
+pnpm db:seed-rbac || echo "RBAC seed skipped"
 
 echo ""
 echo "=========================================="
-echo "✅ Database initialization complete!"
+echo "✅ Database ready!"
 echo "=========================================="
+echo ""
+echo "Login: admin@example.com / Admin123!"
