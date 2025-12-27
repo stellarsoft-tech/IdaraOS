@@ -204,35 +204,45 @@ Individual employee profile view with comprehensive integration information.
 - Warning about manual changes being overwritten
 - Linked user system access status
 
-### Onboarding (`/people/onboarding`) - Placeholder
+### Onboarding (`/people/onboarding`)
 
-New hire workflow management.
+**Status:** Needs Update - Currently uses placeholder data
 
-**Planned Features:**
-- Onboarding checklist templates
-- Task assignment and tracking
-- Progress indicators
-- Automated provisioning triggers
+New hire workflow tracking, now powered by the Workflows module.
 
-### Time Off (`/people/time-off`) - Placeholder
+**Architecture Change (2024-12):**
+- Onboarding is now handled via **Workflows** rather than a custom sub-module
+- When a person's status changes to "onboarding", a workflow instance auto-starts
+- This page should display workflow instances for people in "onboarding" status
+
+**Needs Implementation:**
+- Connect to `/api/workflows/instances?entityType=person&status=onboarding`
+- Show progress from actual workflow instance steps
+- Link to full workflow instance detail page
+- Remove hardcoded seed data
+
+### Time Off (`/people/time-off`) - Deferred
 
 Leave request and calendar management.
 
-**Planned Features:**
-- Leave request submission
-- Approval workflow
-- Calendar view
-- Balance tracking
-- Policy configuration
+**Status:** Placeholder - Not in MVP scope
 
-### HR Roles (`/people/roles`) - Placeholder
+**Future Options:**
+- Third-party integration (BambooHR, Personio, etc.)
+- Custom implementation with leave policies
+- Workflow-based approval system
 
-HR-specific role management.
+### HR Roles (`/people/roles`) - Simplified
 
-**Planned Features:**
-- Job title definitions
-- Reporting structures
-- Compensation bands
+**Status:** Placeholder - Uses seed data
+
+**Current Approach:**
+- Teams and roles are free-text fields on Person records
+- No separate entity management for MVP
+
+**Future Enhancement:**
+- Consider structured Teams table with manager hierarchy
+- Job catalog with levels and bands
 
 ### Audit Log (`/people/audit-log`)
 

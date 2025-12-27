@@ -334,25 +334,25 @@ export default function PeopleOverviewPage() {
             loading={isLoading}
           />
           <QuickLinkCard
-            href="/people/onboarding"
+            href="/people/workflows"
             icon={<UserPlus className="h-4 w-4" />}
-            title="Onboarding"
-            description="New hire checklists and tasks"
+            title="Workflows"
+            description="Onboarding, offboarding & more"
             badge={
-              stats.onboarding > 0 ? (
-                <StatusBadge variant="info">{stats.onboarding} in progress</StatusBadge>
+              (stats.onboarding + stats.offboarding) > 0 ? (
+                <StatusBadge variant="info">{stats.onboarding + stats.offboarding} active</StatusBadge>
               ) : (
-                <span className="text-sm text-muted-foreground">No active onboarding</span>
+                <span className="text-sm text-muted-foreground">No active workflows</span>
               )
             }
             loading={isLoading}
           />
           <QuickLinkCard
-            href="/people/time-off"
+            href="/people/settings"
             icon={<Calendar className="h-4 w-4" />}
-            title="Time Off"
-            description="Leave requests and calendar"
-            badge={<StatusBadge variant="warning">2 pending</StatusBadge>}
+            title="Settings"
+            description="Entra sync & workflow automation"
+            badge={<span className="text-sm text-muted-foreground">Configure</span>}
             loading={isLoading}
           />
         </div>

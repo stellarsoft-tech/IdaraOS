@@ -69,11 +69,7 @@ const navigationData: NavItem[] = [
     items: [
       { title: "Overview", url: "/people", module: "people.overview" },
       { title: "Directory", url: "/people/directory", module: "people.directory" },
-      { title: "Roles & Teams", url: "/people/roles", module: "people.roles" },
-      { title: "Onboarding", url: "/people/onboarding", module: "people.onboarding" },
-      { title: "Offboarding", url: "/people/offboarding", module: "people.offboarding" },
-      { title: "Time Off", url: "/people/time-off", module: "people.timeoff" },
-      { title: "Documents", url: "/people/documents", module: "people.documents" },
+      { title: "Workflows", url: "/people/workflows", module: "people.directory" },
       { title: "Audit Log", url: "/people/audit-log", module: "people.auditlog" },
       { title: "Settings", url: "/people/settings", module: "people.directory" },
     ],

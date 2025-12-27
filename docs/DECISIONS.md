@@ -33,13 +33,13 @@ This document records all frozen architectural and technology decisions for Idar
 
 ### Database & Migrations (Decided)
 - **Database**: PostgreSQL with Row-Level Security (RLS)
-- **Migrations**: Simple SQL files in `migrations/` folder
-  - Timestamp-based naming: `{timestamp}_description.sql`
-  - Run manually or via script
-  - Generated from spec.json via `pnpm generate`
-- **ORM**: None initially (raw SQL for flexibility)
-  - Can add Drizzle or Prisma later if needed
-- **Connection**: Direct PostgreSQL client or pg-pool
+- **ORM**: Drizzle ORM for type-safe queries and migrations
+- **Migrations**: Auto-generated SQL files in `apps/web/drizzle/` folder
+  - Use `pnpm db:generate` to generate migrations from schema changes
+  - Use `pnpm db:migrate:run` to apply migrations
+  - **Never use `db:push` in production** - only for prototyping
+  - See `docs/DATABASE_MIGRATIONS.md` for detailed workflow
+- **Connection**: pg-pool with connection pooling
 
 ### Backend Services (To Be Decided)
 - **Jobs**: BullMQ + Valkey (start) or Temporal (scale later)
@@ -156,6 +156,59 @@ apps/web/app/(dashboard)/<area>/<module>/
 6. **Performance**: LCP < 2.5s, FID < 100ms
 7. **Bundle size**: Monitor, optimize, tree-shake
 
+## Module Architecture Decisions
+
+### People Module (Decided 2024-12)
+
+**Core Sub-modules (Implemented):**
+- Overview Dashboard - Workforce metrics and quick navigation
+- People Directory - Employee listing with Entra ID sync
+- Person Detail - Individual profiles with activity/integration tabs
+- Settings - Entra sync configuration + workflow automation
+- Audit Log - Activity trail for people changes
+
+**Onboarding & Offboarding (Architecture Change):**
+- **Original Plan**: Separate sub-modules with checklists
+- **New Decision**: Handled via **Workflows Module** 
+- Rationale:
+  - Workflows provide more flexibility (custom steps, assignees, due dates)
+  - Single workflow engine serves all modules (people, assets, etc.)
+  - Reduces code duplication
+  - Status changes ("onboarding", "offboarding") auto-trigger workflows
+
+**Implementation:**
+- People Settings has workflow automation toggles
+- When person status → "onboarding", configured workflow auto-starts
+- When person status → "offboarding", configured workflow auto-starts
+- Workflow instances link via `entityType="person"` + `entityId`
+
+**Time Off (Deferred):**
+- Not in MVP scope
+- Placeholder page exists for future implementation
+- Consider third-party integration (BambooHR, etc.) vs custom build
+
+**Roles & Teams (Simplified):**
+- Teams/roles are free-text fields on Person records
+- No separate team/role entity management in MVP
+- Can add structured teams table later if needed
+
+### Workflows Module (Decided 2024-12)
+
+**Core Features (Implemented):**
+- Template Designer - Visual workflow builder with React Flow
+- Template Management - CRUD for workflow templates
+- Instance Management - View/manage running workflows
+- Task Board - Kanban view of assigned tasks
+- My Tasks - Personal task list
+
+**Template → Instance Pattern:**
+- Templates define reusable workflow structures
+- Instances are created when workflows are triggered
+- Steps are copied from template to instance
+- Default assignees from template applied at instance creation
+
+---
+
 ## Change Process
 
 To change any frozen decision:
@@ -167,6 +220,6 @@ To change any frozen decision:
 
 ---
 
-**Last Updated**: 2024-11-29
-**Next Review**: 2025-02-28
+**Last Updated**: 2024-12-28
+**Next Review**: 2025-03-28
 

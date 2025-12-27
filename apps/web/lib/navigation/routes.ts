@@ -31,20 +31,17 @@ export const routes: Record<string, RouteConfig> = {
     label: "Directory",
     parent: "people",
   },
-  "people.onboarding": {
-    path: "/people/onboarding",
-    label: "Onboarding",
+  "people.workflows": {
+    path: "/people/workflows",
+    label: "Workflows",
     parent: "people",
+    description: "Onboarding, offboarding & other people workflows",
   },
-  "people.roles": {
-    path: "/people/roles",
-    label: "Roles",
+  "people.audit-log": {
+    path: "/people/audit-log",
+    label: "Audit Log",
     parent: "people",
-  },
-  "people.time-off": {
-    path: "/people/time-off",
-    label: "Time Off",
-    parent: "people",
+    description: "Activity history for people records",
   },
   "people.settings": {
     path: "/people/settings",
