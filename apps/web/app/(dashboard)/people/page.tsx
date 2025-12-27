@@ -192,20 +192,34 @@ function RecentActivityContent({
     <div className="space-y-4">
       {recentActivity.map((activity) => {
         const isOnboarding = activity.status === "onboarding"
-        const activityTitle = activity.name + (isOnboarding ? " started onboarding" : " joined")
-        const activitySubtitle = activity.team ? activity.role + ", " + String(activity.team) : activity.role
+        const isOffboarding = activity.status === "offboarding"
+        const isInactive = activity.status === "inactive"
+        
+        let activityTitle = `${activity.name} was added`
+        let icon = <UserPlus className="h-4 w-4 text-green-600 dark:text-green-400" />
+        let iconBg = "bg-green-100 dark:bg-green-900/30"
+        
+        if (isOnboarding) {
+          activityTitle = `${activity.name} is onboarding`
+          icon = <UserPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          iconBg = "bg-blue-100 dark:bg-blue-900/30"
+        } else if (isOffboarding) {
+          activityTitle = `${activity.name} is offboarding`
+          icon = <UserCheck className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          iconBg = "bg-amber-100 dark:bg-amber-900/30"
+        } else if (isInactive) {
+          activityTitle = `${activity.name} was deactivated`
+          icon = <UserCheck className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+          iconBg = "bg-gray-100 dark:bg-gray-900/30"
+        }
+        
+        const activitySubtitle = activity.team ? `${activity.role}, ${activity.team}` : activity.role
 
         return (
           <ActivityItem
             key={activity.id}
-            icon={
-              isOnboarding ? (
-                <UserPlus className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              ) : (
-                <UserCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
-              )
-            }
-            iconBg={isOnboarding ? "bg-blue-100 dark:bg-blue-900/30" : "bg-green-100 dark:bg-green-900/30"}
+            icon={icon}
+            iconBg={iconBg}
             title={activityTitle}
             subtitle={activitySubtitle}
             time={activity.timeAgo}
@@ -249,27 +263,42 @@ export default function PeopleOverviewPage() {
     }
   }, [workflowInstances])
 
-  // Get recent activity based on start dates
+  // Get recent activity based on when records were actually created/updated
   const recentActivity = useMemo(() => {
-    const peopleWithDates = people.filter((p): p is typeof p & { startDate: string } => Boolean(p.startDate))
-    const sortedByDate = [...peopleWithDates]
-      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())
-      .slice(0, 3)
+    // Sort by createdAt to show actually recent additions
+    const sortedByCreated = [...people]
+      .filter(p => p.createdAt)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, 5)
 
-    return sortedByDate.map(person => {
-      const startDate = new Date(person.startDate)
+    return sortedByCreated.map(person => {
+      const createdDate = new Date(person.createdAt!)
       const now = new Date()
-      const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+      const diffMs = now.getTime() - createdDate.getTime()
+      const diffMins = Math.floor(diffMs / (1000 * 60))
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
       
       let timeAgo = "Just now"
-      if (diffDays === 1) {
+      if (diffMins < 1) {
+        timeAgo = "Just now"
+      } else if (diffMins < 60) {
+        timeAgo = `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`
+      } else if (diffHours < 24) {
+        timeAgo = `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`
+      } else if (diffDays === 1) {
         timeAgo = "1 day ago"
-      } else if (diffDays > 1 && diffDays < 7) {
-        timeAgo = diffDays + " days ago"
-      } else if (diffDays >= 7 && diffDays < 30) {
-        timeAgo = Math.floor(diffDays / 7) + " weeks ago"
-      } else if (diffDays >= 30) {
-        timeAgo = Math.floor(diffDays / 30) + " months ago"
+      } else if (diffDays < 7) {
+        timeAgo = `${diffDays} days ago`
+      } else if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7)
+        timeAgo = `${weeks} week${weeks === 1 ? "" : "s"} ago`
+      } else if (diffDays < 365) {
+        const months = Math.floor(diffDays / 30)
+        timeAgo = `${months} month${months === 1 ? "" : "s"} ago`
+      } else {
+        const years = Math.floor(diffDays / 365)
+        timeAgo = `${years} year${years === 1 ? "" : "s"} ago`
       }
 
       return {
