@@ -76,8 +76,10 @@ import type { FormConfig, SyncIndicatorType } from "@/components/primitives/form
 // Edit form fields
 const editFields = getFormFields("edit")
 
-// Fields that are synced from Entra ID
-const ENTRA_SYNCED_FIELDS = ["name", "email", "role", "team", "startDate", "hireDate", "location", "phone", "status"]
+// Fields that are synced from Entra ID (must match actual property mapping)
+// See: displayName→name, mail→email, jobTitle→role, department→team, 
+//      officeLocation→location, mobilePhone→phone, employeeHireDate→startDate
+const ENTRA_SYNCED_FIELDS = ["name", "email", "role", "team", "startDate", "location", "phone"]
 
 /**
  * Get form config with sync indicators based on person's sync state
