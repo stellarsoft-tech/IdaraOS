@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Calendar, Clock, UserCheck, UserPlus, Users, Building2 } from "lucide-react"
+import { ArrowRight, Calendar, Clock, UserCheck, UserPlus, Users, Building2, Workflow } from "lucide-react"
 
 import { PageShell } from "@/components/primitives/page-shell"
 import { StatusBadge } from "@/components/status-badge"
@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess } from "@/lib/rbac/context"
 import { usePeopleList } from "@/lib/api/people"
+import { useWorkflowInstancesList } from "@/lib/api/workflows"
 import { useMemo } from "react"
 
 // Quick link card for navigation
@@ -217,7 +218,14 @@ function RecentActivityContent({
 
 export default function PeopleOverviewPage() {
   const canAccess = useCanAccess("people.overview")
-  const { data: people = [], isLoading } = usePeopleList()
+  const { data: people = [], isLoading: isPeopleLoading } = usePeopleList()
+  
+  // Fetch real workflow instances for people
+  const { data: workflowInstances = [], isLoading: isWorkflowsLoading } = useWorkflowInstancesList({
+    entityType: "person",
+  })
+  
+  const isLoading = isPeopleLoading || isWorkflowsLoading
 
   // Calculate stats from real data
   const stats = useMemo(() => {
@@ -229,6 +237,17 @@ export default function PeopleOverviewPage() {
 
     return { total, active, onboarding, offboarding, teams }
   }, [people])
+  
+  // Calculate workflow stats from real workflow instances
+  const workflowStats = useMemo(() => {
+    const activeWorkflows = workflowInstances.filter(
+      w => w.status === "pending" || w.status === "in_progress"
+    )
+    return {
+      active: activeWorkflows.length,
+      total: workflowInstances.length,
+    }
+  }, [workflowInstances])
 
   // Get recent activity based on start dates
   const recentActivity = useMemo(() => {
@@ -335,12 +354,12 @@ export default function PeopleOverviewPage() {
           />
           <QuickLinkCard
             href="/people/workflows"
-            icon={<UserPlus className="h-4 w-4" />}
+            icon={<Workflow className="h-4 w-4" />}
             title="Workflows"
             description="Onboarding, offboarding & more"
             badge={
-              (stats.onboarding + stats.offboarding) > 0 ? (
-                <StatusBadge variant="info">{stats.onboarding + stats.offboarding} active</StatusBadge>
+              workflowStats.active > 0 ? (
+                <StatusBadge variant="info">{workflowStats.active} active</StatusBadge>
               ) : (
                 <span className="text-sm text-muted-foreground">No active workflows</span>
               )
