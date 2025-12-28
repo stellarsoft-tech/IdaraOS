@@ -10,7 +10,7 @@ import { FormDrawer } from "@/components/primitives/form-drawer"
 import { Button } from "@/components/ui/button"
 import { Protected } from "@/components/primitives/protected"
 
-// Generated from spec
+// Shared module types and configs
 import { columns } from "@/lib/generated/security/isms/risk/columns"
 import { formConfig, createFormSchema, getFormFields } from "@/lib/generated/security/isms/risk/form-config"
 import type { Risk, CreateRisk } from "@/lib/generated/security/isms/risk/types"

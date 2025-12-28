@@ -152,6 +152,7 @@ export function FormDrawer<T = Record<string, unknown>>({
             helpText: fieldConfig.helpText,
             type: fieldConfig.type,
             options: fieldConfig.options,
+            loadOptions: fieldConfig.loadOptions, // Include async loader
             disabled: isDisabled,
             syncIndicator: fieldConfig.syncIndicator,
           } as FormFieldDef
@@ -294,6 +295,71 @@ function SyncIndicator({ type }: { type: SyncIndicatorType }) {
 }
 
 /**
+ * Async Select Field Component - loads options and renders a Select dropdown
+ */
+function AsyncSelectField({
+  fieldDef,
+  fieldProps,
+}: {
+  fieldDef: FormFieldDef
+  fieldProps: { value: unknown; onChange: (value: unknown) => void; onBlur: () => void; name: string }
+}) {
+  const [options, setOptions] = React.useState<Array<{ value: string; label: string; sublabel?: string }>>([])
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [hasLoaded, setHasLoaded] = React.useState(false)
+
+  // Load options on mount
+  React.useEffect(() => {
+    if (!fieldDef.loadOptions || hasLoaded) return
+    
+    setIsLoading(true)
+    fieldDef.loadOptions("")
+      .then((opts) => {
+        setOptions(opts)
+        setHasLoaded(true)
+      })
+      .catch((err) => {
+        console.error("Failed to load options:", err)
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
+  }, [fieldDef.loadOptions, hasLoaded])
+
+  const currentValue = fieldProps.value as string | undefined
+
+  return (
+    <Select
+      value={currentValue || ""}
+      onValueChange={(value) => fieldProps.onChange(value || null)}
+      disabled={fieldDef.disabled || isLoading}
+    >
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder={isLoading ? "Loading..." : fieldDef.placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.length === 0 && !isLoading ? (
+          <SelectItem value="__none__" disabled>
+            No options available
+          </SelectItem>
+        ) : (
+          options.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value}>
+              <div className="flex flex-col items-start">
+                <span>{opt.label}</span>
+                {opt.sublabel && (
+                  <span className="text-xs text-muted-foreground">{opt.sublabel}</span>
+                )}
+              </div>
+            </SelectItem>
+          ))
+        )}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/**
  * Render form control based on field definition
  */
 function renderFormControl(
@@ -392,15 +458,10 @@ function renderFormControl(
       )
 
     case "async-select":
-      // TODO: Implement async select with search
       return (
-        <Input
-          placeholder={fieldDef.placeholder || "Search..."}
-          disabled={fieldDef.disabled}
-          name={fieldProps.name}
-          value={(fieldProps.value as string) || ""}
-          onChange={(e) => fieldProps.onChange(e.target.value)}
-          onBlur={fieldProps.onBlur}
+        <AsyncSelectField
+          fieldDef={fieldDef}
+          fieldProps={fieldProps}
         />
       )
 

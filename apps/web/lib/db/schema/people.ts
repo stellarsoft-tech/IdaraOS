@@ -4,6 +4,8 @@
 
 import { pgTable, uuid, text, date, timestamp, index, boolean, type AnyPgColumn } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
+import { teams } from "./teams"
+import { organizationalRoles } from "./org-roles"
 
 /**
  * Person status enum values
@@ -28,8 +30,9 @@ export const persons = pgTable(
     slug: text("slug").notNull().unique(),
     name: text("name").notNull(),
     email: text("email").notNull().unique(),
-    role: text("role").notNull(),
-    team: text("team"),
+    // FK references to entity tables (role and team are linked, not stored as text)
+    roleId: uuid("role_id").references(() => organizationalRoles.id, { onDelete: "set null" }),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
     managerId: uuid("manager_id").references((): AnyPgColumn => persons.id, { onDelete: "set null" }),
     status: text("status", { enum: personStatusValues }).notNull().default("active"),
     startDate: date("start_date").notNull(),
@@ -69,7 +72,8 @@ export const persons = pgTable(
   (table) => [
     index("idx_people_persons_org").on(table.orgId),
     index("idx_people_persons_status").on(table.status),
-    index("idx_people_persons_team").on(table.team),
+    index("idx_people_persons_team_id").on(table.teamId),
+    index("idx_people_persons_role_id").on(table.roleId),
     index("idx_people_persons_slug").on(table.slug),
     index("idx_people_persons_source").on(table.source),
     index("idx_people_persons_entra_id").on(table.entraId),
@@ -85,6 +89,16 @@ export const personsRelations = relations(persons, ({ one }) => ({
     fields: [persons.managerId],
     references: [persons.id],
     relationName: "manager",
+  }),
+  // Team relationship
+  teamEntity: one(teams, {
+    fields: [persons.teamId],
+    references: [teams.id],
+  }),
+  // Organizational role relationship
+  roleEntity: one(organizationalRoles, {
+    fields: [persons.roleId],
+    references: [organizationalRoles.id],
   }),
   // Note: user relation is defined via users.personId -> persons.id
   // This is accessed through a join query, not a direct relation here

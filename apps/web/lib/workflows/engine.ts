@@ -54,7 +54,7 @@ export async function triggerPersonWorkflow(
   }
   
   // Check if auto-workflow is enabled for this status type
-  const triggerType = newStatus === "onboarding" ? "person_onboarding" : "person_offboarding"
+  const triggerType = newStatus === "onboarding" ? "onboarding" : "offboarding"
   let templateId: string | null = null
   
   if (newStatus === "onboarding") {

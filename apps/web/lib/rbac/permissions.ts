@@ -1,6 +1,5 @@
 /**
  * Permission definitions per resource
- * This should match the permissions defined in spec.json files
  */
 
 import type { RoleType, LegacyPermission } from "./types"

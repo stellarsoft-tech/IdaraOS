@@ -54,20 +54,9 @@ This document records all frozen architectural and technology decisions for Idar
 ### Monorepo
 - **Package Manager**: pnpm
 - **Workspace**: pnpm workspaces
-- **Structure**: apps/, specs/, scripts/
+- **Structure**: apps/, scripts/
 
 ## Development Principles
-
-### Spec-First Development
-1. Every module starts with a `spec.json` file
-2. Generators create types, forms, tables, and routes from specs
-3. No manual code until generated code is reviewed
-4. Specs are the single source of truth
-
-### Code Generation
-- **Tool**: Template strings (simple cases) or ts-morph (complex)
-- **Output**: `apps/web/lib/generated/<module>/`
-- **Never edit generated files manually** - edit the spec instead
 
 ### Approved Dependencies Only
 - **No new npm packages** without updating this document
@@ -120,14 +109,15 @@ See `apps/web/package.json` for the approved list. New additions require:
 
 ## File Structure
 
-### Generated Code
+### Shared Module Types
 ```
-apps/web/lib/generated/
-  <module>/
+apps/web/lib/modules/
+  <area>/<entity>/
     types.ts         # Zod schemas + TS types
     columns.tsx      # Table column definitions
     form-config.ts   # Form field configurations
 ```
+Note: Located in `lib/generated/` for legacy reasons. These are manually maintained files, not auto-generated.
 
 ### Primitives
 ```
@@ -187,10 +177,15 @@ apps/web/app/(dashboard)/<area>/<module>/
 - Placeholder page exists for future implementation
 - Consider third-party integration (BambooHR, etc.) vs custom build
 
-**Roles & Teams (Simplified):**
-- Teams/roles are free-text fields on Person records
-- No separate team/role entity management in MVP
-- Can add structured teams table later if needed
+**Teams & Organizational Roles (Implemented 2024-12):**
+- Separate entity tables for Teams and Organizational Roles
+- Hierarchical structures supported (parent-child relationships)
+- Person records link via `teamId` and `roleId` foreign keys
+- Legacy text fields (`team`, `role`) retained for backward compatibility
+- Teams page: Table view with CRUD operations
+- Roles page: Three views (Table, Tree, Org Chart Designer)
+- Org Chart Designer uses React Flow for visual hierarchy editing
+- Entra ID sync maps `department` → Team and `jobTitle` → Role
 
 ### Workflows Module (Decided 2024-12)
 

@@ -12,9 +12,9 @@ graph TB
         OVERVIEW[Overview Dashboard]
         DIR[People Directory]
         DETAIL[Person Detail]
-        ONBOARD[Onboarding]
-        TIMEOFF[Time Off]
-        ROLES[HR Roles]
+        TEAMS[Teams Management]
+        ROLES[Organizational Roles]
+        WORKFLOWS[People Workflows]
         SYNC[Sync Settings]
         AUDIT[Audit Log]
     end
@@ -22,8 +22,9 @@ graph TB
     OVERVIEW --> DIR
     DIR --> DETAIL
     DETAIL --> |linked to| USERS[Settings: Users]
-    ONBOARD --> DIR
-    TIMEOFF --> DIR
+    TEAMS --> |assign to| DIR
+    ROLES --> |assign to| DIR
+    WORKFLOWS --> |triggers on status| DIR
     SYNC --> |configures| DIR
     DIR --> |actions logged to| AUDIT
     
@@ -204,45 +205,87 @@ Individual employee profile view with comprehensive integration information.
 - Warning about manual changes being overwritten
 - Linked user system access status
 
-### Onboarding (`/people/onboarding`)
+### Teams (`/people/teams`)
 
-**Status:** Needs Update - Currently uses placeholder data
+Manage organizational teams with hierarchical structure.
 
-New hire workflow tracking, now powered by the Workflows module.
+**Features:**
+- CRUD operations for teams
+- Hierarchical team structure (parent-child relationships)
+- Team lead assignment (links to Person)
+- Stats cards showing total teams, top-level teams, teams with leads
+- Advanced data table with filtering and sorting
+- Assign teams to people in the Directory
 
-**Architecture Change (2024-12):**
-- Onboarding is now handled via **Workflows** rather than a custom sub-module
-- When a person's status changes to "onboarding", a workflow instance auto-starts
-- This page should display workflow instances for people in "onboarding" status
+**Data Model:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization (multi-tenant) |
+| `name` | VARCHAR | Team name |
+| `description` | TEXT | Optional description |
+| `lead_id` | UUID | FK to persons (team lead) |
+| `parent_team_id` | UUID | FK to self (parent team) |
+| `sort_order` | INT | Display order |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last update time |
 
-**Needs Implementation:**
-- Connect to `/api/workflows/instances?entityType=person&status=onboarding`
-- Show progress from actual workflow instance steps
-- Link to full workflow instance detail page
-- Remove hardcoded seed data
+### Organizational Roles (`/people/roles`)
 
-### Time Off (`/people/time-off`) - Deferred
+Define and manage organizational role hierarchy (not to be confused with RBAC system roles).
 
-Leave request and calendar management.
+**Features:**
+- CRUD operations for organizational roles
+- Three view modes:
+  - **Table View**: Standard data table with filtering
+  - **Tree View**: Collapsible hierarchical display
+  - **Org Chart Designer**: React Flow-based visual designer
+- Role hierarchy (manager-subordinate relationships)
+- Stats cards showing total roles, top-level roles, roles with descriptions
+- Assign roles to people in the Directory
 
-**Status:** Placeholder - Not in MVP scope
+**Data Model:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization (multi-tenant) |
+| `name` | VARCHAR | Role name (e.g., "Senior Engineer") |
+| `description` | TEXT | Role description and responsibilities |
+| `parent_id` | UUID | FK to self (reports to) |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+
+**Entra ID Integration:**
+When bidirectional sync is enabled:
+- `jobTitle` property maps to organizational role
+- `department` property maps to team
+- Changes to role/team in IdaraOS can sync back to Entra ID
+
+### People Workflows (`/people/workflows`)
+
+Unified view of all workflow instances related to people (onboarding, offboarding, etc.).
+
+**Architecture Decision (2024-12):**
+- Onboarding and offboarding are now handled via the **Workflows module**
+- When a person's status changes to "onboarding" or "offboarding", a workflow instance auto-starts (if configured)
+- This page aggregates workflow instances where `entityType = "person"`
+
+**Features:**
+- Stats cards showing active, completed, and cancelled workflows
+- Filterable data table with multi-select filters
+- Filter by workflow type (onboarding, offboarding, manual)
+- Filter by status (pending, in_progress, completed, cancelled)
+- Filter by template and owner
+- Links to full workflow instance details in the Workflows module
+
+### Time Off - Deferred
+
+**Status:** Not in current scope - Removed from navigation
 
 **Future Options:**
 - Third-party integration (BambooHR, Personio, etc.)
 - Custom implementation with leave policies
 - Workflow-based approval system
-
-### HR Roles (`/people/roles`) - Simplified
-
-**Status:** Placeholder - Uses seed data
-
-**Current Approach:**
-- Teams and roles are free-text fields on Person records
-- No separate entity management for MVP
-
-**Future Enhancement:**
-- Consider structured Teams table with manager hierarchy
-- Job catalog with levels and bands
 
 ### Audit Log (`/people/audit-log`)
 
@@ -357,74 +400,74 @@ graph TB
 
 ### Permission Matrix
 
-| Sub-Module | Action | Owner | Admin | HR | User |
-|------------|--------|-------|-------|-----|------|
+| Sub-Module | Action | Owner | Admin | Manager | Member |
+|------------|--------|-------|-------|---------|--------|
 | Overview | View | Yes | Yes | Yes | Yes |
 | Directory | View | Yes | Yes | Yes | Yes |
-| Directory | Create | Yes | Yes | Yes | No |
+| Directory | Create | Yes | Yes | No | No |
 | Directory | Edit | Yes | Yes | Yes | No |
 | Directory | Delete | Yes | Yes | No | No |
-| Person Detail | View | Yes | Yes | Yes | Yes |
-| Person Detail | Edit | Yes | Yes | Yes | No |
-| Onboarding | View | Yes | Yes | Yes | No |
-| Onboarding | Manage | Yes | Yes | Yes | No |
-| Time Off | View | Yes | Yes | Yes | Own |
-| Time Off | Request | Yes | Yes | Yes | Yes |
-| Time Off | Approve | Yes | Yes | Yes | No |
+| Teams | View | Yes | Yes | Yes | No |
+| Teams | Create | Yes | Yes | No | No |
+| Teams | Edit | Yes | Yes | No | No |
+| Teams | Delete | Yes | Yes | No | No |
+| Roles | View | Yes | Yes | Yes | No |
+| Roles | Create | Yes | Yes | No | No |
+| Roles | Edit | Yes | Yes | No | No |
+| Roles | Delete | Yes | Yes | No | No |
+| Workflows | View | Yes | Yes | Yes | Yes |
+| Workflows | Manage | Yes | Yes | Yes | No |
 | Audit Log | View | Yes | Yes | Yes | No |
 | Sync Settings | View | Yes | Yes | Yes | No |
 | Sync Settings | Configure | Yes | Yes | No | No |
-| Sync Settings | Trigger Sync | Yes | Yes | Yes | No |
 
 ### Permission Diagram
 
 ```mermaid
 graph LR
-    subgraph "People Permissions"
+    subgraph "System Roles"
         OWNER[Owner]
         ADMIN[Admin]
-        HR[HR]
-        USER[User]
+        MANAGER[Manager]
+        MEMBER[Member]
     end
     
-    subgraph "Modules"
+    subgraph "People Sub-Modules"
         OVR[Overview]
         DIR[Directory]
-        DET[Detail]
-        ONB[Onboarding]
-        TOF[Time Off]
+        TEAMS[Teams]
+        ROLES[Org Roles]
+        WF[Workflows]
         AUD[Audit Log]
-        SYNC[Sync Settings]
+        SYNC[Settings]
     end
     
     OWNER -->|full access| OVR
     OWNER -->|full access| DIR
-    OWNER -->|full access| DET
-    OWNER -->|full access| ONB
-    OWNER -->|full access| TOF
+    OWNER -->|full access| TEAMS
+    OWNER -->|full access| ROLES
+    OWNER -->|full access| WF
     OWNER -->|view| AUD
     OWNER -->|full access| SYNC
     
     ADMIN -->|full access| OVR
     ADMIN -->|full access| DIR
-    ADMIN -->|full access| DET
-    ADMIN -->|full access| ONB
-    ADMIN -->|full access| TOF
+    ADMIN -->|full access| TEAMS
+    ADMIN -->|full access| ROLES
+    ADMIN -->|full access| WF
     ADMIN -->|view| AUD
     ADMIN -->|full access| SYNC
     
-    HR -->|view, create, edit| OVR
-    HR -->|view, create, edit| DIR
-    HR -->|view, edit| DET
-    HR -->|full access| ONB
-    HR -->|manage| TOF
-    HR -->|view| AUD
-    HR -->|view, trigger| SYNC
+    MANAGER -->|view| OVR
+    MANAGER -->|view, edit| DIR
+    MANAGER -->|view| TEAMS
+    MANAGER -->|view| ROLES
+    MANAGER -->|view, edit| WF
+    MANAGER -->|view| AUD
     
-    USER -->|view| OVR
-    USER -->|view| DIR
-    USER -->|view| DET
-    USER -->|own records| TOF
+    MEMBER -->|view| OVR
+    MEMBER -->|view| DIR
+    MEMBER -->|view| WF
 ```
 
 ---
@@ -591,11 +634,31 @@ sequenceDiagram
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/people` | List all people |
-| POST | `/api/people` | Create person |
-| GET | `/api/people/[id]` | Get person details |
-| PATCH | `/api/people/[id]` | Update person |
-| DELETE | `/api/people/[id]` | Delete person |
+| GET | `/api/people/person` | List all people |
+| POST | `/api/people/person` | Create person |
+| GET | `/api/people/person/[id]` | Get person details |
+| PUT | `/api/people/person/[id]` | Update person |
+| DELETE | `/api/people/person/[id]` | Delete person |
+
+### Teams API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/people/teams` | List all teams |
+| POST | `/api/people/teams` | Create team |
+| GET | `/api/people/teams/[id]` | Get team details |
+| PUT | `/api/people/teams/[id]` | Update team |
+| DELETE | `/api/people/teams/[id]` | Delete team |
+
+### Organizational Roles API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/people/roles` | List all roles |
+| POST | `/api/people/roles` | Create role |
+| GET | `/api/people/roles/[id]` | Get role details |
+| PUT | `/api/people/roles/[id]` | Update role |
+| DELETE | `/api/people/roles/[id]` | Delete role |
 
 ### Request/Response Examples
 
@@ -656,9 +719,11 @@ sequenceDiagram
 
 ### Core Tables
 
-- `people` - Employee records
+- `people_persons` - Employee records
+- `people_teams` - Organizational teams
+- `people_organizational_roles` - Organizational role hierarchy
 
-### People Table Schema
+### People Table Schema (`people_persons`)
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -667,11 +732,15 @@ sequenceDiagram
 | `slug` | VARCHAR | URL-friendly identifier |
 | `name` | VARCHAR | Full name |
 | `email` | VARCHAR | Email address (unique per org) |
-| `role` | VARCHAR | Job title/role |
-| `team` | VARCHAR | Team name |
+| `role` | VARCHAR | Job title/role (legacy text field) |
+| `role_id` | UUID | FK to organizational_roles |
+| `team` | VARCHAR | Team name (legacy text field) |
+| `team_id` | UUID | FK to teams |
+| `manager_id` | UUID | FK to self (reports to) |
 | `status` | ENUM | active, onboarding, offboarding, inactive |
 | `start_date` | DATE | Employment start date |
 | `end_date` | DATE | Employment end date (nullable) |
+| `hire_date` | DATE | Official hire date |
 | `phone` | VARCHAR | Phone number |
 | `location` | VARCHAR | Office location |
 | `avatar` | VARCHAR | Avatar URL |
@@ -685,12 +754,47 @@ sequenceDiagram
 | `created_at` | TIMESTAMP | Record creation time |
 | `updated_at` | TIMESTAMP | Last update time |
 
+### Teams Table Schema (`people_teams`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization (multi-tenant) |
+| `name` | VARCHAR | Team name |
+| `description` | TEXT | Optional description |
+| `lead_id` | UUID | FK to persons (team lead) |
+| `parent_team_id` | UUID | FK to self (parent team) |
+| `sort_order` | INT | Display order |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+
+### Organizational Roles Table Schema (`people_organizational_roles`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization (multi-tenant) |
+| `name` | VARCHAR | Role name |
+| `description` | TEXT | Role description |
+| `parent_id` | UUID | FK to self (reports to) |
+| `created_at` | TIMESTAMP | Record creation time |
+| `updated_at` | TIMESTAMP | Last update time |
+
 ### Relationships
 
 ```mermaid
 erDiagram
     organizations ||--o{ people : has
+    organizations ||--o{ teams : has
+    organizations ||--o{ organizational_roles : has
     people ||--o| users : "linked to"
+    people }o--o| teams : "member of"
+    people }o--o| organizational_roles : "has role"
+    people }o--o| people : "manager"
+    teams }o--o| teams : "parent team"
+    teams }o--o| people : "team lead"
+    organizational_roles }o--o| organizational_roles : "reports to"
+    
     people {
         uuid id PK
         uuid org_id FK
@@ -698,16 +802,32 @@ erDiagram
         string name
         string email
         string role
+        uuid role_id FK
         string team
+        uuid team_id FK
+        uuid manager_id FK
         enum status
         date start_date
-        date end_date
+        date hire_date
         enum source
         string entra_id
-        string entra_group_id
-        string entra_group_name
-        timestamp last_synced_at
         boolean sync_enabled
+    }
+    teams {
+        uuid id PK
+        uuid org_id FK
+        string name
+        text description
+        uuid lead_id FK
+        uuid parent_team_id FK
+        int sort_order
+    }
+    organizational_roles {
+        uuid id PK
+        uuid org_id FK
+        string name
+        text description
+        uuid parent_id FK
     }
     users {
         uuid id PK

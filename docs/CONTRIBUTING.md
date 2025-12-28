@@ -295,11 +295,11 @@ As you add new features:
 
 ## Using AI (Cursor)
 
-Cursor prompts are available in `docs/prompts/`. Use them to assist with:
+Refer to `.cursorrules` for project conventions. Use AI to assist with:
 
-- Planning implementations
-- Generating boilerplate code
-- Reviewing and improving code
+- Planning implementations based on existing module patterns
+- Generating boilerplate code following established conventions
+- Reviewing and improving code quality
 
 ---
 

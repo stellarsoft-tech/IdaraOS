@@ -381,12 +381,8 @@ function mapEntraUserToPerson(
   }
 
   // Apply property mapping
-  if (user.jobTitle && mapping.jobTitle === "role") {
-    person.role = user.jobTitle
-  }
-  if (user.department && mapping.department === "team") {
-    person.team = user.department
-  }
+  // Note: jobTitle and department are no longer synced to text fields
+  // They should be matched to roleId/teamId FKs separately
   if (user.officeLocation && mapping.officeLocation === "location") {
     person.location = user.officeLocation
   }
@@ -433,11 +429,6 @@ function mapEntraUserToPerson(
     if (parsedDate) {
       person.lastPasswordChangeAt = parsedDate
     }
-  }
-
-  // Set default role if not mapped
-  if (!person.role) {
-    person.role = "Employee"
   }
 
   // Set default start date if not available
@@ -540,12 +531,7 @@ export async function performPeopleSync(
             if (personData.name && personData.name !== existing.name) {
               updates.name = personData.name
             }
-            if (personData.role && personData.role !== existing.role) {
-              updates.role = personData.role
-            }
-            if (personData.team && personData.team !== existing.team) {
-              updates.team = personData.team
-            }
+            // Note: role and team text fields removed, use roleId/teamId FKs instead
             if (personData.location && personData.location !== existing.location) {
               updates.location = personData.location
             }
@@ -599,8 +585,6 @@ export async function performPeopleSync(
                 target: persons.email,
                 set: {
                   name: personData.name || sql`${persons.name}`,
-                  role: personData.role || sql`${persons.role}`,
-                  team: personData.team || sql`${persons.team}`,
                   location: personData.location || sql`${persons.location}`,
                   phone: personData.phone || sql`${persons.phone}`,
                   entraCreatedAt: personData.entraCreatedAt || sql`${persons.entraCreatedAt}`,

@@ -79,7 +79,8 @@ const editFields = getFormFields("edit")
 // Fields that are synced from Entra ID (must match actual property mapping)
 // See: displayName→name, mail→email, jobTitle→role, department→team, 
 //      officeLocation→location, mobilePhone→phone, employeeHireDate→startDate
-const ENTRA_SYNCED_FIELDS = ["name", "email", "role", "team", "startDate", "location", "phone"]
+// Note: roleId and teamId are local references, but their derived text values sync
+const ENTRA_SYNCED_FIELDS = ["name", "email", "roleId", "teamId", "startDate", "location", "phone"]
 
 /**
  * Get form config with sync indicators based on person's sync state
@@ -1052,8 +1053,8 @@ export default function PersonDetailPage() {
         defaultValues={{
           name: person.name,
           email: person.email,
-          role: person.role,
-          team: person.team || "",
+          roleId: person.roleId || "",
+          teamId: person.teamId || "",
           status: person.status,
           startDate: person.startDate,
           hireDate: person.hireDate || "",
@@ -1065,11 +1066,12 @@ export default function PersonDetailPage() {
         onSubmit={handleEdit}
         // Disable synced fields ONLY if sync is enabled AND bidirectional sync is disabled
         // Email is always disabled for synced users (email changes don't sync to Entra)
+        // roleId and teamId are local references, but their derived text values sync
         disabledFields={
           isSynced && person.syncEnabled
             ? isBidirectionalSyncEnabled
               ? ["email"] // Only email is disabled when bidirectional sync is enabled
-              : ["name", "email", "role", "team", "startDate", "hireDate", "location", "phone"] // All synced fields disabled
+              : ["name", "email", "roleId", "teamId", "startDate", "hireDate", "location", "phone"] // All synced fields disabled
             : []
         }
         infoBanner={

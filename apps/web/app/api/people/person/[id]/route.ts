@@ -8,12 +8,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { persons, users } from "@/lib/db/schema"
+import { persons, users, organizationalRoles, teams } from "@/lib/db/schema"
 import { UpdatePersonSchema } from "@/lib/generated/people/person/types"
 import { getEntraConfig } from "@/lib/auth/entra-config"
 import { syncPersonToEntra } from "@/lib/auth/entra-sync"
 import { getAuditLogger, requireSession } from "@/lib/api/context"
-import { triggerPersonWorkflow } from "@/lib/workflows/engine"
+import { processWorkflowEvent } from "@/lib/workflows/processor"
 
 // UUID regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -64,12 +64,27 @@ interface SyncInfo {
   syncEnabled: boolean
 }
 
+// Organizational role info type
+interface OrgRoleInfo {
+  id: string
+  name: string
+  level: number
+}
+
+// Team info type (for display)
+interface TeamDisplayInfo {
+  id: string
+  name: string
+}
+
 // Transform DB record to API response
 function toApiResponse(
   record: typeof persons.$inferSelect,
   linkedUser?: LinkedUserInfo | null,
   manager?: ManagerInfo | null,
-  entraRealTimeInfo?: EntraRealTimeInfo | null
+  entraRealTimeInfo?: EntraRealTimeInfo | null,
+  orgRole?: OrgRoleInfo | null,
+  teamInfo?: TeamDisplayInfo | null
 ) {
   // Determine if person has Entra link (either through linked user or direct sync)
   const hasEntraLink = !!record.entraId || linkedUser?.hasEntraLink || false
@@ -89,8 +104,14 @@ function toApiResponse(
     slug: record.slug,
     name: record.name,
     email: record.email,
-    role: record.role,
-    team: record.team ?? undefined,
+    // Role name from linked organizational role
+    role: orgRole?.name ?? null,
+    roleId: record.roleId ?? null,
+    orgRole: orgRole || null,
+    // Team name from linked team
+    team: teamInfo?.name ?? null,
+    teamId: record.teamId ?? null,
+    teamInfo: teamInfo || null,
     managerId: record.managerId,
     manager: manager || null,
     status: record.status,
@@ -248,7 +269,42 @@ export async function GET(request: NextRequest, context: RouteContext) {
       entraRealTimeInfo = await fetchEntraRealTimeInfo(record.entraId)
     }
     
-    return NextResponse.json(toApiResponse(record, linkedUser, manager, entraRealTimeInfo))
+    // Fetch organizational role info if linked
+    let orgRole: OrgRoleInfo | null = null
+    if (record.roleId) {
+      const [roleRecord] = await db
+        .select({
+          id: organizationalRoles.id,
+          name: organizationalRoles.name,
+          level: organizationalRoles.level,
+        })
+        .from(organizationalRoles)
+        .where(eq(organizationalRoles.id, record.roleId))
+        .limit(1)
+      
+      if (roleRecord) {
+        orgRole = roleRecord
+      }
+    }
+    
+    // Fetch team info if linked
+    let teamInfo: TeamDisplayInfo | null = null
+    if (record.teamId) {
+      const [teamRecord] = await db
+        .select({
+          id: teams.id,
+          name: teams.name,
+        })
+        .from(teams)
+        .where(eq(teams.id, record.teamId))
+        .limit(1)
+      
+      if (teamRecord) {
+        teamInfo = teamRecord
+      }
+    }
+    
+    return NextResponse.json(toApiResponse(record, linkedUser, manager, entraRealTimeInfo, orgRole, teamInfo))
   } catch (error) {
     console.error("Error fetching person:", error)
     return NextResponse.json({ error: "Failed to fetch person" }, { status: 500 })
@@ -290,6 +346,36 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     
     const data = parseResult.data
     
+    // Look up role name from roleId if provided (for Entra sync)
+    let roleName: string | null | undefined = undefined
+    if (data.roleId !== undefined) {
+      if (data.roleId) {
+        const [role] = await db
+          .select({ name: organizationalRoles.name })
+          .from(organizationalRoles)
+          .where(eq(organizationalRoles.id, data.roleId))
+          .limit(1)
+        roleName = role?.name ?? null
+      } else {
+        roleName = null // Clearing the roleId
+      }
+    }
+    
+    // Look up team name from teamId if provided (for Entra sync)
+    let teamName: string | null | undefined = undefined
+    if (data.teamId !== undefined) {
+      if (data.teamId) {
+        const [team] = await db
+          .select({ name: teams.name })
+          .from(teams)
+          .where(eq(teams.id, data.teamId))
+          .limit(1)
+        teamName = team?.name ?? null
+      } else {
+        teamName = null // Clearing the teamId
+      }
+    }
+    
     // Fields that are managed by sync and should not be updated when syncEnabled
     // UNLESS bidirectional sync is enabled
     const syncManagedFields = ["name", "email", "role", "team", "location", "phone", "startDate"]
@@ -310,8 +396,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       if (data.email !== undefined && !existing.syncEnabled) {
         updateData.email = data.email
       }
-      if (data.role !== undefined) updateData.role = data.role
-      if (data.team !== undefined) updateData.team = data.team || null
+      // Update role and team references
+      if (data.roleId !== undefined) {
+        updateData.roleId = data.roleId || null
+      }
+      if (data.teamId !== undefined) {
+        updateData.teamId = data.teamId || null
+      }
       if (data.status !== undefined) updateData.status = data.status
       if (data.startDate !== undefined) updateData.startDate = data.startDate
       if (data.hireDate !== undefined) updateData.hireDate = data.hireDate || null
@@ -324,6 +415,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       if (data.status !== undefined) updateData.status = data.status
       if (data.endDate !== undefined) updateData.endDate = data.endDate || null
       if (data.bio !== undefined) updateData.bio = data.bio || null
+      // roleId and teamId can be updated (they're local references)
+      if (data.roleId !== undefined) {
+        updateData.roleId = data.roleId || null
+      }
+      if (data.teamId !== undefined) {
+        updateData.teamId = data.teamId || null
+      }
       
       // Warn if trying to update sync-managed fields
       const attemptedSyncFields = syncManagedFields.filter(
@@ -379,8 +477,42 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
     
+    // Fetch orgRole and teamInfo for response
+    let orgRole: OrgRoleInfo | null = null
+    const effectiveRoleId = updateData.roleId !== undefined ? updateData.roleId : existing.roleId
+    if (effectiveRoleId) {
+      const [roleRecord] = await db
+        .select({
+          id: organizationalRoles.id,
+          name: organizationalRoles.name,
+          level: organizationalRoles.level,
+        })
+        .from(organizationalRoles)
+        .where(eq(organizationalRoles.id, effectiveRoleId))
+        .limit(1)
+      if (roleRecord) {
+        orgRole = roleRecord
+      }
+    }
+    
+    let teamInfoResult: TeamDisplayInfo | null = null
+    const effectiveTeamId = updateData.teamId !== undefined ? updateData.teamId : existing.teamId
+    if (effectiveTeamId) {
+      const [teamRecord] = await db
+        .select({
+          id: teams.id,
+          name: teams.name,
+        })
+        .from(teams)
+        .where(eq(teams.id, effectiveTeamId))
+        .limit(1)
+      if (teamRecord) {
+        teamInfoResult = teamRecord
+      }
+    }
+    
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json(toApiResponse(existing, linkedUser, manager))
+      return NextResponse.json(toApiResponse(existing, linkedUser, manager, null, orgRole, teamInfoResult))
     }
     
     updateData.updatedAt = new Date()
@@ -402,8 +534,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         {
           name: existing.name,
           email: existing.email,
-          role: existing.role,
-          team: existing.team,
+          roleId: existing.roleId,
+          teamId: existing.teamId,
           status: existing.status,
           startDate: existing.startDate,
           hireDate: existing.hireDate,
@@ -415,8 +547,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         {
           name: record.name,
           email: record.email,
-          role: record.role,
-          team: record.team,
+          roleId: record.roleId,
+          teamId: record.teamId,
           status: record.status,
           startDate: record.startDate,
           hireDate: record.hireDate,
@@ -434,8 +566,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         const entraUpdates: Record<string, string | undefined> = {}
         
         if (data.name !== undefined) entraUpdates.displayName = data.name
-        if (data.role !== undefined) entraUpdates.jobTitle = data.role
-        if (data.team !== undefined) entraUpdates.department = data.team
+        // Use looked-up role name for Entra jobTitle (derived from roleId)
+        if (roleName !== undefined) entraUpdates.jobTitle = roleName ?? undefined
+        // Use looked-up team name for Entra department (derived from teamId)
+        if (teamName !== undefined) entraUpdates.department = teamName ?? undefined
         if (data.location !== undefined) entraUpdates.officeLocation = data.location
         if (data.phone !== undefined) entraUpdates.mobilePhone = data.phone
         if (data.hireDate !== undefined) entraUpdates.employeeHireDate = data.hireDate
@@ -459,37 +593,38 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
     
-    // Trigger workflow if status changed to onboarding or offboarding
+    // Trigger workflow via central processor if status changed
     if (data.status && data.status !== existing.status) {
-      if (data.status === "onboarding" || data.status === "offboarding") {
+      try {
+        // Get session for the user who made the change
+        let triggeredByUserId: string | undefined
         try {
-          // Get session for the user who made the change
-          let changedById: string | undefined
-          try {
-            const session = await requireSession()
-            changedById = session.userId
-          } catch {
-            // If no session, workflow will be created without a startedBy
-          }
-          
-          const workflowResult = await triggerPersonWorkflow({
-            personId: record.id,
-            orgId: record.orgId,
-            newStatus: data.status,
-            changedById,
-          })
-          
-          if (workflowResult?.triggered) {
-            console.log(`[People API] Triggered ${data.status} workflow for ${record.email}`)
-          }
-        } catch (workflowError) {
-          console.error("[People API] Error triggering workflow:", workflowError)
-          // Don't fail the request, just log the error
+          const session = await requireSession()
+          triggeredByUserId = session.userId
+        } catch {
+          // If no session, workflow will be created without a startedBy
         }
+        
+        const workflowResult = await processWorkflowEvent({
+          type: "person.status_changed",
+          personId: record.id,
+          personName: record.name,
+          previousStatus: existing.status,
+          newStatus: data.status,
+          orgId: record.orgId,
+          triggeredByUserId,
+        })
+        
+        if (workflowResult.workflowsTriggered.length > 0) {
+          console.log(`[People API] Triggered ${workflowResult.workflowsTriggered.length} workflow(s) for ${record.email}`)
+        }
+      } catch (workflowError) {
+        console.error("[People API] Error triggering workflow:", workflowError)
+        // Don't fail the request, just log the error
       }
     }
     
-    return NextResponse.json(toApiResponse(record, linkedUser, manager))
+    return NextResponse.json(toApiResponse(record, linkedUser, manager, null, orgRole, teamInfoResult))
   } catch (error) {
     console.error("Error updating person:", error)
     return NextResponse.json({ error: "Failed to update person" }, { status: 500 })
@@ -526,8 +661,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         id: existing.id,
         name: existing.name,
         email: existing.email,
-        role: existing.role,
-        team: existing.team,
+        roleId: existing.roleId,
+        teamId: existing.teamId,
         status: existing.status,
       })
     }

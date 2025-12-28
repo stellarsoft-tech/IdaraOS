@@ -300,7 +300,6 @@ export async function POST(_request: NextRequest) {
                   slug: device.userPrincipalName.split("@")[0].toLowerCase(),
                   name: device.userDisplayName || device.userPrincipalName.split("@")[0],
                   email: device.userPrincipalName,
-                  role: "Employee",
                   status: "active",
                   source: "sync",
                   startDate: new Date().toISOString().split("T")[0], // Required field - use current date

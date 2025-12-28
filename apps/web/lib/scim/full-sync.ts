@@ -585,12 +585,7 @@ async function getOrCreatePerson(
       
       if (name !== existingPerson.name) updates.name = name
       if (email !== existingPerson.email) updates.email = email
-      if (entraUser.jobTitle && entraUser.jobTitle !== existingPerson.role) {
-        updates.role = entraUser.jobTitle
-      }
-      if (entraUser.department && entraUser.department !== existingPerson.team) {
-        updates.team = entraUser.department
-      }
+      // Note: role and team text fields removed, use roleId/teamId FKs instead
       if (entraUser.officeLocation && entraUser.officeLocation !== existingPerson.location) {
         updates.location = entraUser.officeLocation
       }
@@ -686,8 +681,6 @@ async function getOrCreatePerson(
         slug,
         name,
         email: email.toLowerCase(), // Normalize email to lowercase
-        role: entraUser.jobTitle || "Employee",
-        team: entraUser.department || null,
         location: entraUser.officeLocation || null,
         phone: entraUser.mobilePhone || null,
         status: "active",
@@ -709,8 +702,6 @@ async function getOrCreatePerson(
         target: persons.email,
         set: {
           name,
-          role: entraUser.jobTitle || sql`${persons.role}`,
-          team: entraUser.department || sql`${persons.team}`,
           location: entraUser.officeLocation || sql`${persons.location}`,
           phone: entraUser.mobilePhone || sql`${persons.phone}`,
           source: "sync",

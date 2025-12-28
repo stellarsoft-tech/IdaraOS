@@ -58,7 +58,9 @@ const SYSTEM_ROLES: Record<string, {
       // People & HR - Full access
       "people.overview": { view: true, create: true, edit: true, delete: true },
       "people.directory": { view: true, create: true, edit: true, delete: true },
+      "people.teams": { view: true, create: true, edit: true, delete: true },
       "people.roles": { view: true, create: true, edit: true, delete: true },
+      "people.workflows": { view: true, create: true, edit: true, delete: true },
       "people.onboarding": { view: true, create: true, edit: true, delete: true },
       "people.offboarding": { view: true, create: true, edit: true, delete: true },
       "people.timeoff": { view: true, create: true, edit: true, delete: true },
@@ -101,7 +103,9 @@ const SYSTEM_ROLES: Record<string, {
       // People & HR - View and manage team
       "people.overview": { view: true, create: false, edit: false, delete: false },
       "people.directory": { view: true, create: false, edit: true, delete: false },
-      "people.roles": { view: true, create: false, edit: true, delete: false },
+      "people.teams": { view: true, create: false, edit: false, delete: false },
+      "people.roles": { view: true, create: false, edit: false, delete: false },
+      "people.workflows": { view: true, create: false, edit: true, delete: false },
       "people.onboarding": { view: true, create: true, edit: true, delete: false },
       "people.offboarding": { view: true, create: true, edit: true, delete: false },
       "people.timeoff": { view: true, create: true, edit: true, delete: false },

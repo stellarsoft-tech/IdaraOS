@@ -1,6 +1,5 @@
 /**
- * AUTO-GENERATED from specs/modules/people/person/spec.json
- * DO NOT EDIT MANUALLY
+ * Column definitions for People/Person entity
  */
 
 "use client"

@@ -43,6 +43,9 @@ export interface Person extends BasePerson, SyncInfo {
   // Manager info
   managerId: string | null
   manager: ManagerInfo | null
+  // FK references to entity tables
+  roleId: string | null
+  teamId: string | null
   // Entra fields (stored in DB, but fetched real-time when Entra enabled)
   entraCreatedAt: string | null
   hireDate: string | null

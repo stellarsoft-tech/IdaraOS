@@ -12,6 +12,7 @@ import {
   Eye,
   Layers,
   User,
+  PlayCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -49,6 +50,7 @@ import { AccessDenied } from "@/components/primitives/protected"
 import { useCanAccess } from "@/lib/rbac/context"
 import { 
   EditTemplateDialog,
+  CreateInstanceDialog,
   moduleScopeOptions,
   triggerTypeOptions,
   type EditTemplateFormData,
@@ -73,9 +75,10 @@ interface TemplateCardProps {
   onEdit: (template: WorkflowTemplate) => void
   onDelete: (template: WorkflowTemplate) => void
   onArchive: (template: WorkflowTemplate) => void
+  onCreateInstance: (template: WorkflowTemplate) => void
 }
 
-function TemplateCard({ template, onEdit, onDelete, onArchive }: TemplateCardProps) {
+function TemplateCard({ template, onEdit, onDelete, onArchive, onCreateInstance }: TemplateCardProps) {
   const router = useRouter()
   
   return (
@@ -105,6 +108,13 @@ function TemplateCard({ template, onEdit, onDelete, onArchive }: TemplateCardPro
                 <Eye className="h-4 w-4 mr-2" />
                 View
               </DropdownMenuItem>
+              {template.status === "active" && (
+                <DropdownMenuItem onClick={() => onCreateInstance(template)}>
+                  <PlayCircle className="h-4 w-4 mr-2" />
+                  Create Instance
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => router.push(`/workflows/templates/${template.id}/designer`)}>
                 <Pencil className="h-4 w-4 mr-2" />
                 Edit Designer
@@ -173,6 +183,7 @@ export default function WorkflowTemplatesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<WorkflowTemplate | null>(null)
   const [deletingTemplate, setDeletingTemplate] = useState<WorkflowTemplate | null>(null)
+  const [creatingInstanceFrom, setCreatingInstanceFrom] = useState<WorkflowTemplate | null>(null)
   
   // Form state
   const [formData, setFormData] = useState<{
@@ -396,6 +407,7 @@ export default function WorkflowTemplatesPage() {
               onEdit={handleEdit}
               onDelete={setDeletingTemplate}
               onArchive={handleArchive}
+              onCreateInstance={setCreatingInstanceFrom}
             />
           ))}
         </div>
@@ -523,6 +535,19 @@ export default function WorkflowTemplatesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Create Instance Dialog */}
+      {creatingInstanceFrom && (
+        <CreateInstanceDialog
+          open={!!creatingInstanceFrom}
+          onOpenChange={(open) => !open && setCreatingInstanceFrom(null)}
+          template={creatingInstanceFrom}
+          onSuccess={(instanceId) => {
+            setCreatingInstanceFrom(null)
+            router.push(`/workflows/instances/${instanceId}`)
+          }}
+        />
+      )}
     </PageShell>
   )
 }

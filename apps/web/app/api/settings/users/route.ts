@@ -25,8 +25,8 @@ interface PersonInfo {
   id: string
   name: string
   slug: string
-  role: string
-  team: string | null
+  roleId: string | null
+  teamId: string | null
 }
 
 // Transform DB record to API response
@@ -104,8 +104,8 @@ export async function GET(request: NextRequest) {
             id: persons.id,
             name: persons.name,
             slug: persons.slug,
-            role: persons.role,
-            team: persons.team,
+            roleId: persons.roleId,
+            teamId: persons.teamId,
           })
           .from(persons)
       : []

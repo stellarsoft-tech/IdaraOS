@@ -16,19 +16,60 @@ const statusOptions = [
 ]
 
 /**
- * Team options for the form
+ * Load teams from API for async select
  */
-const teamOptions = [
-  { value: "Executive", label: "Executive" },
-  { value: "Engineering", label: "Engineering" },
-  { value: "Security", label: "Security" },
-  { value: "People", label: "People" },
-  { value: "Finance", label: "Finance" },
-  { value: "Operations", label: "Operations" },
-]
+async function loadTeamOptions(_search: string) {
+  try {
+    const res = await fetch("/api/people/teams")
+    if (!res.ok) return []
+    const teams = await res.json()
+    return teams.map((t: { id: string; name: string; parentTeam?: { name: string } }) => ({
+      value: t.id,
+      label: t.name,
+      sublabel: t.parentTeam?.name ? `Under ${t.parentTeam.name}` : undefined,
+    }))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Load organizational roles from API for async select
+ * Includes Level and Parent info in sublabel
+ */
+async function loadRoleOptions(_search: string) {
+  try {
+    const res = await fetch("/api/people/roles")
+    if (!res.ok) return []
+    const roles = await res.json()
+    return roles.map((r: { 
+      id: string
+      name: string
+      level: number
+      parentRole?: { name: string } | null
+    }) => {
+      // Build sublabel with level and parent
+      const parts: string[] = []
+      if (r.level !== undefined) {
+        parts.push(`L${r.level}`)
+      }
+      if (r.parentRole) {
+        parts.push(`Reports to ${r.parentRole.name}`)
+      }
+      return {
+        value: r.id,
+        label: r.name,
+        sublabel: parts.length > 0 ? parts.join(" · ") : undefined,
+      }
+    })
+  } catch {
+    return []
+  }
+}
 
 /**
  * Form configuration for Person entity
+ * Note: roleId and teamId are dropdowns - text values are derived for Entra sync
  */
 export const formConfig: FormConfig = {
   name: {
@@ -45,18 +86,17 @@ export const formConfig: FormConfig = {
     required: true,
     type: "email",
   },
-  role: {
-    component: "input",
+  roleId: {
+    component: "async-select",
     label: "Role",
-    placeholder: "e.g. Software Engineer",
-    required: true,
-    type: "text",
+    placeholder: "Select role...",
+    loadOptions: loadRoleOptions,
   },
-  team: {
-    component: "select",
+  teamId: {
+    component: "async-select",
     label: "Team",
-    placeholder: "Select a team",
-    options: teamOptions,
+    placeholder: "Select team...",
+    loadOptions: loadTeamOptions,
   },
   status: {
     component: "select",
@@ -64,6 +104,7 @@ export const formConfig: FormConfig = {
     placeholder: "Select status",
     options: statusOptions,
     required: true,
+    helpText: "Setting to 'Onboarding' or 'Offboarding' may trigger associated workflows",
   },
   startDate: {
     component: "date-picker",
@@ -102,25 +143,29 @@ export const formConfig: FormConfig = {
 
 /**
  * Create form schema
+ * Note: roleId is required - text "role" field is derived from selected role name for Entra sync
  */
 export const createFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   email: z.string().email("Invalid email address"),
-  role: z.string().min(1, "Role is required").max(100, "Role too long"),
-  team: z.string().optional(),
+  roleId: z.string().uuid("Job title is required"),
+  teamId: z.string().uuid().optional().nullable(),
+  status: z.enum(["active", "onboarding", "offboarding", "inactive"]).default("onboarding"),
   startDate: z.string().min(1, "Start date is required"),
+  hireDate: z.string().optional(),
   phone: z.string().optional(),
   location: z.string().optional(),
 })
 
 /**
  * Edit form schema
+ * Note: roleId is required - text "role" field is derived from selected role name for Entra sync
  */
 export const editFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   email: z.string().email("Invalid email address"),
-  role: z.string().min(1, "Role is required").max(100, "Role too long"),
-  team: z.string().optional(),
+  roleId: z.string().uuid("Job title is required"),
+  teamId: z.string().uuid().optional().nullable(),
   status: z.enum(["active", "onboarding", "offboarding", "inactive"]),
   startDate: z.string().min(1, "Start date is required"),
   hireDate: z.string().optional(),
@@ -132,10 +177,11 @@ export const editFormSchema = z.object({
 
 /**
  * Get form fields based on mode
+ * roleId (Job Title) and teamId are the primary fields - text values derived for Entra sync
  */
 export function getFormFields(mode: "create" | "edit"): string[] {
   if (mode === "create") {
-    return ["name", "email", "role", "team", "startDate", "hireDate", "phone", "location"]
+    return ["name", "email", "roleId", "teamId", "status", "startDate", "hireDate", "phone", "location"]
   }
-  return ["name", "email", "role", "team", "status", "startDate", "hireDate", "endDate", "phone", "location", "bio"]
+  return ["name", "email", "roleId", "teamId", "status", "startDate", "hireDate", "endDate", "phone", "location", "bio"]
 }

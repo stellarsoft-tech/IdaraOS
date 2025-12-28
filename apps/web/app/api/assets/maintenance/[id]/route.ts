@@ -10,6 +10,7 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assetMaintenanceRecords, assets, users, persons, assetLifecycleEvents } from "@/lib/db/schema"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { processWorkflowEvent } from "@/lib/workflows/processor"
 import { z } from "zod"
 
 // Update maintenance schema
@@ -252,6 +253,16 @@ export async function PATCH(
             },
             performedById: session.userId,
           })
+          
+          // Trigger workflow event for maintenance started
+          await processWorkflowEvent({
+            type: "asset.maintenance_started",
+            assetId: oldRecord.assetId,
+            assetName: asset[0].name,
+            maintenanceId: id,
+            orgId,
+            triggeredByUserId: session.userId,
+          }).catch(err => console.error("[Maintenance API] Error triggering workflow:", err))
         }
       }
       
@@ -277,6 +288,19 @@ export async function PATCH(
               .where(eq(assets.id, oldRecord.assetId))
           }
         }
+        
+        // Get asset info for workflow event
+        const assetForEvent = await db.select().from(assets).where(eq(assets.id, oldRecord.assetId)).limit(1)
+        
+        // Trigger workflow event for maintenance completed
+        await processWorkflowEvent({
+          type: "asset.maintenance_completed",
+          assetId: oldRecord.assetId,
+          assetName: assetForEvent[0]?.name ?? "Unknown",
+          maintenanceId: id,
+          orgId,
+          triggeredByUserId: session.userId,
+        }).catch(err => console.error("[Maintenance API] Error triggering workflow:", err))
       }
     }
     

@@ -31,6 +31,18 @@ export const routes: Record<string, RouteConfig> = {
     label: "Directory",
     parent: "people",
   },
+  "people.teams": {
+    path: "/people/teams",
+    label: "Teams",
+    parent: "people",
+    description: "Manage organizational teams",
+  },
+  "people.roles": {
+    path: "/people/roles",
+    label: "Roles",
+    parent: "people",
+    description: "Define organizational role hierarchy",
+  },
   "people.workflows": {
     path: "/people/workflows",
     label: "Workflows",

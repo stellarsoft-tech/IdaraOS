@@ -8,4 +8,6 @@ export * from "./step-status-badge"
 export * from "./workflow-kanban"
 export * from "./workflow-task-list"
 export * from "./edit-template-dialog"
+export * from "./create-instance-dialog"
+export * from "./workflow-instances-table"
 

@@ -128,6 +128,7 @@ function DataTableColumnHeader<TData, TValue>({
   enableFiltering,
   data,
   filterType,
+  filterOptions,
 }: {
   column: Column<TData, TValue>
   title: string
@@ -135,32 +136,62 @@ function DataTableColumnHeader<TData, TValue>({
   enableFiltering?: boolean
   data?: TData[]
   filterType?: "text" | "enum" | "date" | "number"
+  filterOptions?: Array<{ label: string; value: string }>
 }) {
   const [isHovered, setIsHovered] = React.useState(false)
   const sortedState = column.getIsSorted()
   const isFiltered = column.getIsFiltered()
   
-  // Extract unique values from dataset for enum filters
+  // Use provided options or extract unique values from dataset for enum filters
   const uniqueValues = React.useMemo(() => {
-    if (!data || filterType !== "enum") return []
+    if (filterType !== "enum") return []
+    
+    // If options are explicitly provided, use them with count from data
+    if (filterOptions && filterOptions.length > 0) {
+      // Count occurrences for each option from the data
+      const counts = new Map<string, number>()
+      if (data) {
+        data.forEach((row) => {
+          // Try to get value using column accessor
+          const cellValue = column.accessorFn 
+            ? (column.accessorFn as (row: TData) => unknown)(row)
+            : (row as Record<string, unknown>)[column.id]
+          if (cellValue !== null && cellValue !== undefined) {
+            const key = String(cellValue)
+            counts.set(key, (counts.get(key) || 0) + 1)
+          }
+        })
+      }
+      return filterOptions.map(opt => ({
+        label: opt.label,
+        value: opt.value,
+        count: counts.get(opt.value) || 0,
+      }))
+    }
+    
+    // Auto-detect from data
+    if (!data) return []
     
     const values = new Map<string, number>()
     data.forEach((row) => {
-      const value = (row as Record<string, unknown>)[column.id]
-      if (value !== null && value !== undefined) {
-        const key = String(value)
+      // Try to get value using column accessor
+      const cellValue = column.accessorFn 
+        ? (column.accessorFn as (row: TData) => unknown)(row)
+        : (row as Record<string, unknown>)[column.id]
+      if (cellValue !== null && cellValue !== undefined) {
+        const key = String(cellValue)
         values.set(key, (values.get(key) || 0) + 1)
       }
     })
     
     return Array.from(values.entries())
       .map(([value, count]) => ({
-        label: value.charAt(0).toUpperCase() + value.slice(1),
+        label: value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, ' '),
         value,
         count,
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
-  }, [data, column.id, filterType])
+  }, [data, column, filterType, filterOptions])
   
   // Handle sort cycling: none → asc → desc → none
   const handleSort = () => {
@@ -623,6 +654,7 @@ export function DataTable<TData>({
                 enableFiltering={enableColumnFilters}
                 data={data}
                 filterType={filterType}
+                filterOptions={facetConfig?.options}
               />
             )
           },

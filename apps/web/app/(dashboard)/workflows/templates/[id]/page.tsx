@@ -39,6 +39,7 @@ import { useBreadcrumbLabel } from "@/components/breadcrumb-context"
 import { 
   WorkflowDesigner, 
   EditTemplateDialog,
+  CreateInstanceDialog,
   moduleScopeOptions,
   triggerTypeOptions,
   type EditTemplateFormData,
@@ -67,6 +68,7 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
   
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showCreateInstanceDialog, setShowCreateInstanceDialog] = useState(false)
   
   // Queries
   const { data: template, isLoading, error } = useWorkflowTemplateDetail(id)
@@ -218,6 +220,12 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
       }
       action={
         <div className="flex items-center gap-2">
+          {template.status === "active" && (
+            <Button onClick={() => setShowCreateInstanceDialog(true)}>
+              <PlayCircle className="h-4 w-4 mr-2" />
+              Create Instance
+            </Button>
+          )}
           {template.status === "draft" && (
             <Button onClick={handleActivate} disabled={updateMutation.isPending}>
               <PlayCircle className="h-4 w-4 mr-2" />
@@ -306,6 +314,17 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
               <CardTitle className="text-base">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              {template.status === "active" && (
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => setShowCreateInstanceDialog(true)}
+                >
+                  <PlayCircle className="h-4 w-4 mr-2" />
+                  Create Instance
+                </Button>
+              )}
+              
               <Button 
                 variant="outline" 
                 className="w-full justify-start"
@@ -464,6 +483,17 @@ export default function WorkflowTemplateDetailPage({ params }: PageProps) {
         onSave={handleEditSave}
         isSaving={updateMutation.isPending}
         people={people}
+      />
+      
+      {/* Create Instance Dialog */}
+      <CreateInstanceDialog
+        open={showCreateInstanceDialog}
+        onOpenChange={setShowCreateInstanceDialog}
+        template={template}
+        onSuccess={(instanceId) => {
+          setShowCreateInstanceDialog(false)
+          router.push(`/workflows/instances/${instanceId}`)
+        }}
       />
     </PageShell>
   )

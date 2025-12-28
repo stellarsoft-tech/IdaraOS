@@ -7,9 +7,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, ilike, or, and, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { persons, users } from "@/lib/db/schema"
+import { persons, users, organizationalRoles, teams } from "@/lib/db/schema"
 import { CreatePersonSchema } from "@/lib/generated/people/person/types"
-import { requireOrgId, getAuditLogger } from "@/lib/api/context"
+import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { processWorkflowEvent } from "@/lib/workflows/processor"
 
 // Generate slug from name
 function slugify(name: string): string {
@@ -49,10 +50,25 @@ interface SyncInfo {
 }
 
 // Transform DB record to API response
+// Organizational role info type
+interface OrgRoleInfo {
+  id: string
+  name: string
+  level: number
+}
+
+// Team info type (for display)
+interface TeamDisplayInfo {
+  id: string
+  name: string
+}
+
 function toApiResponse(
   record: typeof persons.$inferSelect,
   linkedUser?: LinkedUserInfo | null,
-  manager?: ManagerInfo | null
+  manager?: ManagerInfo | null,
+  orgRole?: OrgRoleInfo | null,
+  teamInfo?: TeamDisplayInfo | null
 ) {
   // Determine if person has Entra link (either through linked user or direct sync)
   const hasEntraLink = !!record.entraId || linkedUser?.hasEntraLink || false
@@ -72,8 +88,14 @@ function toApiResponse(
     slug: record.slug,
     name: record.name,
     email: record.email,
-    role: record.role,
-    team: record.team ?? undefined,
+    // Role name from linked organizational role
+    role: orgRole?.name ?? null,
+    roleId: record.roleId ?? null,
+    orgRole: orgRole || null, // Full org role info
+    // Team name from linked team
+    team: teamInfo?.name ?? null,
+    teamId: record.teamId ?? null,
+    teamInfo: teamInfo || null, // Full team info
     managerId: record.managerId,
     manager: manager || null,
     status: record.status,
@@ -119,8 +141,7 @@ export async function GET(request: NextRequest) {
     if (search) {
       const searchCondition = or(
         ilike(persons.name, `%${search}%`),
-        ilike(persons.email, `%${search}%`),
-        ilike(persons.role, `%${search}%`)
+        ilike(persons.email, `%${search}%`)
       )
       if (searchCondition) {
         conditions.push(searchCondition)
@@ -132,10 +153,7 @@ export async function GET(request: NextRequest) {
       conditions.push(inArray(persons.status, statuses as any))
     }
     
-    if (team) {
-      const teams = team.split(",")
-      conditions.push(inArray(persons.team, teams))
-    }
+    // Team filtering removed - use teamId instead if needed
     
     // Execute query with conditions (orgId AND other filters)
     const results = await db
@@ -186,10 +204,49 @@ export async function GET(request: NextRequest) {
       })
     }
     
+    // Fetch organizational roles for all people with roleId
+    const roleIds = [...new Set(results.map(p => p.roleId).filter((id): id is string => !!id))]
+    const orgRoleById = new Map<string, OrgRoleInfo>()
+    
+    if (roleIds.length > 0) {
+      const roles = await db
+        .select({
+          id: organizationalRoles.id,
+          name: organizationalRoles.name,
+          level: organizationalRoles.level,
+        })
+        .from(organizationalRoles)
+        .where(inArray(organizationalRoles.id, roleIds))
+      
+      for (const role of roles) {
+        orgRoleById.set(role.id, role)
+      }
+    }
+    
+    // Fetch teams for all people with teamId
+    const teamIds = [...new Set(results.map(p => p.teamId).filter((id): id is string => !!id))]
+    const teamById = new Map<string, TeamDisplayInfo>()
+    
+    if (teamIds.length > 0) {
+      const teamResults = await db
+        .select({
+          id: teams.id,
+          name: teams.name,
+        })
+        .from(teams)
+        .where(inArray(teams.id, teamIds))
+      
+      for (const t of teamResults) {
+        teamById.set(t.id, t)
+      }
+    }
+    
     return NextResponse.json(
       results.map(person => {
         const manager = person.managerId ? managerById.get(person.managerId) : null
-        return toApiResponse(person, userByPersonId.get(person.id), manager)
+        const orgRole = person.roleId ? orgRoleById.get(person.roleId) : null
+        const teamInfo = person.teamId ? teamById.get(person.teamId) : null
+        return toApiResponse(person, userByPersonId.get(person.id), manager, orgRole, teamInfo)
       })
     )
   } catch (error) {
@@ -245,7 +302,30 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Insert
+    // Look up role name from roleId (for response and Entra sync)
+    let roleName: string | null = null
+    if (data.roleId) {
+      const [role] = await db
+        .select({ name: organizationalRoles.name })
+        .from(organizationalRoles)
+        .where(eq(organizationalRoles.id, data.roleId))
+        .limit(1)
+      roleName = role?.name ?? null
+    }
+    
+    // Look up team name from teamId (for response and Entra sync)
+    let teamName: string | null = null
+    if (data.teamId) {
+      const [team] = await db
+        .select({ name: teams.name })
+        .from(teams)
+        .where(eq(teams.id, data.teamId))
+        .limit(1)
+      teamName = team?.name ?? null
+    }
+    
+    // Insert with status from request or default to "onboarding"
+    const status = data.status ?? "onboarding"
     const result = await db
       .insert(persons)
       .values({
@@ -253,12 +333,13 @@ export async function POST(request: NextRequest) {
         slug,
         name: data.name,
         email: data.email,
-        role: data.role,
-        team: data.team ?? null,
+        roleId: data.roleId ?? null,
+        teamId: data.teamId ?? null,
         startDate: data.startDate,
+        hireDate: data.hireDate ?? null,
         phone: data.phone ?? null,
         location: data.location ?? null,
-        status: "onboarding",
+        status,
       })
       .returning()
     const record = result[0]
@@ -270,16 +351,55 @@ export async function POST(request: NextRequest) {
         id: record.id,
         name: record.name,
         email: record.email,
-        role: record.role,
-        team: record.team,
+        roleId: record.roleId,
+        roleName: roleName,
+        teamId: record.teamId,
+        teamName: teamName,
         startDate: record.startDate,
+        hireDate: record.hireDate,
         phone: record.phone,
         location: record.location,
         status: record.status,
       })
     }
     
-    return NextResponse.json(toApiResponse(record), { status: 201 })
+    // Trigger workflow via central processor
+    try {
+      // Get session for the user who created the person
+      let triggeredByUserId: string | undefined
+      try {
+        const session = await requireSession()
+        triggeredByUserId = session.userId
+      } catch {
+        // If no session, workflow will be created without a startedBy
+      }
+      
+      const workflowResult = await processWorkflowEvent({
+        type: "person.created",
+        personId: record.id,
+        personName: record.name,
+        status: record.status,
+        orgId: record.orgId,
+        triggeredByUserId,
+      })
+      
+      if (workflowResult.workflowsTriggered.length > 0) {
+        console.log(`[People API] Triggered ${workflowResult.workflowsTriggered.length} workflow(s) for new person ${record.email}`)
+      }
+    } catch (workflowError) {
+      console.error("[People API] Error triggering workflow:", workflowError)
+      // Don't fail the request, just log the error
+    }
+    
+    // Build orgRole and teamInfo for response
+    const orgRole: OrgRoleInfo | null = data.roleId && roleName 
+      ? { id: data.roleId, name: roleName, level: 0 } 
+      : null
+    const teamInfo: TeamDisplayInfo | null = data.teamId && teamName 
+      ? { id: data.teamId, name: teamName } 
+      : null
+    
+    return NextResponse.json(toApiResponse(record, null, null, orgRole, teamInfo), { status: 201 })
   } catch (error) {
     // Handle authentication errors
     if (error instanceof Error && error.message === "Authentication required") {

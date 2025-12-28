@@ -31,16 +31,18 @@ export const MODULE_REGISTRY = [
   // People & HR - Overview & Directory
   { slug: "people.overview", name: "People Overview", description: "View People & HR dashboard", category: "People & HR", icon: "LayoutDashboard", sortOrder: "100" },
   { slug: "people.directory", name: "People Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "101" },
-  { slug: "people.roles", name: "Roles & Teams", description: "Manage organizational roles and teams", category: "People & HR", icon: "UsersRound", sortOrder: "102" },
+  { slug: "people.teams", name: "Teams", description: "Manage organizational teams", category: "People & HR", icon: "UsersRound", sortOrder: "102" },
+  { slug: "people.roles", name: "Organizational Roles", description: "Manage organizational roles and hierarchy", category: "People & HR", icon: "Building2", sortOrder: "103" },
+  { slug: "people.workflows", name: "People Workflows", description: "View people-related workflows", category: "People & HR", icon: "Workflow", sortOrder: "104" },
   
-  // People & HR - Lifecycle
-  { slug: "people.onboarding", name: "Onboarding", description: "Manage employee onboarding workflows", category: "People & HR", icon: "UserPlus", sortOrder: "103" },
-  { slug: "people.offboarding", name: "Offboarding", description: "Manage employee offboarding workflows", category: "People & HR", icon: "UserMinus", sortOrder: "104" },
+  // People & HR - Lifecycle (deprecated - now handled via workflows)
+  { slug: "people.onboarding", name: "Onboarding", description: "Manage employee onboarding workflows", category: "People & HR", icon: "UserPlus", sortOrder: "105" },
+  { slug: "people.offboarding", name: "Offboarding", description: "Manage employee offboarding workflows", category: "People & HR", icon: "UserMinus", sortOrder: "106" },
   
   // People & HR - Operations
-  { slug: "people.timeoff", name: "Time Off", description: "Manage time off requests and leave", category: "People & HR", icon: "Calendar", sortOrder: "105" },
-  { slug: "people.documents", name: "Documents", description: "Manage employee documents", category: "People & HR", icon: "FileText", sortOrder: "106" },
-  { slug: "people.auditlog", name: "People Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "107" },
+  { slug: "people.timeoff", name: "Time Off", description: "Manage time off requests and leave", category: "People & HR", icon: "Calendar", sortOrder: "107" },
+  { slug: "people.documents", name: "Documents", description: "Manage employee documents", category: "People & HR", icon: "FileText", sortOrder: "108" },
+  { slug: "people.auditlog", name: "People Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "109" },
   
   // Assets & Equipment
   { slug: "assets.overview", name: "Assets Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200" },

@@ -10,6 +10,7 @@ import { eq, and, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assets, assetCategories, persons, assetLifecycleEvents, assetAssignments } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { processWorkflowEvent } from "@/lib/workflows/processor"
 import { z } from "zod"
 
 // Update asset schema
@@ -288,6 +289,24 @@ export async function PATCH(
           },
           performedById: session.userId,
         })
+        
+        // Get previous person info for workflow event
+        const prevPersonResult = await db
+          .select({ name: persons.name })
+          .from(persons)
+          .where(eq(persons.id, previousValues.assignedToId))
+          .limit(1)
+        
+        // Trigger workflow event for asset return
+        await processWorkflowEvent({
+          type: "asset.returned",
+          assetId: id,
+          assetName: previousValues.name,
+          previousPersonId: previousValues.assignedToId,
+          previousPersonName: prevPersonResult[0]?.name ?? "Unknown",
+          orgId,
+          triggeredByUserId: session.userId,
+        }).catch(err => console.error("[Assets API] Error triggering workflow:", err))
       }
       
       // Create new assignment if there's a new assignee
@@ -325,6 +344,17 @@ export async function PATCH(
           },
           performedById: session.userId,
         })
+        
+        // Trigger workflow event for asset assignment
+        await processWorkflowEvent({
+          type: "asset.assigned",
+          assetId: id,
+          assetName: previousValues.name,
+          personId: data.assignedToId,
+          personName: person?.name ?? "Unknown",
+          orgId,
+          triggeredByUserId: session.userId,
+        }).catch(err => console.error("[Assets API] Error triggering workflow:", err))
         
         // Auto-set status to "assigned" if currently "available"
         if (previousValues.status === "available" && !data.status) {

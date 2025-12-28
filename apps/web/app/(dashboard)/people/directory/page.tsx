@@ -60,7 +60,7 @@ async function fetchEntraIntegrationSettings() {
   return res.json()
 }
 
-// Generated from spec
+// Shared module types and configs
 import { columns as baseColumns } from "@/lib/generated/people/person/columns"
 import { formConfig, createFormSchema, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
 import type { CreatePerson, UpdatePerson } from "@/lib/generated/people/person/types"
@@ -596,8 +596,8 @@ export default function DirectoryPage() {
           defaultValues={{
             name: selectedPerson.name,
             email: selectedPerson.email,
-            role: selectedPerson.role,
-            team: selectedPerson.team || "",
+            roleId: selectedPerson.roleId || "",
+            teamId: selectedPerson.teamId || "",
             status: selectedPerson.status,
             startDate: selectedPerson.startDate,
             hireDate: selectedPerson.hireDate || "",
@@ -609,11 +609,12 @@ export default function DirectoryPage() {
           onSubmit={handleEdit}
           // Disable synced fields ONLY if sync is enabled AND bidirectional sync is disabled
           // Email is always disabled for synced users (email changes don't sync to Entra)
+          // roleId and teamId are local references, but their derived text values sync
           disabledFields={
             selectedPerson.source === "sync" && selectedPerson.syncEnabled
               ? isBidirectionalSyncEnabled
                 ? ["email"] // Only email is disabled when bidirectional sync is enabled
-                : ["name", "email", "role", "team", "startDate", "hireDate", "location", "phone"] // All synced fields disabled
+                : ["name", "email", "roleId", "teamId", "startDate", "hireDate", "location", "phone"] // All synced fields disabled
               : []
           }
           infoBanner={

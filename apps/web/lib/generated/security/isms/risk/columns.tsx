@@ -1,4 +1,4 @@
-// Generated from spec.json - DO NOT EDIT MANUALLY
+// Column definitions for Risk entity
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
