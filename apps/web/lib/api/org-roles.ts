@@ -239,7 +239,10 @@ export function useCreateOrganizationalRole() {
   return useMutation({
     mutationFn: createRole,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orgRolesKeys.lists() })
+      // Invalidate all roles queries
+      queryClient.invalidateQueries({ queryKey: orgRolesKeys.all })
+      // Also invalidate teams since roles are linked to teams
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
     },
   })
 }
@@ -253,8 +256,13 @@ export function useUpdateOrganizationalRole() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateOrganizationalRole }) => updateRole(id, data),
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: orgRolesKeys.lists() })
+      // Invalidate all roles queries
+      queryClient.invalidateQueries({ queryKey: orgRolesKeys.all })
       queryClient.invalidateQueries({ queryKey: orgRolesKeys.detail(id) })
+      // Also invalidate people since role assignments might change
+      queryClient.invalidateQueries({ queryKey: ["people"] })
+      // Also invalidate teams
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
     },
   })
 }
@@ -268,7 +276,10 @@ export function useBulkUpdateOrganizationalRoles() {
   return useMutation({
     mutationFn: bulkUpdateRoles,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orgRolesKeys.lists() })
+      // Invalidate all roles queries
+      queryClient.invalidateQueries({ queryKey: orgRolesKeys.all })
+      // Also invalidate teams
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
     },
   })
 }
@@ -282,7 +293,12 @@ export function useDeleteOrganizationalRole() {
   return useMutation({
     mutationFn: deleteRole,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orgRolesKeys.lists() })
+      // Invalidate all roles queries
+      queryClient.invalidateQueries({ queryKey: orgRolesKeys.all })
+      // Also invalidate people since role counts might change
+      queryClient.invalidateQueries({ queryKey: ["people"] })
+      // Also invalidate teams
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
     },
   })
 }

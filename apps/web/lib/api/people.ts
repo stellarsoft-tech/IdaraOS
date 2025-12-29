@@ -168,7 +168,12 @@ export function useCreatePerson() {
   return useMutation({
     mutationFn: createPerson,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: peopleKeys.lists() })
+      // Invalidate all people queries
+      queryClient.invalidateQueries({ queryKey: peopleKeys.all })
+      // Also invalidate teams since member counts might change
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
+      // And roles since role counts might change
+      queryClient.invalidateQueries({ queryKey: ["org-roles"] })
     },
   })
 }
@@ -179,9 +184,14 @@ export function useUpdatePerson() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdatePerson }) => updatePerson(id, data),
     onSuccess: (person) => {
-      queryClient.invalidateQueries({ queryKey: peopleKeys.lists() })
+      // Invalidate all people queries
+      queryClient.invalidateQueries({ queryKey: peopleKeys.all })
       queryClient.invalidateQueries({ queryKey: peopleKeys.detail(person.id) })
       queryClient.invalidateQueries({ queryKey: peopleKeys.detail(person.slug) })
+      // Also invalidate teams since member counts or leads might change
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
+      // And roles since role assignments might change
+      queryClient.invalidateQueries({ queryKey: ["org-roles"] })
     },
   })
 }
@@ -192,7 +202,12 @@ export function useDeletePerson() {
   return useMutation({
     mutationFn: deletePerson,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: peopleKeys.lists() })
+      // Invalidate all people queries
+      queryClient.invalidateQueries({ queryKey: peopleKeys.all })
+      // Also invalidate teams since member counts might change
+      queryClient.invalidateQueries({ queryKey: ["teams"] })
+      // And roles since role counts might change
+      queryClient.invalidateQueries({ queryKey: ["org-roles"] })
     },
   })
 }

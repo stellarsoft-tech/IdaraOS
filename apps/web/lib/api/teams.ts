@@ -196,7 +196,10 @@ export function useCreateTeam() {
   return useMutation({
     mutationFn: createTeam,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: teamsKeys.lists() })
+      // Invalidate all team queries to ensure the list refreshes
+      queryClient.invalidateQueries({ queryKey: teamsKeys.all })
+      // Also invalidate people list since teams might affect people counts
+      queryClient.invalidateQueries({ queryKey: ["people"] })
     },
   })
 }
@@ -210,8 +213,11 @@ export function useUpdateTeam() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTeam }) => updateTeam(id, data),
     onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: teamsKeys.lists() })
+      // Invalidate all team queries
+      queryClient.invalidateQueries({ queryKey: teamsKeys.all })
       queryClient.invalidateQueries({ queryKey: teamsKeys.detail(id) })
+      // Also invalidate people list since teams might affect people
+      queryClient.invalidateQueries({ queryKey: ["people"] })
     },
   })
 }
@@ -225,7 +231,10 @@ export function useDeleteTeam() {
   return useMutation({
     mutationFn: deleteTeam,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: teamsKeys.lists() })
+      // Invalidate all team queries
+      queryClient.invalidateQueries({ queryKey: teamsKeys.all })
+      // Also invalidate people list since teams might affect people
+      queryClient.invalidateQueries({ queryKey: ["people"] })
     },
   })
 }
