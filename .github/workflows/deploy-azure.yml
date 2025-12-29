@@ -124,6 +124,30 @@ jobs:
           echo "  IdaraOS Database Schema Push"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
+          
+          # Prototyping mode: Drop all tables if schema mismatch detected
+          # This avoids interactive prompts from drizzle-kit push
+          echo "🔍 Checking for schema mismatches..."
+          MISMATCH=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            pool.query(\"SELECT column_name FROM information_schema.columns WHERE table_name = 'people_persons' AND column_name IN ('role', 'team')\")
+              .then(r => { console.log(r.rows.length > 0 ? 'true' : 'false'); pool.end(); })
+              .catch(() => { console.log('false'); pool.end(); });
+          ")
+          
+          if [ "$MISMATCH" = "true" ]; then
+            echo "⚠️  Old schema detected (role/team as text columns)"
+            echo "🗑️  Dropping all tables for clean schema push (prototyping mode)..."
+            node -e "
+              const { Pool } = require('pg');
+              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
+                .then(() => { console.log('Schema reset complete'); pool.end(); })
+                .catch(e => { console.error('Error:', e.message); pool.end(); process.exit(1); });
+            "
+          fi
+          
           echo "📋 Pushing schema to database (prototyping mode)..."
           npx drizzle-kit push --force
           echo ""
@@ -424,6 +448,29 @@ jobs:
           echo "  IdaraOS Database Schema Push"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
+          
+          # Prototyping mode: Drop all tables if schema mismatch detected
+          echo "🔍 Checking for schema mismatches..."
+          MISMATCH=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            pool.query(\"SELECT column_name FROM information_schema.columns WHERE table_name = 'people_persons' AND column_name IN ('role', 'team')\")
+              .then(r => { console.log(r.rows.length > 0 ? 'true' : 'false'); pool.end(); })
+              .catch(() => { console.log('false'); pool.end(); });
+          ")
+          
+          if [ "$MISMATCH" = "true" ]; then
+            echo "⚠️  Old schema detected (role/team as text columns)"
+            echo "🗑️  Dropping all tables for clean schema push (prototyping mode)..."
+            node -e "
+              const { Pool } = require('pg');
+              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
+                .then(() => { console.log('Schema reset complete'); pool.end(); })
+                .catch(e => { console.error('Error:', e.message); pool.end(); process.exit(1); });
+            "
+          fi
+          
           echo "📋 Pushing schema to database (prototyping mode)..."
           npx drizzle-kit push --force
           echo ""
@@ -708,6 +755,29 @@ jobs:
           echo "  IdaraOS Database Schema Push"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
+          
+          # Prototyping mode: Drop all tables if schema mismatch detected
+          echo "🔍 Checking for schema mismatches..."
+          MISMATCH=$(node -e "
+            const { Pool } = require('pg');
+            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+            pool.query(\"SELECT column_name FROM information_schema.columns WHERE table_name = 'people_persons' AND column_name IN ('role', 'team')\")
+              .then(r => { console.log(r.rows.length > 0 ? 'true' : 'false'); pool.end(); })
+              .catch(() => { console.log('false'); pool.end(); });
+          ")
+          
+          if [ "$MISMATCH" = "true" ]; then
+            echo "⚠️  Old schema detected (role/team as text columns)"
+            echo "🗑️  Dropping all tables for clean schema push (prototyping mode)..."
+            node -e "
+              const { Pool } = require('pg');
+              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+              pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
+                .then(() => { console.log('Schema reset complete'); pool.end(); })
+                .catch(e => { console.error('Error:', e.message); pool.end(); process.exit(1); });
+            "
+          fi
+          
           echo "📋 Pushing schema to database (prototyping mode)..."
           npx drizzle-kit push --force
           echo ""
