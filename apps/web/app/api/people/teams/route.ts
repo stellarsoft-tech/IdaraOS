@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { eq, ilike, or, and, asc, sql, isNull, isNotNull } from "drizzle-orm"
+import { eq, ilike, or, and, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { teams, persons } from "@/lib/db/schema"
 import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
           slug: persons.slug,
         })
         .from(persons)
-        .where(sql`${persons.id} = ANY(${leadIds})`)
+        .where(inArray(persons.id, leadIds))
       
       for (const lead of leads) {
         leadsMap.set(lead.id, lead)
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
           name: teams.name,
         })
         .from(teams)
-        .where(sql`${teams.id} = ANY(${parentTeamIds})`)
+        .where(inArray(teams.id, parentTeamIds))
       
       for (const pt of parentTeams) {
         parentTeamsMap.set(pt.id, pt)
