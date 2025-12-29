@@ -155,6 +155,7 @@ export function FormDrawer<T = Record<string, unknown>>({
         console.error("FormDrawer: config is required when fields is an array of strings")
         return []
       }
+      
       return (fields as string[])
         .filter((fieldName) => {
           const fieldConfig = config[fieldName]

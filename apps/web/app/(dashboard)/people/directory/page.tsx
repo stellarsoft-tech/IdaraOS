@@ -62,8 +62,62 @@ async function fetchEntraIntegrationSettings() {
 
 // Shared module types and configs
 import { columns as baseColumns } from "@/lib/generated/people/person/columns"
-import { formConfig, createFormSchema, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
+import { formConfig as baseFormConfig, createFormSchema, editFormSchema, getFormFields } from "@/lib/generated/people/person/form-config"
 import type { CreatePerson, UpdatePerson } from "@/lib/generated/people/person/types"
+import type { FormConfig, SyncIndicatorType } from "@/components/primitives/form-drawer"
+
+// Field mappings from People fields to Entra ID properties
+// Used for sync indicators to show which Entra field each People field maps to
+const ENTRA_FIELD_MAPPINGS: Record<string, string> = {
+  name: "displayName",
+  email: "mail",
+  roleId: "jobTitle",
+  teamId: "department",
+  location: "officeLocation",
+  phone: "mobilePhone",
+  startDate: "employeeHireDate",
+  hireDate: "employeeHireDate",
+}
+
+// Fields that are synced from Entra ID
+const ENTRA_SYNCED_FIELDS = Object.keys(ENTRA_FIELD_MAPPINGS)
+
+/**
+ * Get form config with sync indicators based on person's sync state
+ */
+function getFormConfigWithSyncIndicators(
+  isSynced: boolean,
+  syncEnabled: boolean,
+  isBidirectionalSyncEnabled: boolean
+): FormConfig {
+  // Deep copy to avoid mutating the original config
+  const config: FormConfig = Object.fromEntries(
+    Object.entries(baseFormConfig).map(([key, value]) => [key, { ...value }])
+  ) as FormConfig
+  
+  if (isSynced && syncEnabled) {
+    for (const fieldName of ENTRA_SYNCED_FIELDS) {
+      if (config[fieldName]) {
+        // Determine indicator type
+        let indicator: SyncIndicatorType | undefined
+        if (isBidirectionalSyncEnabled) {
+          // Email never syncs back, always show as readonly from Entra
+          indicator = fieldName === "email" ? "entra" : "bidirectional"
+        } else {
+          // All synced fields are read-only from Entra
+          indicator = "entra"
+        }
+        config[fieldName] = {
+          ...config[fieldName],
+          syncIndicator: indicator,
+          entraFieldName: ENTRA_FIELD_MAPPINGS[fieldName],
+        }
+      }
+    }
+  }
+  
+  return config
+}
 
 // API hooks - Person type comes from api/people with linked user info
 import { usePeopleList, useCreatePerson, useUpdatePerson, useDeletePerson, type Person } from "@/lib/api/people"
@@ -573,7 +627,7 @@ export default function DirectoryPage() {
         title="Add Person"
         description="Create a new employee record"
         schema={createFormSchema}
-        config={formConfig}
+        config={baseFormConfig}
         fields={createFields}
         mode="create"
         onSubmit={handleCreate}
@@ -586,11 +640,17 @@ export default function DirectoryPage() {
           onOpenChange={(open) => { setEditOpen(open); if (!open) setSelectedPerson(null); }}
           title={`Edit ${selectedPerson.name}`}
           description={selectedPerson.source === "sync" && selectedPerson.syncEnabled
-            ? "Some fields are managed by Entra ID sync"
+            ? isBidirectionalSyncEnabled
+              ? "Changes will be synced back to Entra ID (except email)"
+              : "Some fields are managed by Entra ID sync"
             : "Update employee information"
           }
           schema={editFormSchema}
-          config={formConfig}
+          config={getFormConfigWithSyncIndicators(
+            selectedPerson.source === "sync",
+            selectedPerson.syncEnabled ?? false,
+            isBidirectionalSyncEnabled
+          )}
           fields={editFields}
           mode="edit"
           defaultValues={{
