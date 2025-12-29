@@ -76,11 +76,21 @@ import type { FormConfig, SyncIndicatorType } from "@/components/primitives/form
 // Edit form fields
 const editFields = getFormFields("edit")
 
+// Field mappings from People fields to Entra ID properties
+// Used for sync indicators to show which Entra field each People field maps to
+const ENTRA_FIELD_MAPPINGS: Record<string, string> = {
+  name: "displayName",
+  email: "mail",
+  roleId: "jobTitle",
+  teamId: "department",
+  location: "officeLocation",
+  phone: "mobilePhone",
+  startDate: "employeeHireDate",
+  hireDate: "employeeHireDate",
+}
+
 // Fields that are synced from Entra ID (must match actual property mapping)
-// See: displayName→name, mail→email, jobTitle→role, department→team, 
-//      officeLocation→location, mobilePhone→phone, employeeHireDate→startDate
-// Note: roleId and teamId are local references, but their derived text values sync
-const ENTRA_SYNCED_FIELDS = ["name", "email", "roleId", "teamId", "startDate", "location", "phone"]
+const ENTRA_SYNCED_FIELDS = Object.keys(ENTRA_FIELD_MAPPINGS)
 
 /**
  * Get form config with sync indicators based on person's sync state
@@ -107,6 +117,7 @@ function getFormConfigWithSyncIndicators(
         config[fieldName] = {
           ...config[fieldName],
           syncIndicator: indicator,
+          entraFieldName: ENTRA_FIELD_MAPPINGS[fieldName],
         }
       }
     }

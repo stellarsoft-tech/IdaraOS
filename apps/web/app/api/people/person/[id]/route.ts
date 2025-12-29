@@ -561,6 +561,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
     
     // If bidirectional sync is enabled and person has Entra link, sync to Entra
+    console.log(`[People API] Bidirectional sync check:`, {
+      isBidirectionalSyncEnabled,
+      hasEntraLink,
+      entraId: existing.entraId,
+      willSync: isBidirectionalSyncEnabled && hasEntraLink && existing.entraId
+    })
+    
     if (isBidirectionalSyncEnabled && hasEntraLink && existing.entraId) {
       try {
         const entraUpdates: Record<string, string | undefined> = {}
@@ -575,7 +582,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         if (data.hireDate !== undefined) entraUpdates.employeeHireDate = data.hireDate
         
         console.log(`[People API] Bidirectional sync triggered for ${existing.email}`)
-        console.log(`[People API] Updates to sync:`, JSON.stringify(entraUpdates))
+        console.log(`[People API] Input data fields:`, {
+          name: data.name !== undefined,
+          roleId: data.roleId !== undefined,
+          teamId: data.teamId !== undefined,
+          location: data.location !== undefined,
+          phone: data.phone !== undefined,
+          hireDate: data.hireDate !== undefined,
+        })
+        console.log(`[People API] Updates to sync to Entra:`, JSON.stringify(entraUpdates))
         
         if (Object.keys(entraUpdates).length > 0) {
           const syncResult = await syncPersonToEntra(existing.entraId, entraUpdates)

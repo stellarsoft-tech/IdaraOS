@@ -24,10 +24,63 @@ import {
   userScimGroups, 
   userRoles,
   roles,
-  persons
+  persons,
+  organizationalRoles,
+  teams
 } from "@/lib/db/schema"
 import { getEntraConfig, type EntraConfig } from "@/lib/auth/entra-config"
 import { performPeopleSync, getPeopleSyncSettings } from "@/lib/people/sync"
+
+/**
+ * Lookup maps for role and team name to ID mapping
+ */
+interface RoleTeamLookup {
+  rolesByName: Map<string, string> // lowercase name -> id
+  teamsByName: Map<string, string> // lowercase name -> id
+}
+
+/**
+ * Fetch all roles and teams for an organization to enable name-based matching
+ */
+async function fetchRoleTeamLookups(orgId: string): Promise<RoleTeamLookup> {
+  const [rolesList, teamsList] = await Promise.all([
+    db.select({ id: organizationalRoles.id, name: organizationalRoles.name })
+      .from(organizationalRoles)
+      .where(eq(organizationalRoles.orgId, orgId)),
+    db.select({ id: teams.id, name: teams.name })
+      .from(teams)
+      .where(eq(teams.orgId, orgId)),
+  ])
+
+  const rolesByName = new Map<string, string>()
+  for (const role of rolesList) {
+    rolesByName.set(role.name.toLowerCase(), role.id)
+  }
+
+  const teamsByName = new Map<string, string>()
+  for (const team of teamsList) {
+    teamsByName.set(team.name.toLowerCase(), team.id)
+  }
+
+  console.log(`[Full Sync] Loaded ${rolesByName.size} roles and ${teamsByName.size} teams for matching`)
+  return { rolesByName, teamsByName }
+}
+
+/**
+ * Match Entra jobTitle to an existing organizational role by name (case-insensitive)
+ */
+function matchRoleByName(jobTitle: string | undefined, lookup: RoleTeamLookup): string | null {
+  if (!jobTitle) return null
+  return lookup.rolesByName.get(jobTitle.toLowerCase()) || null
+}
+
+/**
+ * Match Entra department to an existing team by name (case-insensitive)
+ */
+function matchTeamByName(department: string | undefined, lookup: RoleTeamLookup): string | null {
+  if (!department) return null
+  return lookup.teamsByName.get(department.toLowerCase()) || null
+}
 
 /**
  * Property mapping configuration for syncing Entra user properties to People fields
@@ -540,7 +593,8 @@ async function getOrCreatePerson(
   userId: string,
   entraUser: GraphUser,
   _config: EntraConfig, // Reserved for future property mapping support
-  groupInfo?: EntraGroupInfo // Optional group info for sync tracking
+  groupInfo?: EntraGroupInfo, // Optional group info for sync tracking
+  roleTeamLookup?: RoleTeamLookup // Optional lookup for role/team name matching
 ): Promise<{ person: typeof persons.$inferSelect | null; created: boolean; updated: boolean }> {
   const email = entraUser.mail || entraUser.userPrincipalName
   const name = entraUser.displayName || email
@@ -551,6 +605,17 @@ async function getOrCreatePerson(
   const hireDate = safeFormatDateString(entraUser.employeeHireDate)
   const lastSignInAt = safeParseDate(entraUser.signInActivity?.lastSignInDateTime)
   const lastPasswordChangeAt = safeParseDate(entraUser.lastPasswordChangeDateTime)
+  
+  // Match role and team from Entra jobTitle/department
+  const matchedRoleId = roleTeamLookup ? matchRoleByName(entraUser.jobTitle, roleTeamLookup) : null
+  const matchedTeamId = roleTeamLookup ? matchTeamByName(entraUser.department, roleTeamLookup) : null
+  
+  if (matchedRoleId) {
+    console.log(`[Full Sync] Matched jobTitle "${entraUser.jobTitle}" to role ${matchedRoleId}`)
+  }
+  if (matchedTeamId) {
+    console.log(`[Full Sync] Matched department "${entraUser.department}" to team ${matchedTeamId}`)
+  }
 
   // Check if user already has a linked person
   const [existingUser] = await db
@@ -585,7 +650,14 @@ async function getOrCreatePerson(
       
       if (name !== existingPerson.name) updates.name = name
       if (email !== existingPerson.email) updates.email = email
-      // Note: role and team text fields removed, use roleId/teamId FKs instead
+      // Update roleId if matched from Entra jobTitle (and different from current)
+      if (matchedRoleId && matchedRoleId !== existingPerson.roleId) {
+        updates.roleId = matchedRoleId
+      }
+      // Update teamId if matched from Entra department (and different from current)
+      if (matchedTeamId && matchedTeamId !== existingPerson.teamId) {
+        updates.teamId = matchedTeamId
+      }
       if (entraUser.officeLocation && entraUser.officeLocation !== existingPerson.location) {
         updates.location = entraUser.officeLocation
       }
@@ -681,6 +753,8 @@ async function getOrCreatePerson(
         slug,
         name,
         email: email.toLowerCase(), // Normalize email to lowercase
+        roleId: matchedRoleId || null,
+        teamId: matchedTeamId || null,
         location: entraUser.officeLocation || null,
         phone: entraUser.mobilePhone || null,
         status: "active",
@@ -702,6 +776,8 @@ async function getOrCreatePerson(
         target: persons.email,
         set: {
           name,
+          roleId: matchedRoleId || sql`${persons.roleId}`,
+          teamId: matchedTeamId || sql`${persons.teamId}`,
           location: entraUser.officeLocation || sql`${persons.location}`,
           phone: entraUser.mobilePhone || sql`${persons.phone}`,
           source: "sync",
@@ -757,6 +833,12 @@ async function getOrCreatePerson(
         lastSyncedAt: now,
         syncEnabled: true,
         updatedAt: now,
+      }
+      if (matchedRoleId && matchedRoleId !== existingBySlugOrEmail.roleId) {
+        updateData.roleId = matchedRoleId
+      }
+      if (matchedTeamId && matchedTeamId !== existingBySlugOrEmail.teamId) {
+        updateData.teamId = matchedTeamId
       }
       if (entraCreatedAt) updateData.entraCreatedAt = entraCreatedAt
       if (hireDate) updateData.hireDate = hireDate
@@ -1122,6 +1204,9 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
 
   const groupPattern = config.scimGroupPrefix || ""
 
+  // Fetch role and team lookups for name-based matching (if sync people enabled)
+  const roleTeamLookup = config.syncPeopleEnabled ? await fetchRoleTeamLookups(orgId) : null
+
   // Get the default role for users in groups without a role mapping
   const defaultRole = await getDefaultRole(orgId)
   if (defaultRole) {
@@ -1197,7 +1282,8 @@ export async function performFullSync(orgId: string): Promise<SyncResult> {
                 user.id,
                 member,
                 config,
-                { id: entraGroup.id, displayName: entraGroup.displayName } // Pass group info for sync tracking
+                { id: entraGroup.id, displayName: entraGroup.displayName }, // Pass group info for sync tracking
+                roleTeamLookup || undefined // Pass role/team lookup for name matching
               )
               if (personCreated) stats.peopleCreated++
               if (personUpdated) stats.peopleUpdated++

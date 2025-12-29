@@ -7,9 +7,60 @@
 
 import { eq, and, ilike, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { persons, peopleSettings } from "@/lib/db/schema"
+import { persons, peopleSettings, organizationalRoles, teams } from "@/lib/db/schema"
 import { getEntraConfig } from "@/lib/auth/entra-config"
 import type { PeoplePropertyMapping } from "@/lib/db/schema/people-settings"
+
+/**
+ * Lookup maps for role and team name to ID mapping
+ */
+interface RoleTeamLookup {
+  rolesByName: Map<string, string> // lowercase name -> id
+  teamsByName: Map<string, string> // lowercase name -> id
+}
+
+/**
+ * Fetch all roles and teams for an organization to enable name-based matching
+ */
+async function fetchRoleTeamLookups(orgId: string): Promise<RoleTeamLookup> {
+  const [rolesList, teamsList] = await Promise.all([
+    db.select({ id: organizationalRoles.id, name: organizationalRoles.name })
+      .from(organizationalRoles)
+      .where(eq(organizationalRoles.orgId, orgId)),
+    db.select({ id: teams.id, name: teams.name })
+      .from(teams)
+      .where(eq(teams.orgId, orgId)),
+  ])
+
+  const rolesByName = new Map<string, string>()
+  for (const role of rolesList) {
+    rolesByName.set(role.name.toLowerCase(), role.id)
+  }
+
+  const teamsByName = new Map<string, string>()
+  for (const team of teamsList) {
+    teamsByName.set(team.name.toLowerCase(), team.id)
+  }
+
+  console.log(`[People Sync] Loaded ${rolesByName.size} roles and ${teamsByName.size} teams for matching`)
+  return { rolesByName, teamsByName }
+}
+
+/**
+ * Match Entra jobTitle to an existing organizational role by name (case-insensitive)
+ */
+function matchRoleByName(jobTitle: string | undefined, lookup: RoleTeamLookup): string | null {
+  if (!jobTitle) return null
+  return lookup.rolesByName.get(jobTitle.toLowerCase()) || null
+}
+
+/**
+ * Match Entra department to an existing team by name (case-insensitive)
+ */
+function matchTeamByName(department: string | undefined, lookup: RoleTeamLookup): string | null {
+  if (!department) return null
+  return lookup.teamsByName.get(department.toLowerCase()) || null
+}
 
 /**
  * Safely format a date string to YYYY-MM-DD format
@@ -363,7 +414,8 @@ function generateSlug(name: string, _email: string): string {
 function mapEntraUserToPerson(
   user: GraphUser,
   mapping: PeoplePropertyMapping,
-  defaultStatus: string
+  defaultStatus: string,
+  lookup: RoleTeamLookup
 ): Partial<typeof persons.$inferInsert> {
   const email = user.mail || user.userPrincipalName
   const name = user.displayName || email
@@ -380,9 +432,21 @@ function mapEntraUserToPerson(
     status,
   }
 
-  // Apply property mapping
-  // Note: jobTitle and department are no longer synced to text fields
-  // They should be matched to roleId/teamId FKs separately
+  // Match jobTitle to roleId by name (case-insensitive)
+  const matchedRoleId = matchRoleByName(user.jobTitle, lookup)
+  if (matchedRoleId) {
+    person.roleId = matchedRoleId
+    console.log(`[People Sync] Matched jobTitle "${user.jobTitle}" to role ${matchedRoleId}`)
+  }
+
+  // Match department to teamId by name (case-insensitive)
+  const matchedTeamId = matchTeamByName(user.department, lookup)
+  if (matchedTeamId) {
+    person.teamId = matchedTeamId
+    console.log(`[People Sync] Matched department "${user.department}" to team ${matchedTeamId}`)
+  }
+
+  // Apply property mapping for other fields
   if (user.officeLocation && mapping.officeLocation === "location") {
     person.location = user.officeLocation
   }
@@ -475,6 +539,9 @@ export async function performPeopleSync(
 
   const mapping = options.propertyMapping || DEFAULT_MAPPING
 
+  // Fetch role and team lookups for name-based matching
+  const roleTeamLookup = await fetchRoleTeamLookups(orgId)
+
   // Fetch matching groups
   const groups = await fetchMatchingGroups(accessToken, options.groupPattern)
   stats.groupsFound = groups.length
@@ -514,7 +581,7 @@ export async function performPeopleSync(
             .where(and(eq(persons.orgId, orgId), ilike(persons.email, email)))
             .limit(1)
 
-          const personData = mapEntraUserToPerson(member, mapping, options.defaultStatus)
+          const personData = mapEntraUserToPerson(member, mapping, options.defaultStatus, roleTeamLookup)
 
           if (existing) {
             // Update existing person with sync tracking
@@ -531,7 +598,14 @@ export async function performPeopleSync(
             if (personData.name && personData.name !== existing.name) {
               updates.name = personData.name
             }
-            // Note: role and team text fields removed, use roleId/teamId FKs instead
+            // Update roleId if matched from Entra jobTitle (and different from current)
+            if (personData.roleId && personData.roleId !== existing.roleId) {
+              updates.roleId = personData.roleId
+            }
+            // Update teamId if matched from Entra department (and different from current)
+            if (personData.teamId && personData.teamId !== existing.teamId) {
+              updates.teamId = personData.teamId
+            }
             if (personData.location && personData.location !== existing.location) {
               updates.location = personData.location
             }
@@ -585,6 +659,8 @@ export async function performPeopleSync(
                 target: persons.email,
                 set: {
                   name: personData.name || sql`${persons.name}`,
+                  roleId: personData.roleId || sql`${persons.roleId}`,
+                  teamId: personData.teamId || sql`${persons.teamId}`,
                   location: personData.location || sql`${persons.location}`,
                   phone: personData.phone || sql`${persons.phone}`,
                   entraCreatedAt: personData.entraCreatedAt || sql`${persons.entraCreatedAt}`,

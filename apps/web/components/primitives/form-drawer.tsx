@@ -43,6 +43,8 @@ export interface FormFieldDef {
   disabled?: boolean
   // Sync indicator - shows where data comes from or syncs to
   syncIndicator?: SyncIndicatorType
+  // For bidirectional sync, the Entra field name this maps to (e.g., "officeLocation", "mobilePhone")
+  entraFieldName?: string
 }
 
 /**
@@ -62,6 +64,8 @@ export interface FieldConfig {
   hidden?: boolean
   // Sync indicator - shows where data comes from or syncs to
   syncIndicator?: SyncIndicatorType
+  // For bidirectional sync, the Entra field name this maps to (e.g., "officeLocation", "mobilePhone")
+  entraFieldName?: string
 }
 
 export type FormConfig = Record<string, FieldConfig>
@@ -228,7 +232,7 @@ export function FormDrawer<T = Record<string, unknown>>({
                               {fieldDef.label}
                               {fieldDef.required && <span className="text-destructive">*</span>}
                               {fieldDef.syncIndicator && (
-                                <SyncIndicator type={fieldDef.syncIndicator} />
+                                <SyncIndicator type={fieldDef.syncIndicator} entraFieldName={fieldDef.entraFieldName} />
                               )}
                             </FormLabel>
                             <FormControl>
@@ -269,31 +273,47 @@ export function FormDrawer<T = Record<string, unknown>>({
 /**
  * Sync indicator component - shows visual cue for synced fields
  */
-function SyncIndicator({ type }: { type: SyncIndicatorType }) {
+function SyncIndicator({ type, entraFieldName }: { type: SyncIndicatorType; entraFieldName?: string }) {
+  // Build tooltip text based on type and optional field name
+  const getTooltip = () => {
+    switch (type) {
+      case "intune":
+        return entraFieldName 
+          ? `Synced from Microsoft Intune: ${entraFieldName} (read-only)`
+          : "Synced from Microsoft Intune (read-only)"
+      case "entra":
+        return entraFieldName
+          ? `Synced from Microsoft Entra ID: ${entraFieldName} (read-only)`
+          : "Synced from Microsoft Entra ID (read-only)"
+      case "readonly":
+        return "This field is managed by external sync"
+      case "bidirectional":
+        return entraFieldName
+          ? `Syncs with Microsoft Entra ID: ${entraFieldName}`
+          : "Changes will sync back to the source system"
+    }
+  }
+
   const config = {
     intune: {
       icon: Lock,
-      tooltip: "Synced from Microsoft Intune (read-only)",
       className: "text-blue-500",
     },
     entra: {
       icon: Lock,
-      tooltip: "Synced from Microsoft Entra ID (read-only)",
       className: "text-purple-500",
     },
     readonly: {
       icon: Lock,
-      tooltip: "This field is managed by external sync",
       className: "text-muted-foreground",
     },
     bidirectional: {
       icon: RefreshCw,
-      tooltip: "Changes will sync back to the source system",
       className: "text-green-500",
     },
   }
 
-  const { icon: Icon, tooltip, className } = config[type]
+  const { icon: Icon, className } = config[type]
 
   return (
     <TooltipProvider>
@@ -303,8 +323,8 @@ function SyncIndicator({ type }: { type: SyncIndicatorType }) {
             <Icon className={`h-3.5 w-3.5 ${className}`} />
           </span>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          {tooltip}
+        <TooltipContent side="top" className="text-xs max-w-xs">
+          {getTooltip()}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

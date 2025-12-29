@@ -17,6 +17,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 
 import { PageShell } from "@/components/primitives/page-shell"
 import { Button } from "@/components/ui/button"
@@ -96,6 +97,7 @@ function usePeopleSettings() {
 
 export default function PeopleSettingsPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const canAccess = useCanAccess("people.directory")
   const canEdit = usePermission("people.directory", "edit")
   
@@ -237,6 +239,13 @@ export default function PeopleSettingsPage() {
         
         toast.success(result.message || "Sync completed successfully")
       }
+      
+      // Invalidate all people queries so the directory page shows fresh data
+      await queryClient.invalidateQueries({ queryKey: ["people"] })
+      // Also invalidate users and teams since they may have been affected
+      await queryClient.invalidateQueries({ queryKey: ["users"] })
+      await queryClient.invalidateQueries({ queryKey: ["teams"] })
+      await queryClient.invalidateQueries({ queryKey: ["org-roles"] })
       
       refetch()
     } catch (error) {
@@ -400,17 +409,59 @@ export default function PeopleSettingsPage() {
                               <CardTitle className="text-sm">Property Mapping</CardTitle>
                             </CardHeader>
                             <CardContent className="pt-0">
-                              <div className="text-xs text-muted-foreground space-y-2">
+                              <div className="text-xs text-muted-foreground space-y-3">
                                 <p>The following Entra ID properties are mapped to People fields:</p>
-                                <ul className="space-y-1 ml-4 list-disc">
-                                  <li><strong>displayName</strong> → Name</li>
-                                  <li><strong>mail / userPrincipalName</strong> → Email</li>
-                                  <li><strong>jobTitle</strong> → Role/Position</li>
-                                  <li><strong>department</strong> → Team</li>
-                                  <li><strong>officeLocation</strong> → Location</li>
-                                  <li><strong>mobilePhone</strong> → Phone</li>
-                                  <li><strong>employeeHireDate</strong> → Start Date</li>
-                                </ul>
+                                <div className="overflow-hidden rounded-md border">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-muted">
+                                      <tr>
+                                        <th className="px-3 py-1.5 text-left font-medium">Entra Field</th>
+                                        <th className="px-3 py-1.5 text-left font-medium">People Field</th>
+                                        <th className="px-3 py-1.5 text-center font-medium">Bidirectional</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">displayName</code></td>
+                                        <td className="px-3 py-1.5">Name</td>
+                                        <td className="px-3 py-1.5 text-center text-green-600">✓</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">mail</code></td>
+                                        <td className="px-3 py-1.5">Email</td>
+                                        <td className="px-3 py-1.5 text-center text-muted-foreground">—</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">jobTitle</code></td>
+                                        <td className="px-3 py-1.5">Role (matched by name)</td>
+                                        <td className="px-3 py-1.5 text-center text-green-600">✓</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">department</code></td>
+                                        <td className="px-3 py-1.5">Team (matched by name)</td>
+                                        <td className="px-3 py-1.5 text-center text-green-600">✓</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">officeLocation</code></td>
+                                        <td className="px-3 py-1.5">Location</td>
+                                        <td className="px-3 py-1.5 text-center text-green-600">✓</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">mobilePhone</code></td>
+                                        <td className="px-3 py-1.5">Phone</td>
+                                        <td className="px-3 py-1.5 text-center text-green-600">✓</td>
+                                      </tr>
+                                      <tr>
+                                        <td className="px-3 py-1.5"><code className="text-purple-600 dark:text-purple-400">employeeHireDate</code></td>
+                                        <td className="px-3 py-1.5">Start Date / Hire Date</td>
+                                        <td className="px-3 py-1.5 text-center text-green-600">✓</td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                </div>
+                                <p className="text-muted-foreground/80">
+                                  <strong className="text-green-600">✓</strong> = When bidirectional sync is enabled in Integrations, changes made in IdaraOS will sync back to Entra ID.
+                                </p>
                               </div>
                             </CardContent>
                           </Card>
