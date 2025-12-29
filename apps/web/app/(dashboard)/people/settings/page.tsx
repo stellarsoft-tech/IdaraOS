@@ -681,20 +681,33 @@ function WorkflowSettingsCard({
       const onboardingId = onboardingTemplateId === "__none__" ? null : onboardingTemplateId
       const offboardingId = offboardingTemplateId === "__none__" ? null : offboardingTemplateId
       
+      const requestBody = {
+        autoOnboardingWorkflow: autoOnboarding,
+        defaultOnboardingWorkflowTemplateId: onboardingId,
+        autoOffboardingWorkflow: autoOffboarding,
+        defaultOffboardingWorkflowTemplateId: offboardingId,
+      }
+      
+      console.log("[Workflow Settings] Sending PUT with body:", requestBody)
+      
       const response = await fetch("/api/people/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          autoOnboardingWorkflow: autoOnboarding,
-          defaultOnboardingWorkflowTemplateId: onboardingId,
-          autoOffboardingWorkflow: autoOffboarding,
-          defaultOffboardingWorkflowTemplateId: offboardingId,
-        }),
+        body: JSON.stringify(requestBody),
       })
       
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error("[Workflow Settings] PUT failed:", response.status, errorData)
         throw new Error("Failed to save workflow settings")
       }
+      
+      const result = await response.json()
+      console.log("[Workflow Settings] PUT response:", {
+        syncMode: result.syncMode,
+        peopleGroupPattern: result.peopleGroupPattern,
+        autoOnboardingWorkflow: result.autoOnboardingWorkflow,
+      })
       
       toast.success("Workflow settings saved")
       setInitialOnboarding(onboardingTemplateId)
@@ -702,7 +715,8 @@ function WorkflowSettingsCard({
       setInitialAutoOnboarding(autoOnboarding)
       setInitialAutoOffboarding(autoOffboarding)
       onSave() // Refresh parent settings
-    } catch {
+    } catch (error) {
+      console.error("[Workflow Settings] Error:", error)
       toast.error("Failed to save workflow settings")
     } finally {
       setIsSavingWorkflow(false)

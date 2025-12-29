@@ -91,6 +91,12 @@ export async function GET() {
       })
     }
 
+    console.log("[People Settings] GET returning settings:", {
+      syncMode: settings.syncMode,
+      peopleGroupPattern: settings.peopleGroupPattern,
+      autoOnboardingWorkflow: settings.autoOnboardingWorkflow,
+    })
+    
     return NextResponse.json({
       ...settings,
       propertyMapping: settings.propertyMapping || DEFAULT_PROPERTY_MAPPING,
@@ -266,6 +272,13 @@ export async function PUT(request: NextRequest) {
           )
         )
     }
+
+    // Log what we're returning
+    console.log("[People Settings] PUT returning:", {
+      syncMode: result.syncMode,
+      peopleGroupPattern: result.peopleGroupPattern,
+      autoOnboardingWorkflow: result.autoOnboardingWorkflow,
+    })
 
     return NextResponse.json({
       ...result,
