@@ -100,7 +100,10 @@ function getFormConfigWithSyncIndicators(
   syncEnabled: boolean,
   isBidirectionalSyncEnabled: boolean
 ): FormConfig {
-  const config: FormConfig = { ...baseFormConfig }
+  // Deep copy to avoid mutating the original config
+  const config: FormConfig = Object.fromEntries(
+    Object.entries(baseFormConfig).map(([key, value]) => [key, { ...value }])
+  ) as FormConfig
   
   if (isSynced && syncEnabled) {
     for (const fieldName of ENTRA_SYNCED_FIELDS) {

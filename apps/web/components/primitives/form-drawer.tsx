@@ -176,6 +176,7 @@ export function FormDrawer<T = Record<string, unknown>>({
             loadOptions: fieldConfig.loadOptions, // Include async loader
             disabled: isDisabled,
             syncIndicator: fieldConfig.syncIndicator,
+            entraFieldName: fieldConfig.entraFieldName,
           } as FormFieldDef
         })
     }
