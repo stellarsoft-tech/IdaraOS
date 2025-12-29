@@ -141,15 +141,21 @@ export const formConfig: FormConfig = {
   },
 }
 
+// Helper to handle empty strings as null for optional UUID fields
+const optionalUuid = z.preprocess(
+  (val) => (val === "" || val === "__none__" ? null : val),
+  z.string().uuid().nullable().optional()
+)
+
 /**
  * Create form schema
- * Note: roleId is required - text "role" field is derived from selected role name for Entra sync
+ * roleId and teamId are optional - text values are derived from selected entities for Entra sync
  */
 export const createFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   email: z.string().email("Invalid email address"),
-  roleId: z.string().uuid("Job title is required"),
-  teamId: z.string().uuid().optional().nullable(),
+  roleId: optionalUuid,
+  teamId: optionalUuid,
   status: z.enum(["active", "onboarding", "offboarding", "inactive"]).default("onboarding"),
   startDate: z.string().min(1, "Start date is required"),
   hireDate: z.string().optional(),
@@ -159,13 +165,13 @@ export const createFormSchema = z.object({
 
 /**
  * Edit form schema
- * Note: roleId is required - text "role" field is derived from selected role name for Entra sync
+ * roleId and teamId are optional - text values are derived from selected entities for Entra sync
  */
 export const editFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   email: z.string().email("Invalid email address"),
-  roleId: z.string().uuid("Job title is required"),
-  teamId: z.string().uuid().optional().nullable(),
+  roleId: optionalUuid,
+  teamId: optionalUuid,
   status: z.enum(["active", "onboarding", "offboarding", "inactive"]),
   startDate: z.string().min(1, "Start date is required"),
   hireDate: z.string().optional(),
