@@ -119,6 +119,8 @@ export async function PUT(request: NextRequest) {
     const orgId = DEMO_ORG_ID
     const body = await request.json()
 
+    console.log("[People Settings] PUT request body:", JSON.stringify(body, null, 2))
+
     const {
       syncMode,
       peopleGroupPattern,
@@ -156,39 +158,98 @@ export async function PUT(request: NextRequest) {
       .where(eq(peopleSettings.orgId, orgId))
       .limit(1)
 
-    const updateData = {
-      syncMode: syncMode || "linked",
-      peopleGroupPattern: syncMode === "independent" ? peopleGroupPattern : null,
-      propertyMapping: propertyMapping || DEFAULT_PROPERTY_MAPPING,
-      autoDeleteOnRemoval: autoDeleteOnRemoval ?? false,
-      defaultStatus: defaultStatus || "active",
-      scimEnabled: scimEnabled ?? false,
-      // Workflow settings
-      autoOnboardingWorkflow: autoOnboardingWorkflow ?? false,
-      defaultOnboardingWorkflowTemplateId: defaultOnboardingWorkflowTemplateId || null,
-      autoOffboardingWorkflow: autoOffboardingWorkflow ?? false,
-      defaultOffboardingWorkflowTemplateId: defaultOffboardingWorkflowTemplateId || null,
-      updatedAt: new Date(),
-    }
-
-    let result
+    let result: typeof peopleSettings.$inferSelect | undefined
+    
     if (existing) {
-      // Update existing settings
-      [result] = await db
+      console.log("[People Settings] Existing settings found:", {
+        id: existing.id,
+        syncMode: existing.syncMode,
+        peopleGroupPattern: existing.peopleGroupPattern,
+      })
+      
+      // Update existing settings - only include fields that were explicitly provided
+      const updateData: Partial<typeof peopleSettings.$inferInsert> = {
+        updatedAt: new Date(),
+      }
+
+      // Integration settings - only update if provided
+      // Use 'key in body' check to distinguish between undefined and not sent
+      if ("syncMode" in body) {
+        updateData.syncMode = syncMode
+      }
+      if ("peopleGroupPattern" in body) {
+        // Only set peopleGroupPattern if syncMode is being set to independent, 
+        // OR if syncMode isn't changing and existing syncMode is independent
+        const effectiveSyncMode = "syncMode" in body ? syncMode : existing.syncMode
+        updateData.peopleGroupPattern = effectiveSyncMode === "independent" ? peopleGroupPattern : null
+      }
+      if ("propertyMapping" in body) {
+        updateData.propertyMapping = propertyMapping
+      }
+      if ("autoDeleteOnRemoval" in body) {
+        updateData.autoDeleteOnRemoval = autoDeleteOnRemoval
+      }
+      if ("defaultStatus" in body) {
+        updateData.defaultStatus = defaultStatus
+      }
+      if ("scimEnabled" in body) {
+        updateData.scimEnabled = scimEnabled
+      }
+
+      // Workflow settings - only update if provided
+      if ("autoOnboardingWorkflow" in body) {
+        updateData.autoOnboardingWorkflow = autoOnboardingWorkflow
+      }
+      if ("defaultOnboardingWorkflowTemplateId" in body) {
+        updateData.defaultOnboardingWorkflowTemplateId = defaultOnboardingWorkflowTemplateId || null
+      }
+      if ("autoOffboardingWorkflow" in body) {
+        updateData.autoOffboardingWorkflow = autoOffboardingWorkflow
+      }
+      if ("defaultOffboardingWorkflowTemplateId" in body) {
+        updateData.defaultOffboardingWorkflowTemplateId = defaultOffboardingWorkflowTemplateId || null
+      }
+
+      console.log("[People Settings] Update data (only fields being updated):", JSON.stringify(updateData, null, 2))
+
+      const updateResult = await db
         .update(peopleSettings)
         .set(updateData)
         .where(eq(peopleSettings.id, existing.id))
         .returning()
+      result = updateResult[0]
     } else {
-      // Create new settings
-      [result] = await db
+      console.log("[People Settings] No existing settings, creating new")
+      // Create new settings - use defaults for fields not provided
+      const insertResult = await db
         .insert(peopleSettings)
         .values({
           orgId,
-          ...updateData,
+          syncMode: syncMode || "linked",
+          peopleGroupPattern: syncMode === "independent" ? peopleGroupPattern : null,
+          propertyMapping: propertyMapping || DEFAULT_PROPERTY_MAPPING,
+          autoDeleteOnRemoval: autoDeleteOnRemoval ?? false,
+          defaultStatus: defaultStatus || "active",
+          scimEnabled: scimEnabled ?? false,
+          autoOnboardingWorkflow: autoOnboardingWorkflow ?? false,
+          defaultOnboardingWorkflowTemplateId: defaultOnboardingWorkflowTemplateId || null,
+          autoOffboardingWorkflow: autoOffboardingWorkflow ?? false,
+          defaultOffboardingWorkflowTemplateId: defaultOffboardingWorkflowTemplateId || null,
+          updatedAt: new Date(),
         })
         .returning()
+      result = insertResult[0]
     }
+    
+    if (!result) {
+      throw new Error("Failed to save settings")
+    }
+    
+    console.log("[People Settings] Save result:", {
+      syncMode: result.syncMode,
+      peopleGroupPattern: result.peopleGroupPattern,
+      autoOnboardingWorkflow: result.autoOnboardingWorkflow,
+    })
 
     // If switching to independent mode, disable syncPeopleEnabled in core integration
     if (syncMode === "independent") {

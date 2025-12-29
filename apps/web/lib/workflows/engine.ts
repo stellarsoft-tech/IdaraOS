@@ -165,7 +165,7 @@ export async function triggerPersonWorkflow(
         name: step.name,
         description: step.description,
         orderIndex: step.orderIndex,
-        status: index === 0 ? "in_progress" as const : "pending" as const,
+        status: "pending" as const,
         assignedPersonId: step.defaultAssigneeId,
         dueAt: stepDueAt,
         metadata: {
