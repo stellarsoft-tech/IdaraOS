@@ -2,19 +2,17 @@
 # IdaraOS - Database Initialization Container
 # =============================================================================
 #
-# WORKFLOW:
-# ---------
-# LOCAL DEV (prototyping):  pnpm db:push (fast, no migrations)
-# LOCAL DEV (testing):      pnpm db:migrate:run
-# CI/CD & PRODUCTION:       This container runs db:migrate:run
+# WORKFLOW (Prototyping Phase):
+# -----------------------------
+# Uses db:push to directly sync schema to database (no migration files needed)
+# Schema changes: Edit apps/web/lib/db/schema/*.ts and redeploy
 #
-# ADDING SCHEMA CHANGES:
-# ----------------------
-# 1. Edit apps/web/lib/db/schema/*.ts
-# 2. Run: pnpm --filter web db:generate
-# 3. Review generated SQL in apps/web/drizzle/
-# 4. Commit: *.sql + meta/_journal.json + meta/*_snapshot.json
-# 5. Deploy - this container applies migrations automatically
+# FUTURE (Production with real data):
+# -----------------------------------
+# Switch to migrations when you have production data:
+# 1. Generate: pnpm --filter web db:generate
+# 2. Commit migration files
+# 3. Change this container to use db:migrate:run
 #
 # =============================================================================
 
@@ -35,20 +33,16 @@ ENV NODE_ENV=development
 
 CMD ["sh", "-c", "\
 echo '=========================================='; \
-echo 'IdaraOS Database Migrations'; \
+echo 'IdaraOS Database Schema Push'; \
 echo '=========================================='; \
 cd /app/apps/web; \
 \
 echo ''; \
-echo '📋 Checking migration status...'; \
-pnpm db:migrate:status 2>/dev/null || echo 'First run - no migrations applied yet'; \
-\
-echo ''; \
-echo '📋 Running pending migrations...'; \
-pnpm db:migrate:run; \
+echo '📋 Pushing schema to database...'; \
+npx drizzle-kit push --force; \
 \
 if [ $? -ne 0 ]; then \
-  echo '❌ Migration failed!'; \
+  echo '❌ Schema push failed!'; \
   exit 1; \
 fi; \
 \
