@@ -40,10 +40,22 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Navigation item with permission module mapping
+interface NavFourthLevelItem {
+  title: string
+  url: string
+}
+
+interface NavThirdLevelItem {
+  title: string
+  url: string
+  items?: NavFourthLevelItem[] // Fourth level items (e.g., ISO 27001 sub-pages)
+}
+
 interface NavSubItem {
   title: string
   url: string
   module?: string // RBAC module slug for permission check
+  items?: NavThirdLevelItem[] // Third level items (e.g., framework sub-pages)
 }
 
 interface NavItem {
@@ -96,13 +108,42 @@ const navigationData: NavItem[] = [
     icon: Shield,
     items: [
       { title: "Overview", url: "/security", module: "security.overview" },
-      { title: "Frameworks (IMS)", url: "/security/frameworks", module: "security.frameworks" },
       { title: "Risk Register", url: "/security/risks", module: "security.risks" },
       { title: "Controls Library", url: "/security/controls", module: "security.controls" },
-      { title: "Audits", url: "/security/audits", module: "security.audits" },
       { title: "Evidence Store", url: "/security/evidence", module: "security.evidence" },
-      { title: "SoA", url: "/security/soa", module: "security.soa" },
-      { title: "Objectives & Plan", url: "/security/objectives", module: "security.objectives" },
+      { title: "Audits", url: "/security/audits", module: "security.audits" },
+      { title: "Objectives", url: "/security/objectives", module: "security.objectives" },
+      { 
+        title: "Frameworks", 
+        url: "/security/frameworks", 
+        module: "security.frameworks",
+        items: [
+          { title: "All Frameworks", url: "/security/frameworks" },
+          { 
+            title: "ISO 27001", 
+            url: "/security/frameworks/iso-27001",
+            items: [
+              { title: "Dashboard", url: "/security/frameworks/iso-27001" },
+              { title: "ISMS Clauses (4-10)", url: "/security/frameworks/iso-27001/clauses" },
+              { title: "Statement of Applicability", url: "/security/frameworks/iso-27001/soa" },
+              { title: "Annex A Controls", url: "/security/frameworks/iso-27001/controls" },
+              { title: "Evidence Matrix", url: "/security/frameworks/iso-27001/evidence" },
+              { title: "Gap Analysis", url: "/security/frameworks/iso-27001/gaps" },
+            ],
+          },
+          { 
+            title: "SOC 2", 
+            url: "/security/frameworks/soc-2",
+            items: [
+              { title: "Dashboard", url: "/security/frameworks/soc-2" },
+              { title: "Statement of Applicability", url: "/security/frameworks/soc-2/soa" },
+              { title: "Trust Service Criteria", url: "/security/frameworks/soc-2/criteria" },
+              { title: "Evidence Matrix", url: "/security/frameworks/soc-2/evidence" },
+              { title: "Gap Analysis", url: "/security/frameworks/soc-2/gaps" },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -260,13 +301,69 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <CollapsibleContent>
                       <SidebarMenuSub>
                         {item.items.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton asChild isActive={isItemActive(subItem.url)}>
-                              <Link href={subItem.url}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                          subItem.items ? (
+                            // Third level: sub-item with nested items
+                            <Collapsible key={subItem.title} asChild defaultOpen={pathname.startsWith(subItem.url)} className="group/nested">
+                              <SidebarMenuSubItem>
+                                <CollapsibleTrigger asChild>
+                                  <SidebarMenuSubButton className="pr-2" isActive={pathname.startsWith(subItem.url) && !subItem.items.some(i => isItemActive(i.url))}>
+                                    <span>{subItem.title}</span>
+                                    <ChevronRight className="ml-auto size-3.5 shrink-0 transition-transform duration-200 group-data-[state=open]/nested:rotate-90" />
+                                  </SidebarMenuSubButton>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <SidebarMenuSub className="ml-2 border-l border-border/50 pl-2">
+                                    {subItem.items.map((thirdItem) => (
+                                      thirdItem.items ? (
+                                        // Fourth level: third-item with nested items (e.g., ISO 27001 sub-pages)
+                                        <Collapsible key={thirdItem.title} asChild defaultOpen={pathname.startsWith(thirdItem.url)} className="group/deep">
+                                          <SidebarMenuSubItem>
+                                            <CollapsibleTrigger asChild>
+                                              <SidebarMenuSubButton className="pr-2 text-xs" isActive={pathname.startsWith(thirdItem.url) && !thirdItem.items.some(i => isItemActive(i.url))}>
+                                                <span>{thirdItem.title}</span>
+                                                <ChevronRight className="ml-auto size-3 shrink-0 transition-transform duration-200 group-data-[state=open]/deep:rotate-90" />
+                                              </SidebarMenuSubButton>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent>
+                                              <SidebarMenuSub className="ml-2 border-l border-border/30 pl-2">
+                                                {thirdItem.items.map((fourthItem) => (
+                                                  <SidebarMenuSubItem key={fourthItem.title}>
+                                                    <SidebarMenuSubButton asChild isActive={isItemActive(fourthItem.url)} className="text-[11px] py-1">
+                                                      <Link href={fourthItem.url}>
+                                                        <span>{fourthItem.title}</span>
+                                                      </Link>
+                                                    </SidebarMenuSubButton>
+                                                  </SidebarMenuSubItem>
+                                                ))}
+                                              </SidebarMenuSub>
+                                            </CollapsibleContent>
+                                          </SidebarMenuSubItem>
+                                        </Collapsible>
+                                      ) : (
+                                        // Third level: regular item without nested children
+                                        <SidebarMenuSubItem key={thirdItem.title}>
+                                          <SidebarMenuSubButton asChild isActive={isItemActive(thirdItem.url)} className="text-xs">
+                                            <Link href={thirdItem.url}>
+                                              <span>{thirdItem.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      )
+                                    ))}
+                                  </SidebarMenuSub>
+                                </CollapsibleContent>
+                              </SidebarMenuSubItem>
+                            </Collapsible>
+                          ) : (
+                            // Second level: regular sub-item
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubButton asChild isActive={isItemActive(subItem.url)}>
+                                <Link href={subItem.url}>
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          )
                         ))}
                       </SidebarMenuSub>
                     </CollapsibleContent>

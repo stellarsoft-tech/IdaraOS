@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
 import { PersonSchema } from "../../lib/generated/people/person/types"
-import { RiskSchema } from "../../lib/generated/security/isms/risk/types"
 
 describe("Generated Types - Person", () => {
   it("should validate valid person data", () => {
@@ -64,65 +63,4 @@ describe("Generated Types - Person", () => {
   })
 })
 
-describe("Generated Types - Risk", () => {
-  it("should validate valid risk data", () => {
-    const validRisk = {
-      risk_id: "550e8400-e29b-41d4-a716-446655440000",
-      title: "Data Breach Risk",
-      owner_id: "660e8400-e29b-41d4-a716-446655440001",
-      likelihood: "high",
-      impact: "high",
-      level: "high",
-      status: "open",
-    }
-    
-    const result = RiskSchema.safeParse(validRisk)
-    expect(result.success).toBe(true)
-  })
-  
-  it("should reject invalid likelihood", () => {
-    const invalidRisk = {
-      risk_id: "550e8400-e29b-41d4-a716-446655440000",
-      title: "Data Breach Risk",
-      owner_id: "660e8400-e29b-41d4-a716-446655440001",
-      likelihood: "super-high", // Invalid
-      impact: "high",
-      level: "high",
-      status: "open",
-    }
-    
-    const result = RiskSchema.safeParse(invalidRisk)
-    expect(result.success).toBe(false)
-  })
-  
-  it("should require title", () => {
-    const invalidRisk = {
-      risk_id: "550e8400-e29b-41d4-a716-446655440000",
-      title: "",
-      owner_id: "660e8400-e29b-41d4-a716-446655440001",
-      likelihood: "high",
-      impact: "high",
-      level: "high",
-      status: "open",
-    }
-    
-    const result = RiskSchema.safeParse(invalidRisk)
-    expect(result.success).toBe(false)
-  })
-  
-  it("should make description optional", () => {
-    const validRisk = {
-      risk_id: "550e8400-e29b-41d4-a716-446655440000",
-      title: "Data Breach Risk",
-      owner_id: "660e8400-e29b-41d4-a716-446655440001",
-      likelihood: "high",
-      impact: "high",
-      level: "high",
-      status: "open",
-      // description is optional
-    }
-    
-    const result = RiskSchema.safeParse(validRisk)
-    expect(result.success).toBe(true)
-  })
-})
+// Risk schema tests removed - security/isms/risk generated types deprecated in favor of lib/db/schema/security.ts

@@ -231,3 +231,44 @@ export function createAuditLogger(
 ): AuditLogger {
   return new AuditLogger({ orgId, actor })
 }
+
+/**
+ * Simple audit log helper for backward compatibility with security API routes
+ * Creates a minimal audit entry without full actor context
+ */
+export interface SimpleAuditInput {
+  action: "create" | "update" | "delete" | "access" | "login" | "logout" | "error"
+  entityType: string
+  entityId: string
+  userId: string
+  orgId: string
+  newValues?: Record<string, unknown>
+  oldValues?: Record<string, unknown>
+  previousValues?: Record<string, unknown>
+  description?: string
+}
+
+export async function createSimpleAuditLog(input: SimpleAuditInput): Promise<void> {
+  const context: AuditContext = {
+    orgId: input.orgId,
+    actor: {
+      id: input.userId,
+      email: "",
+      name: null,
+      ip: null,
+      userAgent: null,
+    },
+  }
+
+  const auditInput: AuditLogInput = {
+    module: `security.${input.entityType}`,
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    current: input.newValues,
+    previous: input.oldValues || input.previousValues,
+    description: input.description,
+  }
+
+  await createAuditLog(context, auditInput)
+}

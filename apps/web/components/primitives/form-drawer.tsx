@@ -93,6 +93,8 @@ export interface FormDrawerProps<T = Record<string, unknown>> {
   readOnly?: boolean
   // Info banner to show above form
   infoBanner?: React.ReactNode
+  // Callback when a field value changes - can return new values to set on other fields
+  onFieldChange?: (fieldName: string, value: unknown, setValue: (name: string, value: unknown) => void) => void
 }
 
 /**
@@ -115,11 +117,26 @@ export function FormDrawer<T = Record<string, unknown>>({
   disabledFields = [],
   readOnly = false,
   infoBanner,
+  onFieldChange,
 }: FormDrawerProps<T>) {
   const form = useForm({
     resolver: schema ? zodResolver(schema) : undefined,
     defaultValues: defaultValues || {},
   })
+
+  // Watch all fields and trigger onFieldChange callback
+  React.useEffect(() => {
+    if (!onFieldChange) return
+
+    const subscription = form.watch((formValues, { name }) => {
+      if (name) {
+        onFieldChange(name, formValues[name], (fieldName, value) => {
+          form.setValue(fieldName, value)
+        })
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [form, onFieldChange])
 
   const submitting = isSubmitting || loading
 

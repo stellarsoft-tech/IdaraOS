@@ -15,18 +15,19 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, description, icon: Icon, iconColor, trend }: StatCardProps) {
-  const defaultIconColor = "text-muted-foreground"
-  const iconBgColor = iconColor 
-    ? iconColor.replace("text-", "bg-").replace("/10", "/10")
-    : "bg-muted"
+  // Parse iconColor which may contain both bg and text classes
+  // e.g., "bg-green-500/10 text-green-600 dark:text-green-400"
+  const classes = iconColor?.split(" ") || []
+  const bgClasses = classes.filter(c => c.startsWith("bg-")).join(" ") || "bg-muted"
+  const textClasses = classes.filter(c => c.startsWith("text-") || c.startsWith("dark:text-")).join(" ") || "text-muted-foreground"
   
   return (
     <Card className="relative overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
         {Icon && (
-          <div className={`h-8 w-8 rounded-lg ${iconBgColor} flex items-center justify-center`}>
-            <Icon className={`h-4 w-4 ${iconColor || defaultIconColor}`} />
+          <div className={`h-8 w-8 rounded-lg ${bgClasses} flex items-center justify-center`}>
+            <Icon className={`h-4 w-4 ${textClasses}`} />
           </div>
         )}
       </CardHeader>
@@ -43,7 +44,7 @@ export function StatCard({ title, value, description, icon: Icon, iconColor, tre
       {/* Gradient accent */}
       {iconColor && (
         <div
-          className={`absolute top-0 right-0 w-24 h-24 opacity-10 ${iconBgColor}`}
+          className={`absolute top-0 right-0 w-24 h-24 opacity-10 ${bgClasses}`}
           style={{
             background: `radial-gradient(circle at top right, currentColor 0%, transparent 70%)`,
           }}

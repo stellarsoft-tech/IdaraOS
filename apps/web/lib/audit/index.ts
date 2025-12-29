@@ -33,9 +33,12 @@
 export { 
   AuditLogger, 
   createAuditLogger, 
-  createAuditLog, 
+  createAuditLog,
+  createSimpleAuditLog,
   extractActor 
 } from "./logger"
+
+export type { SimpleAuditInput } from "./logger"
 
 // Types
 export type { 

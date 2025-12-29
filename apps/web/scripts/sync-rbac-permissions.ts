@@ -57,6 +57,13 @@ export const MODULE_REGISTRY = [
   { slug: "security.overview", name: "Security Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300" },
   { slug: "security.risks", name: "Risk Register", description: "Manage security risks", category: "Security", icon: "AlertTriangle", sortOrder: "301" },
   { slug: "security.controls", name: "Controls Library", description: "Manage security controls", category: "Security", icon: "CheckSquare", sortOrder: "302" },
+  { slug: "security.evidence", name: "Evidence Store", description: "Manage compliance evidence", category: "Security", icon: "FileText", sortOrder: "303" },
+  { slug: "security.audits", name: "Audits", description: "Manage security audits", category: "Security", icon: "ClipboardList", sortOrder: "304" },
+  { slug: "security.objectives", name: "Objectives", description: "Manage security objectives", category: "Security", icon: "Target", sortOrder: "305" },
+  { slug: "security.frameworks", name: "Frameworks", description: "Manage compliance frameworks", category: "Security", icon: "Shield", sortOrder: "306" },
+  { slug: "security.soa", name: "Statement of Applicability", description: "Manage SoA for frameworks", category: "Security", icon: "FileCheck", sortOrder: "307" },
+  { slug: "security.settings", name: "Security Settings", description: "Configure security module settings", category: "Security", icon: "Settings", sortOrder: "308" },
+  { slug: "security.clauses", name: "ISMS Clauses", description: "Manage ISMS clause compliance tracking", category: "Security", icon: "FileCheck2", sortOrder: "309" },
   
   // Workflows
   { slug: "workflows.overview", name: "Workflows Overview", description: "View workflows dashboard", category: "Workflows", icon: "Workflow", sortOrder: "400" },
@@ -78,9 +85,10 @@ export const MODULE_REGISTRY = [
 
 export const ACTION_REGISTRY = [
   { slug: "view", name: "View", description: "View and list records", sortOrder: "1" },
-  { slug: "create", name: "Create", description: "Create new records", sortOrder: "2" },
-  { slug: "edit", name: "Edit", description: "Edit existing records", sortOrder: "3" },
-  { slug: "delete", name: "Delete", description: "Delete records", sortOrder: "4" },
+  { slug: "write", name: "Write", description: "Create and edit records", sortOrder: "2" },
+  { slug: "create", name: "Create", description: "Create new records", sortOrder: "3" },
+  { slug: "edit", name: "Edit", description: "Edit existing records", sortOrder: "4" },
+  { slug: "delete", name: "Delete", description: "Delete records", sortOrder: "5" },
 ] as const
 
 /**

@@ -66,36 +66,97 @@ export const routes: Record<string, RouteConfig> = {
   security: {
     path: "/security",
     label: "Security",
+    description: "Security and compliance management",
   },
   "security.risks": {
     path: "/security/risks",
-    label: "Risks",
+    label: "Risk Register",
     parent: "security",
+    description: "Identify and manage security risks",
   },
   "security.controls": {
     path: "/security/controls",
-    label: "Controls",
+    label: "Controls Library",
     parent: "security",
+    description: "Manage security controls and their implementation",
+  },
+  "security.evidence": {
+    path: "/security/evidence",
+    label: "Evidence Store",
+    parent: "security",
+    description: "Central repository for compliance artifacts",
   },
   "security.audits": {
     path: "/security/audits",
     label: "Audits",
     parent: "security",
+    description: "Track internal and external audits",
   },
-  "security.evidence": {
-    path: "/security/evidence",
-    label: "Evidence",
+  "security.objectives": {
+    path: "/security/objectives",
+    label: "Objectives",
     parent: "security",
+    description: "Security objectives and improvement plans",
   },
   "security.frameworks": {
     path: "/security/frameworks",
-    label: "Frameworks",
+    label: "Frameworks (IMS)",
     parent: "security",
+    description: "Compliance frameworks and certifications",
   },
-  "security.frameworks.isms": {
-    path: "/security/frameworks/isms",
-    label: "ISMS",
+  "security.frameworks.iso-27001": {
+    path: "/security/frameworks/iso-27001",
+    label: "ISO 27001",
     parent: "security.frameworks",
+    description: "ISO/IEC 27001:2022 ISMS",
+  },
+  "security.frameworks.iso-27001.soa": {
+    path: "/security/frameworks/iso-27001/soa",
+    label: "Statement of Applicability",
+    parent: "security.frameworks.iso-27001",
+    description: "ISO 27001 Annex A control applicability",
+  },
+  "security.frameworks.iso-27001.controls": {
+    path: "/security/frameworks/iso-27001/controls",
+    label: "Annex A Controls",
+    parent: "security.frameworks.iso-27001",
+    description: "93 Annex A controls browser",
+  },
+  "security.frameworks.iso-27001.gaps": {
+    path: "/security/frameworks/iso-27001/gaps",
+    label: "Gap Analysis",
+    parent: "security.frameworks.iso-27001",
+    description: "Identify implementation gaps",
+  },
+  "security.frameworks.soc-2": {
+    path: "/security/frameworks/soc-2",
+    label: "SOC 2",
+    parent: "security.frameworks",
+    description: "SOC 2 Type II compliance",
+  },
+  "security.frameworks.soc-2.criteria": {
+    path: "/security/frameworks/soc-2/criteria",
+    label: "Trust Criteria",
+    parent: "security.frameworks.soc-2",
+    description: "Trust Service Criteria mapping",
+  },
+  "security.frameworks.soc-2.evidence": {
+    path: "/security/frameworks/soc-2/evidence",
+    label: "Evidence Matrix",
+    parent: "security.frameworks.soc-2",
+    description: "Evidence requirements per criterion",
+  },
+  "security.frameworks.soc-2.gaps": {
+    path: "/security/frameworks/soc-2/gaps",
+    label: "Gap Analysis",
+    parent: "security.frameworks.soc-2",
+    description: "Audit readiness gaps",
+  },
+  "security.settings": {
+    path: "/security/settings",
+    label: "Settings",
+    parent: "security",
+    description: "Configure security module settings",
   },
   
   // Assets
