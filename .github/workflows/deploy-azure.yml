@@ -109,7 +109,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
 
-      - name: Run database migrations
+      - name: Push database schema
         env:
           CI: "true"
           FORCE_COLOR: "0"
@@ -121,22 +121,13 @@ jobs:
           export DATABASE_URL
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  IdaraOS Database Migration Pipeline"
+          echo "  IdaraOS Database Schema Push"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          
-          # Step 1: Smart baseline for existing databases (db:push)
-          # This only marks migrations as applied if their changes actually exist
-          echo "📋 Step 1: Running smart baseline..."
-          pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
+          echo "📋 Pushing schema to database (prototyping mode)..."
+          npx drizzle-kit push --force
           echo ""
-          
-          # Step 2: Apply any pending migrations
-          echo "🔄 Step 2: Applying pending migrations..."
-          pnpm db:run-migrations
-          
-          echo ""
-          echo "✅ Database migrations completed successfully!"
+          echo "✅ Database schema push completed successfully!"
           
       - name: Verify database schema
         run: |
@@ -158,22 +149,28 @@ jobs:
                 await pool.query('SELECT 1 FROM rbac_user_roles LIMIT 1');
                 console.log('✅ rbac_user_roles table exists');
                 
-                // Check people_persons has required columns (including Entra fields)
+                // Check people_persons has required columns
                 const result = await pool.query(\`
                   SELECT column_name FROM information_schema.columns 
                   WHERE table_name = 'people_persons' 
-                  AND column_name IN ('source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at')
+                  AND column_name IN ('role_id', 'team_id', 'source', 'entra_created_at', 'hire_date')
                 \`);
                 const columns = result.rows.map(r => r.column_name);
                 
-                const required = ['source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at'];
+                const required = ['role_id', 'team_id', 'source', 'entra_created_at', 'hire_date'];
                 const missing = required.filter(c => !columns.includes(c));
                 
                 if (missing.length > 0) {
                   console.error('❌ Missing columns in people_persons:', missing.join(', '));
-                  console.error('   Run db:repair and db:run-migrations to fix');
                   process.exit(1);
                 }
+                
+                // Check related tables exist
+                await pool.query('SELECT 1 FROM people_teams LIMIT 1');
+                console.log('✅ people_teams table exists');
+                
+                await pool.query('SELECT 1 FROM people_organizational_roles LIMIT 1');
+                console.log('✅ people_organizational_roles table exists');
                 
                 console.log('✅ people_persons has all required columns');
                 console.log('✅ Database schema verified');
@@ -412,7 +409,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
 
-      - name: Run database migrations
+      - name: Push database schema
         env:
           CI: "true"
           FORCE_COLOR: "0"
@@ -424,21 +421,13 @@ jobs:
           export DATABASE_URL
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  IdaraOS Database Migration Pipeline"
+          echo "  IdaraOS Database Schema Push"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          
-          # Step 1: Smart baseline for existing databases (db:push)
-          echo "📋 Step 1: Running smart baseline..."
-          pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
+          echo "📋 Pushing schema to database (prototyping mode)..."
+          npx drizzle-kit push --force
           echo ""
-          
-          # Step 2: Apply any pending migrations
-          echo "🔄 Step 2: Applying pending migrations..."
-          pnpm db:run-migrations
-          
-          echo ""
-          echo "✅ Database migrations completed successfully!"
+          echo "✅ Database schema push completed successfully!"
           
       - name: Verify database schema
         run: |
@@ -462,16 +451,23 @@ jobs:
                 const result = await pool.query(\`
                   SELECT column_name FROM information_schema.columns 
                   WHERE table_name = 'people_persons' 
-                  AND column_name IN ('source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at')
+                  AND column_name IN ('role_id', 'team_id', 'source', 'entra_created_at', 'hire_date')
                 \`);
                 const columns = result.rows.map(r => r.column_name);
-                const required = ['source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at'];
+                const required = ['role_id', 'team_id', 'source', 'entra_created_at', 'hire_date'];
                 const missing = required.filter(c => !columns.includes(c));
                 
                 if (missing.length > 0) {
                   console.error('❌ Missing columns in people_persons:', missing.join(', '));
                   process.exit(1);
                 }
+                
+                // Check related tables exist
+                await pool.query('SELECT 1 FROM people_teams LIMIT 1');
+                console.log('✅ people_teams table exists');
+                
+                await pool.query('SELECT 1 FROM people_organizational_roles LIMIT 1');
+                console.log('✅ people_organizational_roles table exists');
                 
                 console.log('✅ people_persons has all required columns');
                 console.log('✅ Database schema verified');
@@ -697,7 +693,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
 
-      - name: Run database migrations
+      - name: Push database schema
         env:
           CI: "true"
           FORCE_COLOR: "0"
@@ -709,21 +705,13 @@ jobs:
           export DATABASE_URL
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  IdaraOS Database Migration Pipeline"
+          echo "  IdaraOS Database Schema Push"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
-          
-          # Step 1: Smart baseline for existing databases (db:push)
-          echo "📋 Step 1: Running smart baseline..."
-          pnpm db:baseline || echo "ℹ️  Baseline skipped (fresh database)"
+          echo "📋 Pushing schema to database (prototyping mode)..."
+          npx drizzle-kit push --force
           echo ""
-          
-          # Step 2: Apply any pending migrations
-          echo "🔄 Step 2: Applying pending migrations..."
-          pnpm db:run-migrations
-          
-          echo ""
-          echo "✅ Database migrations completed successfully!"
+          echo "✅ Database schema push completed successfully!"
           
       - name: Verify database schema
         run: |
@@ -747,16 +735,23 @@ jobs:
                 const result = await pool.query(\`
                   SELECT column_name FROM information_schema.columns 
                   WHERE table_name = 'people_persons' 
-                  AND column_name IN ('source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at')
+                  AND column_name IN ('role_id', 'team_id', 'source', 'entra_created_at', 'hire_date')
                 \`);
                 const columns = result.rows.map(r => r.column_name);
-                const required = ['source', 'entra_created_at', 'hire_date', 'last_sign_in_at', 'last_password_change_at'];
+                const required = ['role_id', 'team_id', 'source', 'entra_created_at', 'hire_date'];
                 const missing = required.filter(c => !columns.includes(c));
                 
                 if (missing.length > 0) {
                   console.error('❌ Missing columns in people_persons:', missing.join(', '));
                   process.exit(1);
                 }
+                
+                // Check related tables exist
+                await pool.query('SELECT 1 FROM people_teams LIMIT 1');
+                console.log('✅ people_teams table exists');
+                
+                await pool.query('SELECT 1 FROM people_organizational_roles LIMIT 1');
+                console.log('✅ people_organizational_roles table exists');
                 
                 console.log('✅ people_persons has all required columns');
                 console.log('✅ Database schema verified');
