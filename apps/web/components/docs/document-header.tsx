@@ -35,6 +35,8 @@ interface DocumentHeaderProps {
   confidentiality?: "public" | "internal" | "confidential" | "restricted"
   tags?: string[]
   className?: string
+  /** Optional action buttons to render in the header */
+  actions?: React.ReactNode
 }
 
 /**
@@ -63,14 +65,18 @@ export function DocumentHeader({
   effectiveDate,
   approvedBy,
   className,
+  actions,
 }: DocumentHeaderProps) {
   // Check if we have any metadata to show
   const hasMetadata = referenceId || version || owner || effectiveDate || approvedBy
 
   return (
     <div className={cn("mb-6", className)}>
-      {/* Title */}
-      <h1 className="text-3xl font-bold tracking-tight mb-4">{title}</h1>
+      {/* Title row with optional actions */}
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+        {actions}
+      </div>
       
       {/* Metadata Box - 2 row grid layout like reference */}
       {hasMetadata && (

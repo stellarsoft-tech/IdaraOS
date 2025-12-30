@@ -176,6 +176,66 @@ export default function DocumentViewerPage() {
     return undefined
   })()
   
+  // Action buttons component to avoid duplication
+  const ActionButtons = () => (
+    <div className="flex items-center gap-1 print:hidden">
+      {/* Acknowledgment Status */}
+      {myDocRecord && !needsAcknowledgment && (
+        <div className="flex items-center gap-1 text-green-600 mr-2 text-sm">
+          <CheckCircle className="h-4 w-4" />
+          <span>{myDocRecord.acknowledgmentStatus === "signed" ? "Signed" : "Acknowledged"}</span>
+        </div>
+      )}
+      
+      {/* Acknowledgment/Sign Button */}
+      {needsAcknowledgment && (
+        needsSignature ? (
+          <Button size="sm" variant="default" onClick={() => setShowSignDialog(true)} className="mr-2">
+            <PenLine className="mr-1.5 h-3.5 w-3.5" />
+            Sign Document
+          </Button>
+        ) : (
+          <Button size="sm" variant="default" onClick={() => setShowAckDialog(true)} className="mr-2">
+            <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+            Acknowledge
+          </Button>
+        )
+      )}
+      
+      {/* ToC Toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" onClick={() => setShowToc(!showToc)} className="h-8 w-8">
+            {showToc ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{showToc ? "Hide contents" : "Show contents"}</TooltipContent>
+      </Tooltip>
+      
+      {/* Print Button */}
+      {canPrint && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" onClick={handlePrint} className="h-8 w-8">
+              <Printer className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Print document</TooltipContent>
+        </Tooltip>
+      )}
+      
+      {/* Fullscreen Toggle */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(!isFullscreen)} className="h-8 w-8">
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}</TooltipContent>
+      </Tooltip>
+    </div>
+  )
+  
   return (
     <div
       className={cn(
@@ -183,66 +243,6 @@ export default function DocumentViewerPage() {
         isFullscreen && "fixed inset-0 z-50 bg-background overflow-auto p-6"
       )}
     >
-      {/* Action Bar */}
-      <div className="flex items-center justify-end mb-4 print:hidden">
-        <div className="flex items-center gap-1">
-          {/* Acknowledgment Status */}
-          {myDocRecord && !needsAcknowledgment && (
-            <div className="flex items-center gap-1 text-green-600 mr-2 text-sm">
-              <CheckCircle className="h-4 w-4" />
-              <span>{myDocRecord.acknowledgmentStatus === "signed" ? "Signed" : "Acknowledged"}</span>
-            </div>
-          )}
-          
-          {/* Acknowledgment/Sign Button */}
-          {needsAcknowledgment && (
-            needsSignature ? (
-              <Button size="sm" variant="default" onClick={() => setShowSignDialog(true)} className="mr-2">
-                <PenLine className="mr-1.5 h-3.5 w-3.5" />
-                Sign Document
-              </Button>
-            ) : (
-              <Button size="sm" variant="default" onClick={() => setShowAckDialog(true)} className="mr-2">
-                <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
-                Acknowledge
-              </Button>
-            )
-          )}
-          
-          {/* ToC Toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => setShowToc(!showToc)} className="h-8 w-8">
-                {showToc ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{showToc ? "Hide contents" : "Show contents"}</TooltipContent>
-          </Tooltip>
-          
-          {/* Print Button */}
-          {canPrint && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handlePrint} className="h-8 w-8">
-                  <Printer className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Print document</TooltipContent>
-            </Tooltip>
-          )}
-          
-          {/* Fullscreen Toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(!isFullscreen)} className="h-8 w-8">
-                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-      
       {/* Pending Action Banner */}
       {needsAcknowledgment && (
         <Card className="border-yellow-500/50 bg-yellow-500/5 mb-4 print:hidden">
@@ -281,6 +281,7 @@ export default function DocumentViewerPage() {
             } : undefined}
             effectiveDate={effectiveDate}
             approvedBy={approvedBy}
+            actions={<ActionButtons />}
           />
           
           {/* Main Content */}
