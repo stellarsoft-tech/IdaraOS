@@ -61,7 +61,7 @@ function extractHeadings(container: HTMLElement): TocHeading[] {
 
 /**
  * Table of Contents Component
- * Minimalistic scrollspy-enabled table of contents
+ * Displays a scrollspy-enabled table of contents for document navigation
  */
 export function TableOfContents({
   contentRef,
@@ -189,23 +189,23 @@ export function TableOfContents({
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">On this page</h2>
+        <h2 className="text-sm font-semibold text-foreground">On this page</h2>
         {collapsible && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-5 w-5"
+            className="h-6 w-6"
             onClick={toggleCollapse}
             aria-label={isCollapsed ? "Show table of contents" : "Hide table of contents"}
           >
-            {isCollapsed ? <List className="h-3 w-3" /> : <X className="h-3 w-3" />}
+            {isCollapsed ? <List className="h-4 w-4" /> : <X className="h-4 w-4" />}
           </Button>
         )}
       </div>
 
-      {/* Minimalistic ToC List */}
+      {/* ToC List with minimal scrollbar */}
       {!isCollapsed && (
-        <ul className="space-y-0.5 text-sm border-l border-border">
+        <ul className="space-y-1 text-sm max-h-[calc(100vh-80px)] overflow-y-auto toc-scroll">
           {headings.map((heading) => {
             const indent = heading.level - minLevel
             const isActive = activeId === heading.id
@@ -215,14 +215,15 @@ export function TableOfContents({
                 <button
                   onClick={() => scrollToHeading(heading.id)}
                   className={cn(
-                    "w-full text-left py-1 transition-colors block",
-                    "hover:text-foreground",
+                    "w-full text-left py-1 px-2 rounded-sm transition-colors",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                     isActive
-                      ? "text-foreground font-medium border-l-2 border-foreground -ml-px"
-                      : "text-muted-foreground",
+                      ? "text-primary font-medium border-l-2 border-primary bg-primary/5"
+                      : "text-muted-foreground border-l-2 border-transparent",
                   )}
                   style={{
-                    paddingLeft: `${12 + indent * 12}px`,
+                    paddingLeft: `${8 + indent * 12}px`,
                   }}
                 >
                   <span className="line-clamp-2">{heading.text}</span>
@@ -232,6 +233,23 @@ export function TableOfContents({
           })}
         </ul>
       )}
+
+      {/* Minimal scrollbar styles */}
+      <style jsx>{`
+        .toc-scroll::-webkit-scrollbar {
+          width: 4px;
+        }
+        .toc-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .toc-scroll::-webkit-scrollbar-thumb {
+          background: hsl(var(--muted-foreground) / 0.3);
+          border-radius: 2px;
+        }
+        .toc-scroll::-webkit-scrollbar-thumb:hover {
+          background: hsl(var(--muted-foreground) / 0.5);
+        }
+      `}</style>
     </nav>
   )
 }
