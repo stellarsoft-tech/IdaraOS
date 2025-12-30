@@ -169,9 +169,19 @@ export function TableOfContents({
   const scrollToHeading = (id: string) => {
     const element = document.getElementById(id)
     if (element) {
-      const yOffset = -100 // Account for fixed header
-      const y = element.getBoundingClientRect().top + window.scrollY + yOffset
-      window.scrollTo({ top: y, behavior: "smooth" })
+      // Use scrollIntoView which works with any scroll container
+      element.scrollIntoView({ behavior: "smooth", block: "start" })
+      // Add a small delay then adjust for header offset
+      setTimeout(() => {
+        const scrollContainer = document.querySelector("[data-scroll-container]") || 
+                               document.querySelector("main") ||
+                               window
+        if (scrollContainer && scrollContainer !== window) {
+          (scrollContainer as HTMLElement).scrollTop -= 80
+        } else {
+          window.scrollBy({ top: -80, behavior: "instant" })
+        }
+      }, 100)
       setActiveId(id)
     }
   }
@@ -218,35 +228,37 @@ export function TableOfContents({
         )}
       </div>
 
-      {/* ToC List */}
+      {/* ToC List - scrollable when content is long */}
       {!isCollapsed && (
-        <ul className="space-y-1 text-sm">
-          {headings.map((heading) => {
-            const indent = heading.level - minLevel
-            const isActive = activeId === heading.id
-            
-            return (
-              <li key={heading.id}>
-                <button
-                  onClick={() => scrollToHeading(heading.id)}
-                  className={cn(
-                    "w-full text-left py-1 px-2 rounded-sm transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                    isActive
-                      ? "text-primary font-medium border-l-2 border-primary bg-primary/5"
-                      : "text-muted-foreground border-l-2 border-transparent",
-                  )}
-                  style={{
-                    paddingLeft: `${8 + indent * 12}px`,
-                  }}
-                >
-                  <span className="line-clamp-2">{heading.text}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+        <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2 scrollbar-thin">
+          <ul className="space-y-1 text-sm">
+            {headings.map((heading) => {
+              const indent = heading.level - minLevel
+              const isActive = activeId === heading.id
+              
+              return (
+                <li key={heading.id}>
+                  <button
+                    onClick={() => scrollToHeading(heading.id)}
+                    className={cn(
+                      "w-full text-left py-1 px-2 rounded-sm transition-colors",
+                      "hover:bg-accent hover:text-accent-foreground",
+                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                      isActive
+                        ? "text-primary font-medium border-l-2 border-primary bg-primary/5"
+                        : "text-muted-foreground border-l-2 border-transparent",
+                    )}
+                    style={{
+                      paddingLeft: `${8 + indent * 12}px`,
+                    }}
+                  >
+                    <span className="line-clamp-2">{heading.text}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
     </nav>
   )
