@@ -112,6 +112,12 @@ export default function DocumentDetailPage() {
   // Initialize form data when document loads
   React.useEffect(() => {
     if (doc) {
+      const metadata = (doc.metadata || {}) as {
+        referenceId?: string
+        effectiveDate?: string
+        ownerRole?: string
+        approvedBy?: { name?: string; role?: string }
+      }
       setFormData({
         title: doc.title,
         description: doc.description || "",
@@ -123,6 +129,12 @@ export default function DocumentDetailPage() {
         showVersionHistory: doc.showVersionHistory,
         nextReviewAt: doc.nextReviewAt || "",
         reviewFrequencyDays: doc.reviewFrequencyDays || "",
+        // Metadata fields
+        referenceId: metadata.referenceId || "",
+        effectiveDate: metadata.effectiveDate || "",
+        ownerRole: metadata.ownerRole || "",
+        approvedByName: metadata.approvedBy?.name || "",
+        approvedByRole: metadata.approvedBy?.role || "",
       })
       setContent(doc.content || "")
     }
@@ -132,11 +144,36 @@ export default function DocumentDetailPage() {
     if (!doc) return
     
     try {
+      // Extract metadata form fields with proper typing
+      const refId = formData.referenceId as string | undefined
+      const effDate = formData.effectiveDate as string | undefined
+      const ownerRoleVal = formData.ownerRole as string | undefined
+      const approvedName = formData.approvedByName as string | undefined
+      const approvedRole = formData.approvedByRole as string | undefined
+      
+      // Build metadata object from form fields
+      const metadata = {
+        ...(doc.metadata || {}),
+        referenceId: refId || undefined,
+        effectiveDate: effDate || undefined,
+        ownerRole: ownerRoleVal || undefined,
+        approvedBy: (approvedName || approvedRole) 
+          ? { 
+              name: approvedName || undefined, 
+              role: approvedRole || undefined 
+            }
+          : undefined,
+      }
+      
+      // Exclude our UI-only fields from formData before sending
+      const { referenceId, effectiveDate, ownerRole, approvedByName, approvedByRole, ...restFormData } = formData
+      
       await updateDocument.mutateAsync({
         id: doc.id,
         data: {
-          ...formData,
+          ...restFormData,
           content,
+          metadata,
         },
       })
       toast.success("Document saved successfully")
@@ -502,6 +539,73 @@ flowchart LR
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   rows={3}
                 />
+              </div>
+              
+              <Separator />
+              
+              {/* Document Information - For Header Display */}
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium">Document Information</h4>
+                  <p className="text-sm text-muted-foreground">
+                    These fields are displayed in the document header when viewing
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Reference ID</Label>
+                    <Input
+                      value={formData.referenceId as string || ""}
+                      onChange={(e) => setFormData({ ...formData, referenceId: e.target.value })}
+                      placeholder="e.g., SS-ORG-01"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Document reference code for identification
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Effective Date</Label>
+                    <Input
+                      value={formData.effectiveDate as string || ""}
+                      onChange={(e) => setFormData({ ...formData, effectiveDate: e.target.value })}
+                      placeholder="e.g., 2024-01-15 or [Implementation Date]"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      When this document becomes effective
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Owner Role/Title</Label>
+                    <Input
+                      value={formData.ownerRole as string || ""}
+                      onChange={(e) => setFormData({ ...formData, ownerRole: e.target.value })}
+                      placeholder="e.g., Information Security Manager"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Role or title of the document owner
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Approved By (Name)</Label>
+                    <Input
+                      value={formData.approvedByName as string || ""}
+                      onChange={(e) => setFormData({ ...formData, approvedByName: e.target.value })}
+                      placeholder="e.g., John Smith"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Approved By (Role)</Label>
+                    <Input
+                      value={formData.approvedByRole as string || ""}
+                      onChange={(e) => setFormData({ ...formData, approvedByRole: e.target.value })}
+                      placeholder="e.g., CEO, Board of Directors"
+                    />
+                  </div>
+                </div>
               </div>
               
               <Separator />
