@@ -37,7 +37,7 @@ function extractHeadings(container: HTMLElement): TocHeading[] {
   const headings: TocHeading[] = []
   const elements = container.querySelectorAll("h1, h2, h3, h4")
   
-  elements.forEach((el, index) => {
+  elements.forEach((el) => {
     const text = el.textContent?.trim() || ""
     if (!text) return
     
@@ -61,7 +61,7 @@ function extractHeadings(container: HTMLElement): TocHeading[] {
 
 /**
  * Table of Contents Component
- * Displays a scrollspy-enabled table of contents for document navigation
+ * Minimalistic scrollspy-enabled table of contents
  */
 export function TableOfContents({
   contentRef,
@@ -84,10 +84,8 @@ export function TableOfContents({
       setHeadings(extracted)
     }
     
-    // Initial extraction
     updateHeadings()
     
-    // Watch for DOM changes (for dynamic content)
     const mutationObserver = new MutationObserver(updateHeadings)
     mutationObserver.observe(contentRef.current, {
       childList: true,
@@ -101,7 +99,6 @@ export function TableOfContents({
   React.useEffect(() => {
     if (!contentRef.current || headings.length === 0) return
     
-    // Cleanup previous observer
     if (observerRef.current) {
       observerRef.current.disconnect()
     }
@@ -112,7 +109,6 @@ export function TableOfContents({
     
     if (headingElements.length === 0) return
     
-    // Track visible headings
     const visibleHeadings = new Set<string>()
     
     observerRef.current = new IntersectionObserver(
@@ -125,7 +121,6 @@ export function TableOfContents({
           }
         })
         
-        // Find the first visible heading in document order
         for (const heading of headings) {
           if (visibleHeadings.has(heading.id)) {
             setActiveId(heading.id)
@@ -133,7 +128,6 @@ export function TableOfContents({
           }
         }
         
-        // If no headings visible, find the closest one above viewport
         if (visibleHeadings.size === 0) {
           let closestAbove: string | null = null
           for (const heading of headings) {
@@ -169,9 +163,7 @@ export function TableOfContents({
   const scrollToHeading = (id: string) => {
     const element = document.getElementById(id)
     if (element) {
-      // Update URL with hash
       window.history.pushState(null, "", `#${id}`)
-      // Scroll to element with small offset
       element.scrollIntoView({ behavior: "smooth", block: "start" })
       setActiveId(id)
     }
@@ -188,66 +180,57 @@ export function TableOfContents({
     return null
   }
 
-  // Find the minimum heading level to normalize indentation
   const minLevel = Math.min(...headings.map((h) => h.level))
 
   return (
     <nav
-      className={cn(
-        "relative",
-        className
-      )}
+      className={cn("relative", className)}
       aria-label="Table of contents"
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-foreground">On this page</h2>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">On this page</h2>
         {collapsible && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-5 w-5"
             onClick={toggleCollapse}
             aria-label={isCollapsed ? "Show table of contents" : "Hide table of contents"}
           >
-            {isCollapsed ? (
-              <List className="h-4 w-4" />
-            ) : (
-              <X className="h-4 w-4" />
-            )}
+            {isCollapsed ? <List className="h-3 w-3" /> : <X className="h-3 w-3" />}
           </Button>
         )}
       </div>
 
-      {/* ToC List - scrollable only when content overflows */}
+      {/* Minimalistic ToC List */}
       {!isCollapsed && (
-        <ul className="space-y-1 text-sm max-h-[calc(100vh-120px)] overflow-y-auto pr-1">
-            {headings.map((heading) => {
-              const indent = heading.level - minLevel
-              const isActive = activeId === heading.id
-              
-              return (
-                <li key={heading.id}>
-                  <button
-                    onClick={() => scrollToHeading(heading.id)}
-                    className={cn(
-                      "w-full text-left py-1 px-2 rounded-sm transition-colors",
-                      "hover:bg-accent hover:text-accent-foreground",
-                      "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                      isActive
-                        ? "text-primary font-medium border-l-2 border-primary bg-primary/5"
-                        : "text-muted-foreground border-l-2 border-transparent",
-                    )}
-                    style={{
-                      paddingLeft: `${8 + indent * 12}px`,
-                    }}
-                  >
-                    <span className="line-clamp-2">{heading.text}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+        <ul className="space-y-0.5 text-sm border-l border-border">
+          {headings.map((heading) => {
+            const indent = heading.level - minLevel
+            const isActive = activeId === heading.id
+            
+            return (
+              <li key={heading.id}>
+                <button
+                  onClick={() => scrollToHeading(heading.id)}
+                  className={cn(
+                    "w-full text-left py-1 transition-colors block",
+                    "hover:text-foreground",
+                    isActive
+                      ? "text-foreground font-medium border-l-2 border-foreground -ml-px"
+                      : "text-muted-foreground",
+                  )}
+                  style={{
+                    paddingLeft: `${12 + indent * 12}px`,
+                  }}
+                >
+                  <span className="line-clamp-2">{heading.text}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       )}
     </nav>
   )
@@ -282,4 +265,3 @@ export function TocTrigger({ onClick, isOpen, className }: TocTriggerProps) {
     </Button>
   )
 }
-
