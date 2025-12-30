@@ -178,16 +178,18 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Write MDX content to file if provided
-    if (data.content) {
-      const written = await writeDocumentContent(data.slug, data.content)
-      if (!written) {
-        return NextResponse.json(
-          { error: "Failed to write document content" },
-          { status: 500 }
-        )
-      }
+    // Always write MDX content to file (even if empty, to create the file)
+    const contentToWrite = data.content ?? ""
+    console.log(`[Docs] Creating document file: content/docs/${data.slug}.mdx`)
+    const written = await writeDocumentContent(data.slug, contentToWrite)
+    if (!written) {
+      console.error(`[Docs] Failed to write document file: ${data.slug}`)
+      return NextResponse.json(
+        { error: "Failed to write document content" },
+        { status: 500 }
+      )
     }
+    console.log(`[Docs] Successfully wrote document file: ${data.slug}.mdx`)
     
     // Create document record
     const [created] = await db

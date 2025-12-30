@@ -51,7 +51,7 @@ export const CreateDocumentSchema = z.object({
   currentVersion: z.string().default("1.0"),
   ownerId: z.string().uuid().optional().nullable(),
   nextReviewAt: z.string().optional().nullable(),
-  reviewFrequencyDays: z.number().int().positive().optional().nullable(),
+  reviewFrequencyDays: z.coerce.number().int().positive().optional().nullable(),
   showHeader: z.boolean().default(true),
   showFooter: z.boolean().default(true),
   showVersionHistory: z.boolean().default(true),
@@ -71,7 +71,10 @@ export type CreateDocument = z.infer<typeof CreateDocumentSchema>
  * Update document schema
  */
 export const UpdateDocumentSchema = CreateDocumentSchema.partial().extend({
-  publishedAt: z.string().datetime().optional().nullable(),
+  publishedAt: z.string().optional().nullable(),
+  // Allow any additional fields from the form
+  changeDescription: z.string().optional(),
+  changeSummary: z.string().optional(),
 })
 export type UpdateDocument = z.infer<typeof UpdateDocumentSchema>
 
@@ -236,6 +239,9 @@ export interface RolloutWithTarget {
 export interface AcknowledgmentWithUser {
   id: string
   documentId: string
+  documentTitle?: string
+  documentSlug?: string
+  documentCategory?: string
   rolloutId: string | null
   userId: string
   userName: string

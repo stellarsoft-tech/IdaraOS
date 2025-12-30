@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -51,6 +52,10 @@ export function MermaidDiagram({ chart, title, className }: MermaidDiagramProps)
   const [error, setError] = React.useState<string | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   
+  // Get current theme
+  const { resolvedTheme } = useTheme()
+  const isDarkMode = resolvedTheme === "dark"
+  
   // Transform state for pan/zoom
   const [transform, setTransform] = React.useState<TransformState>({
     scale: 1,
@@ -74,12 +79,37 @@ export function MermaidDiagram({ chart, title, className }: MermaidDiagramProps)
         // Dynamically import mermaid (loaded from CDN or npm)
         const mermaid = (await import("mermaid")).default
         
-        // Initialize mermaid with config
+        // Initialize mermaid with config - use dark theme when in dark mode
         mermaid.initialize({
           startOnLoad: false,
-          theme: "neutral",
+          theme: isDarkMode ? "dark" : "neutral",
           securityLevel: "loose",
           fontFamily: "inherit",
+          themeVariables: isDarkMode ? {
+            primaryColor: "#1e293b",
+            primaryTextColor: "#f1f5f9",
+            primaryBorderColor: "#475569",
+            lineColor: "#94a3b8",
+            secondaryColor: "#334155",
+            tertiaryColor: "#1e293b",
+            background: "#0f172a",
+            mainBkg: "#1e293b",
+            secondBkg: "#334155",
+            nodeBorder: "#475569",
+            clusterBkg: "#1e293b",
+            clusterBorder: "#475569",
+            titleColor: "#f1f5f9",
+            edgeLabelBackground: "#1e293b",
+            actorBorder: "#475569",
+            actorBkg: "#1e293b",
+            actorTextColor: "#f1f5f9",
+            actorLineColor: "#94a3b8",
+            noteBkgColor: "#334155",
+            noteTextColor: "#f1f5f9",
+            noteBorderColor: "#475569",
+            signalColor: "#94a3b8",
+            signalTextColor: "#f1f5f9",
+          } : undefined,
         })
         
         // Generate unique ID for this diagram
@@ -106,7 +136,7 @@ export function MermaidDiagram({ chart, title, className }: MermaidDiagramProps)
     return () => {
       mounted = false
     }
-  }, [chart])
+  }, [chart, isDarkMode])
   
   // Reset transform
   const resetTransform = React.useCallback(() => {
@@ -312,21 +342,25 @@ export function MermaidDiagram({ chart, title, className }: MermaidDiagramProps)
       
       {/* Fullscreen dialog */}
       <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
-        <DialogContent className="max-w-[95vw] w-[95vw] max-h-[95vh] h-[95vh] p-0">
-          <DialogHeader className="px-4 py-2 border-b">
+        <DialogContent 
+          showCloseButton={false}
+          className="!max-w-none !w-screen !h-screen !max-h-screen !p-0 !rounded-none !border-0 !top-0 !left-0 !translate-x-0 !translate-y-0 !gap-0"
+        >
+          <DialogHeader className="px-4 py-3 border-b shrink-0">
             <div className="flex items-center justify-between">
               <DialogTitle>{title || "Diagram"}</DialogTitle>
               <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
+                variant="outline"
+                size="sm"
+                className="h-8"
                 onClick={() => setIsFullscreen(false)}
               >
-                <Minimize2 className="h-4 w-4" />
+                <Minimize2 className="mr-2 h-4 w-4" />
+                Exit Fullscreen
               </Button>
             </div>
           </DialogHeader>
-          <div className="flex-1 p-4 h-[calc(95vh-60px)]">
+          <div className="flex-1 p-4 overflow-hidden">
             {renderDiagram(true)}
           </div>
         </DialogContent>

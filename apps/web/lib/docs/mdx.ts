@@ -9,6 +9,9 @@ import path from "path"
 // Content directory path
 const CONTENT_DIR = path.join(process.cwd(), "content/docs")
 
+// Log the resolved path on module load (helps debug Docker path issues)
+console.log(`[MDX] Content directory: ${CONTENT_DIR} (cwd: ${process.cwd()})`)
+
 /**
  * Document frontmatter structure (optional in MDX files)
  */
@@ -69,13 +72,16 @@ export async function listDocumentFiles(): Promise<string[]> {
 export async function writeDocumentContent(slug: string, content: string): Promise<boolean> {
   try {
     // Ensure directory exists
+    console.log(`[MDX] Creating directory: ${CONTENT_DIR}`)
     await fs.mkdir(CONTENT_DIR, { recursive: true })
     
     const filePath = path.join(CONTENT_DIR, `${slug}.mdx`)
+    console.log(`[MDX] Writing file: ${filePath} (${content.length} bytes)`)
     await fs.writeFile(filePath, content, "utf-8")
+    console.log(`[MDX] Successfully wrote: ${filePath}`)
     return true
   } catch (error) {
-    console.error(`Error writing document ${slug}:`, error)
+    console.error(`[MDX] Error writing document ${slug}:`, error)
     return false
   }
 }

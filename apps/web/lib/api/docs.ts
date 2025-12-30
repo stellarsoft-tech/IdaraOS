@@ -100,7 +100,10 @@ async function updateDocument(id: string, data: UpdateDocument): Promise<Documen
   })
   if (!res.ok) {
     const error = await res.json()
-    throw new Error(error.error || "Failed to update document")
+    // Create an error that includes field details for better error messages
+    const err = new Error(error.error || "Failed to update document") as Error & { details?: unknown }
+    err.details = error.details
+    throw err
   }
   const result = await res.json()
   return result.data
@@ -258,7 +261,8 @@ export function useCreateDocument() {
   return useMutation({
     mutationFn: createDocument,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.documents() })
+      // Invalidate all docs queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
     },
   })
 }
@@ -268,9 +272,17 @@ export function useUpdateDocument() {
   
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateDocument }) => updateDocument(id, data),
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.documents() })
+    onSuccess: (data, { id }) => {
+      // Invalidate all document queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
+      
+      // Also invalidate specific document detail by ID
       queryClient.invalidateQueries({ queryKey: docsKeys.documentDetail(id) })
+      
+      // If we have the slug, also invalidate by slug (important for slug-based routing)
+      if (data?.slug) {
+        queryClient.invalidateQueries({ queryKey: docsKeys.documentDetail(data.slug) })
+      }
     },
   })
 }
@@ -281,7 +293,8 @@ export function useDeleteDocument() {
   return useMutation({
     mutationFn: deleteDocument,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.documents() })
+      // Invalidate all docs queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
     },
   })
 }
@@ -303,7 +316,8 @@ export function useCreateRollout() {
   return useMutation({
     mutationFn: createRollout,
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.rollouts() })
+      // Invalidate all docs queries to ensure fresh data everywhere
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
       queryClient.invalidateQueries({ queryKey: docsKeys.documentDetail(variables.documentId) })
     },
   })
@@ -315,7 +329,8 @@ export function useUpdateRollout() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateRollout }) => updateRollout(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.rollouts() })
+      // Invalidate all docs queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
     },
   })
 }
@@ -326,7 +341,8 @@ export function useDeleteRollout() {
   return useMutation({
     mutationFn: deleteRollout,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.rollouts() })
+      // Invalidate all docs queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
     },
   })
 }
@@ -348,8 +364,8 @@ export function useUpdateAcknowledgment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAcknowledgment }) => updateAcknowledgment(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: docsKeys.acknowledgments() })
-      queryClient.invalidateQueries({ queryKey: docsKeys.myDocuments() })
+      // Invalidate all docs queries to ensure fresh data everywhere
+      queryClient.invalidateQueries({ queryKey: docsKeys.all })
     },
   })
 }

@@ -150,6 +150,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 /**
+ * Bump patch version (e.g., "1.0" -> "1.0.1", "1.0.1" -> "1.0.2")
+ */
+function bumpPatchVersion(version: string): string {
+  const parts = version.split(".")
+  if (parts.length === 2) {
+    // e.g., "1.0" -> "1.0.1"
+    return `${parts[0]}.${parts[1]}.1`
+  } else if (parts.length >= 3) {
+    // e.g., "1.0.1" -> "1.0.2"
+    const patch = parseInt(parts[2], 10) || 0
+    return `${parts[0]}.${parts[1]}.${patch + 1}`
+  }
+  return `${version}.1`
+}
+
+/**
  * PUT /api/docs/documents/[id]
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
@@ -165,6 +181,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     // Validate request body
     const parseResult = UpdateDocumentSchema.safeParse(body)
     if (!parseResult.success) {
+      console.error("Document update validation error:", parseResult.error.flatten())
       return NextResponse.json(
         { error: "Invalid request body", details: parseResult.error.flatten() },
         { status: 400 }
@@ -205,6 +222,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
     
+    // Read existing content to detect changes
+    const existingContent = await readDocumentContent(existing.slug)
+    const contentChanged = data.content !== undefined && data.content !== existingContent
+    
     // Write content to file if provided
     if (data.content !== undefined) {
       const slug = data.slug || existing.slug
@@ -237,6 +258,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       updateData.publishedAt = existing.publishedAt
     }
     
+    // Determine if we need to auto-create a version
+    // Auto-version: Published doc + content changed + version not manually changed
+    const isManualVersionBump = data.currentVersion && data.currentVersion !== existing.currentVersion
+    const shouldAutoVersion = existing.status === "published" && contentChanged && !isManualVersionBump
+    
+    // If auto-versioning, bump the patch version
+    if (shouldAutoVersion) {
+      updateData.currentVersion = bumpPatchVersion(existing.currentVersion)
+    }
+    
     // Update document
     const [updated] = await db
       .update(documents)
@@ -244,13 +275,25 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       .where(eq(documents.id, existing.id))
       .returning()
     
-    // If version changed, create version record
-    if (data.currentVersion && data.currentVersion !== existing.currentVersion) {
+    // Create version record for manual version bump
+    if (isManualVersionBump) {
       await db.insert(documentVersions).values({
         documentId: existing.id,
-        version: data.currentVersion,
+        version: data.currentVersion!,
         changeDescription: body.changeDescription || `Updated to version ${data.currentVersion}`,
         changeSummary: body.changeSummary,
+        contentSnapshot: data.content || existingContent || undefined,
+        createdById: session.userId,
+      })
+    }
+    // Create version record for auto-versioning (content change on published doc)
+    else if (shouldAutoVersion) {
+      await db.insert(documentVersions).values({
+        documentId: existing.id,
+        version: updated.currentVersion,
+        changeDescription: body.changeDescription || "Content updated",
+        changeSummary: body.changeSummary || "Automatic version from content update",
+        contentSnapshot: data.content || undefined,
         createdById: session.userId,
       })
     }

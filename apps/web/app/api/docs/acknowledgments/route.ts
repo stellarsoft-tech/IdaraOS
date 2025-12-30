@@ -44,11 +44,14 @@ export async function GET(request: NextRequest) {
       conditions.push(inArray(documentAcknowledgments.status, statuses as typeof documentAcknowledgments.status.enumValues))
     }
     
-    // Query acknowledgments with user info
+    // Query acknowledgments with user and document info
     const acksResult = await db
       .select({
         id: documentAcknowledgments.id,
         documentId: documentAcknowledgments.documentId,
+        documentTitle: documents.title,
+        documentSlug: documents.slug,
+        documentCategory: documents.category,
         rolloutId: documentAcknowledgments.rolloutId,
         userId: documentAcknowledgments.userId,
         userName: users.name,

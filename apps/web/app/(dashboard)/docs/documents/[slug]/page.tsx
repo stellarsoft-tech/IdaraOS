@@ -12,6 +12,8 @@ import {
   Globe,
   History,
   Loader2,
+  Maximize2,
+  Minimize2,
   MoreHorizontal,
   Plus,
   Save,
@@ -22,6 +24,7 @@ import {
   Trash2,
   User,
   Users,
+  X,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/page-header"
@@ -95,6 +98,7 @@ export default function DocumentDetailPage() {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
   const [formData, setFormData] = React.useState<Record<string, unknown>>({})
   const [content, setContent] = React.useState("")
+  const [fullscreenMode, setFullscreenMode] = React.useState<"editor" | "preview" | null>(null)
   
   const doc = data?.data
   
@@ -138,8 +142,24 @@ export default function DocumentDetailPage() {
       toast.success("Document saved successfully")
       setIsEditing(false)
       refetch()
-    } catch (error) {
-      toast.error("Failed to save document")
+    } catch (error: unknown) {
+      // Try to extract field errors from the API response
+      const err = error as { message?: string; details?: { fieldErrors?: Record<string, string[]> } }
+      const fieldErrors = err?.details?.fieldErrors
+      
+      if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+        const errorMessages = Object.entries(fieldErrors)
+          .map(([field, errors]) => `${field}: ${errors.join(", ")}`)
+          .join("\n")
+        toast.error("Validation failed", {
+          description: errorMessages,
+          duration: 5000,
+        })
+      } else {
+        toast.error("Failed to save document", {
+          description: err?.message || "Please check your input and try again",
+        })
+      }
     }
   }
   
@@ -276,12 +296,80 @@ export default function DocumentDetailPage() {
         
         {/* Content Tab */}
         <TabsContent value="content" className="mt-4">
-          <div className="grid gap-6 lg:grid-cols-2">
+          {/* Fullscreen Editor */}
+          {fullscreenMode === "editor" && (
+            <div className="fixed inset-0 z-50 bg-background">
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between p-4 border-b shrink-0">
+                  <div>
+                    <h2 className="text-lg font-semibold">MDX Editor</h2>
+                    <p className="text-sm text-muted-foreground">{doc?.title}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={handleSave} disabled={updateDocument.isPending}>
+                      {updateDocument.isPending && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      <Save className="mr-2 h-4 w-4" />
+                      Save
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setFullscreenMode(null)}>
+                      <Minimize2 className="mr-2 h-4 w-4" />
+                      Exit Fullscreen
+                    </Button>
+                  </div>
+                </div>
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="flex-1 font-mono text-sm resize-none rounded-none border-0 focus-visible:ring-0"
+                  placeholder="# Document Title&#10;&#10;Start writing your document content here..."
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Fullscreen Preview */}
+          {fullscreenMode === "preview" && (
+            <div className="fixed inset-0 z-50 bg-background">
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between p-4 border-b shrink-0">
+                  <div>
+                    <h2 className="text-lg font-semibold">Document Preview</h2>
+                    <p className="text-sm text-muted-foreground">{doc?.title}</p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setFullscreenMode(null)}>
+                    <Minimize2 className="mr-2 h-4 w-4" />
+                    Exit Fullscreen
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-auto p-6">
+                  <div className="max-w-4xl mx-auto">
+                    {content ? (
+                      <MDXRenderer content={content} />
+                    ) : (
+                      <p className="text-muted-foreground text-sm">
+                        No content to preview...
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Normal View */}
+          <div className={`grid gap-6 lg:grid-cols-2 ${fullscreenMode ? "hidden" : ""}`}>
             {/* Editor */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">MDX Content</CardTitle>
-                <CardDescription>Edit the document content in MDX format</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="text-base">MDX Content</CardTitle>
+                  <CardDescription>Edit the document content in MDX format</CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setFullscreenMode("editor")}>
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
               </CardHeader>
               <CardContent>
                 <Textarea
@@ -317,20 +405,27 @@ flowchart LR
             
             {/* Preview */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Preview</CardTitle>
-                <CardDescription>Live preview of the rendered content</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="text-base">Preview</CardTitle>
+                  <CardDescription>Live preview of the rendered content</CardDescription>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setFullscreenMode("preview")}>
+                  <Maximize2 className="h-4 w-4" />
+                </Button>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[500px] rounded-lg border p-4">
-                  {content ? (
-                    <MDXRenderer content={content} />
-                  ) : (
-                    <p className="text-muted-foreground text-sm">
-                      Start typing to see the preview...
-                    </p>
-                  )}
-                </ScrollArea>
+                <div className="h-[500px] rounded-lg border overflow-auto">
+                  <div className="p-4">
+                    {content ? (
+                      <MDXRenderer content={content} />
+                    ) : (
+                      <p className="text-muted-foreground text-sm">
+                        Start typing to see the preview...
+                      </p>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -367,7 +462,7 @@ flowchart LR
                     value={formData.category as string || ""}
                     onValueChange={(value) => setFormData({ ...formData, category: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -386,7 +481,7 @@ flowchart LR
                     value={formData.status as string || ""}
                     onValueChange={(value) => setFormData({ ...formData, status: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
