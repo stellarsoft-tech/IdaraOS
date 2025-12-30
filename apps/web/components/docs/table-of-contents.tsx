@@ -219,10 +219,9 @@ export function TableOfContents({
         )}
       </div>
 
-      {/* ToC List - scrollable when content is long */}
+      {/* ToC List - scrollable only when content overflows */}
       {!isCollapsed && (
-        <div className="max-h-[calc(100vh-200px)] overflow-y-auto pr-2 scrollbar-thin">
-          <ul className="space-y-1 text-sm">
+        <ul className="space-y-1 text-sm max-h-[calc(100vh-120px)] overflow-y-auto pr-1">
             {headings.map((heading) => {
               const indent = heading.level - minLevel
               const isActive = activeId === heading.id
@@ -249,7 +248,6 @@ export function TableOfContents({
               )
             })}
           </ul>
-        </div>
       )}
     </nav>
   )
