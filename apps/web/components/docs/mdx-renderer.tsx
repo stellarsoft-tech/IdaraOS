@@ -169,7 +169,9 @@ export const mdxComponents = {
  * Converts basic markdown syntax to React elements
  */
 function parseMarkdown(content: string): React.ReactNode[] {
-  const lines = content.split("\n")
+  // Normalize line endings (handle Windows \r\n and Mac \r)
+  const normalizedContent = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  const lines = normalizedContent.split("\n")
   const elements: React.ReactNode[] = []
   let currentBlock: string[] = []
   let inCodeBlock = false

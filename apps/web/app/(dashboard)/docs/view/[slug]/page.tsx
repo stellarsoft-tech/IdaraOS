@@ -373,8 +373,8 @@ export default function DocumentViewerPage() {
         
         {/* Table of Contents Sidebar */}
         {showToc && (
-          <aside className="hidden lg:block w-64 shrink-0 print:hidden">
-            <div className="sticky top-20">
+          <aside className="hidden md:block w-56 lg:w-64 shrink-0 print:hidden">
+            <div className="sticky top-6">
               <TableOfContents
                 contentRef={contentRef}
                 collapsible={false}
