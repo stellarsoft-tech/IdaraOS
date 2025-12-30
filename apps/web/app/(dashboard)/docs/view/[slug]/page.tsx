@@ -4,7 +4,6 @@ import * as React from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import {
-  ArrowLeft,
   CheckCircle,
   FileText,
   Loader2,
@@ -184,17 +183,8 @@ export default function DocumentViewerPage() {
         isFullscreen && "fixed inset-0 z-50 bg-background overflow-auto p-6"
       )}
     >
-      {/* Compact Action Bar */}
-      <div className="flex items-center justify-between mb-4 print:hidden">
-        {/* Left: Back button only */}
-        <Button variant="ghost" size="sm" asChild className={cn(isFullscreen && "hidden")}>
-          <Link href="/docs" className="gap-1.5">
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-sm">Back</span>
-          </Link>
-        </Button>
-        
-        {/* Right: Actions */}
+      {/* Action Bar */}
+      <div className="flex items-center justify-end mb-4 print:hidden">
         <div className="flex items-center gap-1">
           {/* Acknowledgment Status */}
           {myDocRecord && !needsAcknowledgment && (
