@@ -149,12 +149,25 @@ jobs:
           fi
           
           echo "📋 Pushing schema to database (prototyping mode)..."
-          # Use 'yes' to auto-accept all drizzle-kit prompts in CI
-          yes | npx drizzle-kit push --force || true
-          # Run again to ensure all tables are created (some may be skipped on first run)
-          yes | npx drizzle-kit push --force || true
+          # Install expect for handling interactive prompts
+          sudo apt-get install -y expect > /dev/null 2>&1 || true
+          
+          # Use expect to handle drizzle-kit's interactive prompts
+          # This sends Enter to accept default selections
+          expect -c '
+            set timeout 300
+            spawn npx drizzle-kit push --force
+            expect {
+              "truncate" { send "\r"; exp_continue }
+              "Do you" { send "\r"; exp_continue }
+              "?" { send "\r"; exp_continue }
+              eof { exit 0 }
+              timeout { exit 0 }
+            }
+          ' || true
+          
           echo ""
-          echo "✅ Database schema push completed successfully!"
+          echo "✅ Database schema push completed!"
           
       - name: Verify database schema
         run: |
@@ -489,12 +502,24 @@ jobs:
           fi
           
           echo "📋 Pushing schema to database (prototyping mode)..."
-          # Use 'yes' to auto-accept all drizzle-kit prompts in CI
-          yes | npx drizzle-kit push --force || true
-          # Run again to ensure all tables are created (some may be skipped on first run)
-          yes | npx drizzle-kit push --force || true
+          # Install expect for handling interactive prompts
+          sudo apt-get install -y expect > /dev/null 2>&1 || true
+          
+          # Use expect to handle drizzle-kit's interactive prompts
+          expect -c '
+            set timeout 300
+            spawn npx drizzle-kit push --force
+            expect {
+              "truncate" { send "\r"; exp_continue }
+              "Do you" { send "\r"; exp_continue }
+              "?" { send "\r"; exp_continue }
+              eof { exit 0 }
+              timeout { exit 0 }
+            }
+          ' || true
+          
           echo ""
-          echo "✅ Database schema push completed successfully!"
+          echo "✅ Database schema push completed!"
           
       - name: Verify database schema
         run: |
@@ -813,12 +838,24 @@ jobs:
           fi
           
           echo "📋 Pushing schema to database (prototyping mode)..."
-          # Use 'yes' to auto-accept all drizzle-kit prompts in CI
-          yes | npx drizzle-kit push --force || true
-          # Run again to ensure all tables are created (some may be skipped on first run)
-          yes | npx drizzle-kit push --force || true
+          # Install expect for handling interactive prompts
+          sudo apt-get install -y expect > /dev/null 2>&1 || true
+          
+          # Use expect to handle drizzle-kit's interactive prompts
+          expect -c '
+            set timeout 300
+            spawn npx drizzle-kit push --force
+            expect {
+              "truncate" { send "\r"; exp_continue }
+              "Do you" { send "\r"; exp_continue }
+              "?" { send "\r"; exp_continue }
+              eof { exit 0 }
+              timeout { exit 0 }
+            }
+          ' || true
+          
           echo ""
-          echo "✅ Database schema push completed successfully!"
+          echo "✅ Database schema push completed!"
           
       - name: Verify database schema
         run: |
