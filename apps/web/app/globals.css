@@ -242,13 +242,13 @@
   }
 
   /* Hide non-printable elements */
-  .print\\:hidden,
+  .no-print,
+  .print-hidden,
   [data-sidebar],
   nav,
   header,
   aside,
   footer,
-  .no-print,
   button,
   [role="dialog"],
   [role="tooltip"],
@@ -258,7 +258,7 @@
   }
 
   /* Show print-only elements */
-  .print\\:block {
+  .print-visible {
     display: block !important;
   }
 
