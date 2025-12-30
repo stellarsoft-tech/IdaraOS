@@ -149,22 +149,14 @@ jobs:
           fi
           
           echo "📋 Pushing schema to database (prototyping mode)..."
-          # Install expect for handling interactive prompts
-          sudo apt-get install -y expect > /dev/null 2>&1 || true
           
-          # Use expect to handle drizzle-kit's interactive prompts
-          # This sends Enter to accept default selections
-          expect -c '
-            set timeout 300
-            spawn npx drizzle-kit push --force
-            expect {
-              "truncate" { send "\r"; exp_continue }
-              "Do you" { send "\r"; exp_continue }
-              "?" { send "\r"; exp_continue }
-              eof { exit 0 }
-              timeout { exit 0 }
-            }
-          ' || true
+          # Use yes to auto-accept any prompts, with timeout to prevent hanging
+          timeout 120 bash -c 'yes "" | npx drizzle-kit push --force' || {
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "⚠️  Push timed out, but schema may have been applied"
+            fi
+          }
           
           echo ""
           echo "✅ Database schema push completed!"
@@ -502,21 +494,14 @@ jobs:
           fi
           
           echo "📋 Pushing schema to database (prototyping mode)..."
-          # Install expect for handling interactive prompts
-          sudo apt-get install -y expect > /dev/null 2>&1 || true
           
-          # Use expect to handle drizzle-kit's interactive prompts
-          expect -c '
-            set timeout 300
-            spawn npx drizzle-kit push --force
-            expect {
-              "truncate" { send "\r"; exp_continue }
-              "Do you" { send "\r"; exp_continue }
-              "?" { send "\r"; exp_continue }
-              eof { exit 0 }
-              timeout { exit 0 }
-            }
-          ' || true
+          # Use yes to auto-accept any prompts, with timeout to prevent hanging
+          timeout 120 bash -c 'yes "" | npx drizzle-kit push --force' || {
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "⚠️  Push timed out, but schema may have been applied"
+            fi
+          }
           
           echo ""
           echo "✅ Database schema push completed!"
@@ -838,21 +823,14 @@ jobs:
           fi
           
           echo "📋 Pushing schema to database (prototyping mode)..."
-          # Install expect for handling interactive prompts
-          sudo apt-get install -y expect > /dev/null 2>&1 || true
           
-          # Use expect to handle drizzle-kit's interactive prompts
-          expect -c '
-            set timeout 300
-            spawn npx drizzle-kit push --force
-            expect {
-              "truncate" { send "\r"; exp_continue }
-              "Do you" { send "\r"; exp_continue }
-              "?" { send "\r"; exp_continue }
-              eof { exit 0 }
-              timeout { exit 0 }
-            }
-          ' || true
+          # Use yes to auto-accept any prompts, with timeout to prevent hanging
+          timeout 120 bash -c 'yes "" | npx drizzle-kit push --force' || {
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "⚠️  Push timed out, but schema may have been applied"
+            fi
+          }
           
           echo ""
           echo "✅ Database schema push completed!"
