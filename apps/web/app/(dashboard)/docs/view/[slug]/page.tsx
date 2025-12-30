@@ -21,7 +21,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -185,43 +184,36 @@ export default function DocumentViewerPage() {
         isFullscreen && "fixed inset-0 z-50 bg-background overflow-auto p-6"
       )}
     >
-      {/* Top Bar */}
-      <div className="flex items-center justify-between gap-4 mb-4 print:hidden">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" asChild className={cn(isFullscreen && "hidden")}>
-            <Link href="/docs">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{doc.category}</Badge>
-            {doc.status === "published" && (
-              <Badge variant="default">Published</Badge>
-            )}
-          </div>
-        </div>
+      {/* Compact Action Bar */}
+      <div className="flex items-center justify-between mb-4 print:hidden">
+        {/* Left: Back button only */}
+        <Button variant="ghost" size="sm" asChild className={cn(isFullscreen && "hidden")}>
+          <Link href="/docs" className="gap-1.5">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-sm">Back</span>
+          </Link>
+        </Button>
         
+        {/* Right: Actions */}
         <div className="flex items-center gap-1">
           {/* Acknowledgment Status */}
           {myDocRecord && !needsAcknowledgment && (
-            <div className="flex items-center gap-1 text-green-600 mr-2">
+            <div className="flex items-center gap-1 text-green-600 mr-2 text-sm">
               <CheckCircle className="h-4 w-4" />
-              <span className="text-sm">
-                {myDocRecord.acknowledgmentStatus === "signed" ? "Signed" : "Acknowledged"}
-              </span>
+              <span>{myDocRecord.acknowledgmentStatus === "signed" ? "Signed" : "Acknowledged"}</span>
             </div>
           )}
           
           {/* Acknowledgment/Sign Button */}
           {needsAcknowledgment && (
             needsSignature ? (
-              <Button size="sm" onClick={() => setShowSignDialog(true)}>
-                <PenLine className="mr-1 h-3 w-3" />
-                Sign
+              <Button size="sm" variant="default" onClick={() => setShowSignDialog(true)} className="mr-2">
+                <PenLine className="mr-1.5 h-3.5 w-3.5" />
+                Sign Document
               </Button>
             ) : (
-              <Button size="sm" onClick={() => setShowAckDialog(true)}>
-                <CheckCircle className="mr-1 h-3 w-3" />
+              <Button size="sm" variant="default" onClick={() => setShowAckDialog(true)} className="mr-2">
+                <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
                 Acknowledge
               </Button>
             )
@@ -230,30 +222,18 @@ export default function DocumentViewerPage() {
           {/* ToC Toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowToc(!showToc)}
-                className="h-8 w-8"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setShowToc(!showToc)} className="h-8 w-8">
                 {showToc ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              {showToc ? "Hide contents" : "Show contents"}
-            </TooltipContent>
+            <TooltipContent>{showToc ? "Hide contents" : "Show contents"}</TooltipContent>
           </Tooltip>
           
           {/* Print Button */}
           {canPrint && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handlePrint}
-                  className="h-8 w-8"
-                >
+                <Button variant="ghost" size="icon" onClick={handlePrint} className="h-8 w-8">
                   <Printer className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -264,22 +244,11 @@ export default function DocumentViewerPage() {
           {/* Fullscreen Toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className="h-8 w-8"
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="h-4 w-4" />
-                ) : (
-                  <Maximize2 className="h-4 w-4" />
-                )}
+              <Button variant="ghost" size="icon" onClick={() => setIsFullscreen(!isFullscreen)} className="h-8 w-8">
+                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
-            <TooltipContent>
-              {isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}
-            </TooltipContent>
+            <TooltipContent>{isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}</TooltipContent>
           </Tooltip>
         </div>
       </div>
@@ -303,17 +272,6 @@ export default function DocumentViewerPage() {
                 </p>
               </div>
             </div>
-            {needsSignature ? (
-              <Button size="sm" onClick={() => setShowSignDialog(true)}>
-                <PenLine className="mr-1 h-3 w-3" />
-                Sign
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => setShowAckDialog(true)}>
-                <CheckCircle className="mr-1 h-3 w-3" />
-                Acknowledge
-              </Button>
-            )}
           </CardContent>
         </Card>
       )}
@@ -322,24 +280,19 @@ export default function DocumentViewerPage() {
       <div className="flex gap-6">
         {/* Document Content */}
         <div className={cn("flex-1 min-w-0", showToc ? "lg:pr-0" : "")}>
-          {/* Document Header */}
-          {doc.showHeader && (
-            <DocumentHeader
-              title={doc.title}
-              referenceId={referenceId}
-              version={doc.currentVersion}
-              status={doc.status}
-              category={doc.category}
-              owner={doc.owner ? {
-                name: doc.owner.name,
-                role: doc.metadata?.ownerRole as string | undefined,
-              } : undefined}
-              effectiveDate={effectiveDate}
-              approvedBy={approvedBy}
-              tags={doc.tags || undefined}
-              compact={true}
-            />
-          )}
+          {/* Document Header - Always shown for proper display */}
+          <DocumentHeader
+            title={doc.title}
+            referenceId={referenceId}
+            version={doc.currentVersion}
+            owner={doc.owner ? {
+              name: doc.owner.name,
+              role: doc.metadata?.ownerRole as string | undefined,
+            } : undefined}
+            effectiveDate={effectiveDate}
+            approvedBy={approvedBy}
+            showAnchor={true}
+          />
           
           {/* Main Content */}
           <div
