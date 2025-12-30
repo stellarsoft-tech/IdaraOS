@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { Hash } from "lucide-react"
 
 // Custom MDX components
 import { DocumentHeader } from "./document-header"
@@ -20,6 +21,72 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+
+/**
+ * Generate a slug from text for heading IDs
+ */
+function generateSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim()
+}
+
+/**
+ * Heading component with anchor link on hover
+ */
+interface HeadingWithAnchorProps extends React.HTMLAttributes<HTMLHeadingElement> {
+  level: 1 | 2 | 3 | 4 | 5 | 6
+  children?: React.ReactNode
+}
+
+function HeadingWithAnchor({ level, children, className, id, ...props }: HeadingWithAnchorProps) {
+  // Generate ID from children text if not provided
+  const headingId = id || (typeof children === "string" ? generateSlug(children) : undefined)
+  
+  const handleClick = () => {
+    if (headingId) {
+      // Update URL with hash
+      window.history.pushState(null, "", `#${headingId}`)
+      // Scroll to element
+      const el = document.getElementById(headingId)
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+    }
+  }
+  
+  const sharedClassName = cn("group relative", className)
+  const anchorButton = headingId && (
+    <button
+      onClick={handleClick}
+      className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center text-muted-foreground hover:text-foreground"
+      aria-label={`Link to ${typeof children === "string" ? children : "section"}`}
+    >
+      <Hash className="h-4 w-4" />
+    </button>
+  )
+  
+  // Render the appropriate heading element
+  switch (level) {
+    case 1:
+      return <h1 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h1>
+    case 2:
+      return <h2 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h2>
+    case 3:
+      return <h3 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h3>
+    case 4:
+      return <h4 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h4>
+    case 5:
+      return <h5 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h5>
+    case 6:
+      return <h6 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h6>
+    default:
+      return <h2 id={headingId} className={sharedClassName} {...props}>{children}{anchorButton}</h2>
+  }
+}
 
 /**
  * MDX Components available in documents
@@ -50,41 +117,36 @@ export const mdxComponents = {
   TableRow,
   
   // Standard HTML overrides with styling
-  h1: ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h1
-      className={cn("scroll-m-20 text-3xl font-bold tracking-tight mt-8 mb-4 first:mt-0", className)}
-      {...props}
-    />
+  // Headings with anchor links on hover
+  h1: ({ className, children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <HeadingWithAnchor level={1} id={id} className={cn("scroll-mt-4 text-3xl font-bold tracking-tight mt-8 mb-4 first:mt-0", className)} {...props}>
+      {children}
+    </HeadingWithAnchor>
   ),
-  h2: ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h2
-      className={cn("scroll-m-20 text-2xl font-semibold tracking-tight mt-8 mb-4 border-b pb-2", className)}
-      {...props}
-    />
+  h2: ({ className, children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <HeadingWithAnchor level={2} id={id} className={cn("scroll-mt-4 text-2xl font-semibold tracking-tight mt-8 mb-4 border-b pb-2", className)} {...props}>
+      {children}
+    </HeadingWithAnchor>
   ),
-  h3: ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h3
-      className={cn("scroll-m-20 text-xl font-semibold tracking-tight mt-6 mb-3", className)}
-      {...props}
-    />
+  h3: ({ className, children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <HeadingWithAnchor level={3} id={id} className={cn("scroll-mt-4 text-xl font-semibold tracking-tight mt-6 mb-3", className)} {...props}>
+      {children}
+    </HeadingWithAnchor>
   ),
-  h4: ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h4
-      className={cn("scroll-m-20 text-lg font-semibold tracking-tight mt-4 mb-2", className)}
-      {...props}
-    />
+  h4: ({ className, children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <HeadingWithAnchor level={4} id={id} className={cn("scroll-mt-4 text-lg font-semibold tracking-tight mt-4 mb-2", className)} {...props}>
+      {children}
+    </HeadingWithAnchor>
   ),
-  h5: ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h5
-      className={cn("scroll-m-20 text-base font-semibold tracking-tight mt-4 mb-2", className)}
-      {...props}
-    />
+  h5: ({ className, children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <HeadingWithAnchor level={5} id={id} className={cn("scroll-mt-4 text-base font-semibold tracking-tight mt-4 mb-2", className)} {...props}>
+      {children}
+    </HeadingWithAnchor>
   ),
-  h6: ({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h6
-      className={cn("scroll-m-20 text-sm font-semibold tracking-tight mt-4 mb-2", className)}
-      {...props}
-    />
+  h6: ({ className, children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <HeadingWithAnchor level={6} id={id} className={cn("scroll-mt-4 text-sm font-semibold tracking-tight mt-4 mb-2", className)} {...props}>
+      {children}
+    </HeadingWithAnchor>
   ),
   p: ({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) => (
     <p

@@ -281,13 +281,12 @@ export default function DocumentViewerPage() {
             } : undefined}
             effectiveDate={effectiveDate}
             approvedBy={approvedBy}
-            showAnchor={true}
           />
           
           {/* Main Content */}
           <div
             ref={contentRef}
-            className="prose prose-neutral dark:prose-invert max-w-none prose-headings:scroll-mt-24"
+            className="prose prose-neutral dark:prose-invert max-w-none prose-headings:scroll-mt-4"
           >
             {doc.content ? (
               <MDXRenderer content={doc.content} />

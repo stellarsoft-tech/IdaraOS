@@ -165,23 +165,14 @@ export function TableOfContents({
     }
   }, [headings, contentRef])
 
-  // Scroll to heading
+  // Scroll to heading and update URL
   const scrollToHeading = (id: string) => {
     const element = document.getElementById(id)
     if (element) {
-      // Use scrollIntoView which works with any scroll container
+      // Update URL with hash
+      window.history.pushState(null, "", `#${id}`)
+      // Scroll to element with small offset
       element.scrollIntoView({ behavior: "smooth", block: "start" })
-      // Add a small delay then adjust for header offset
-      setTimeout(() => {
-        const scrollContainer = document.querySelector("[data-scroll-container]") || 
-                               document.querySelector("main") ||
-                               window
-        if (scrollContainer && scrollContainer !== window) {
-          (scrollContainer as HTMLElement).scrollTop -= 80
-        } else {
-          window.scrollBy({ top: -80, behavior: "instant" })
-        }
-      }, 100)
       setActiveId(id)
     }
   }

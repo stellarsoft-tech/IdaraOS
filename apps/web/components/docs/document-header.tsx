@@ -9,7 +9,6 @@ import {
   User, 
   Calendar, 
   CheckCircle2,
-  Link as LinkIcon 
 } from "lucide-react"
 import type { DocumentStatus, DocumentCategory } from "@/lib/docs/types"
 
@@ -36,8 +35,6 @@ interface DocumentHeaderProps {
   confidentiality?: "public" | "internal" | "confidential" | "restricted"
   tags?: string[]
   className?: string
-  /** Show anchor link icon next to title */
-  showAnchor?: boolean
 }
 
 /**
@@ -66,20 +63,14 @@ export function DocumentHeader({
   effectiveDate,
   approvedBy,
   className,
-  showAnchor = false,
 }: DocumentHeaderProps) {
   // Check if we have any metadata to show
   const hasMetadata = referenceId || version || owner || effectiveDate || approvedBy
 
   return (
     <div className={cn("mb-6", className)}>
-      {/* Title with optional anchor */}
-      <div className="flex items-center gap-2 mb-4">
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
-        {showAnchor && (
-          <LinkIcon className="h-5 w-5 text-muted-foreground hover:text-foreground cursor-pointer" />
-        )}
-      </div>
+      {/* Title */}
+      <h1 className="text-3xl font-bold tracking-tight mb-4">{title}</h1>
       
       {/* Metadata Box - 2 row grid layout like reference */}
       {hasMetadata && (
