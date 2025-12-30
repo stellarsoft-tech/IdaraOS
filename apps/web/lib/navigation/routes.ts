@@ -206,16 +206,43 @@ export const routes: Record<string, RouteConfig> = {
   docs: {
     path: "/docs",
     label: "Docs",
+    description: "Organizational documentation, policies, and procedures",
+  },
+  "docs.documents": {
+    path: "/docs/documents",
+    label: "Document Library",
+    parent: "docs",
+    description: "All organizational documents",
   },
   "docs.policies": {
     path: "/docs/policies",
     label: "Policies",
     parent: "docs",
+    description: "Organizational policies",
+  },
+  "docs.procedures": {
+    path: "/docs/procedures",
+    label: "Procedures",
+    parent: "docs",
+    description: "Standard operating procedures",
+  },
+  "docs.my-documents": {
+    path: "/docs/my-documents",
+    label: "My Documents",
+    parent: "docs",
+    description: "Documents assigned to you",
   },
   "docs.attestations": {
     path: "/docs/attestations",
     label: "Attestations",
     parent: "docs",
+    description: "Policy acknowledgements and sign-offs",
+  },
+  "docs.settings": {
+    path: "/docs/settings",
+    label: "Settings",
+    parent: "docs",
+    description: "Configure documentation module settings",
   },
   
   // Finance

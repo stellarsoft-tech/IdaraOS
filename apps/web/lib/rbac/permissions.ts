@@ -224,6 +224,68 @@ export const permissions: Record<string, LegacyPermission> = {
     roles: ["Auditor", "Admin", "Owner"],
     scope: "org",
   },
+  
+  // Documentation module
+  "docs.overview": {
+    resource: "docs.overview",
+    actions: ["read"],
+    roles: ["User", "HR", "Security", "Auditor", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.documents": {
+    resource: "docs.documents",
+    actions: ["read"],
+    roles: ["User", "HR", "Security", "Auditor", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.documents.write": {
+    resource: "docs.documents",
+    actions: ["create", "edit"],
+    roles: ["HR", "Security", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.documents.delete": {
+    resource: "docs.documents",
+    actions: ["delete"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.documents.publish": {
+    resource: "docs.documents",
+    actions: ["publish"],
+    roles: ["HR", "Security", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.rollouts": {
+    resource: "docs.rollouts",
+    actions: ["read"],
+    roles: ["HR", "Security", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.rollouts.write": {
+    resource: "docs.rollouts",
+    actions: ["create", "edit", "delete"],
+    roles: ["HR", "Security", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.acknowledgments": {
+    resource: "docs.acknowledgments",
+    actions: ["read"],
+    roles: ["HR", "Security", "Auditor", "Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.settings": {
+    resource: "docs.settings",
+    actions: ["read"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
+  "docs.settings.write": {
+    resource: "docs.settings",
+    actions: ["write"],
+    roles: ["Admin", "Owner"],
+    scope: "org",
+  },
 }
 
 /**

@@ -18,38 +18,38 @@ const statusConfig = {
   archived: { label: "Archived", variant: "danger" as const },
 }
 
-export default function PoliciesPage() {
-  const { data, isLoading } = useDocuments({ category: "policy" })
+export default function ProceduresPage() {
+  const { data, isLoading } = useDocuments({ category: "procedure" })
   
-  const policies = data?.data || []
+  const procedures = data?.data || []
   
   const groupedByStatus = {
-    published: policies.filter((d) => d.status === "published"),
-    in_review: policies.filter((d) => d.status === "in_review"),
-    draft: policies.filter((d) => d.status === "draft"),
+    published: procedures.filter((d) => d.status === "published"),
+    in_review: procedures.filter((d) => d.status === "in_review"),
+    draft: procedures.filter((d) => d.status === "draft"),
   }
   
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Policies"
-        description="Organizational policies and compliance documentation."
+        title="Procedures / SOPs"
+        description="Standard operating procedures and process documentation."
       >
         <Button asChild>
-          <Link href="/docs/documents/new?category=policy">
+          <Link href="/docs/documents/new?category=procedure">
             <Plus className="mr-2 h-4 w-4" />
-            New Policy
+            New Procedure
           </Link>
         </Button>
       </PageHeader>
       
-      {/* Published Policies */}
+      {/* Published Procedures */}
       {groupedByStatus.published.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold mb-4">Published Policies</h2>
+          <h2 className="text-lg font-semibold mb-4">Published Procedures</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {groupedByStatus.published.map((policy) => (
-              <PolicyCard key={policy.id} policy={policy} />
+            {groupedByStatus.published.map((procedure) => (
+              <ProcedureCard key={procedure.id} procedure={procedure} />
             ))}
           </div>
         </section>
@@ -60,8 +60,8 @@ export default function PoliciesPage() {
         <section>
           <h2 className="text-lg font-semibold mb-4">In Review</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {groupedByStatus.in_review.map((policy) => (
-              <PolicyCard key={policy.id} policy={policy} />
+            {groupedByStatus.in_review.map((procedure) => (
+              <ProcedureCard key={procedure.id} procedure={procedure} />
             ))}
           </div>
         </section>
@@ -72,26 +72,26 @@ export default function PoliciesPage() {
         <section>
           <h2 className="text-lg font-semibold mb-4">Drafts</h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {groupedByStatus.draft.map((policy) => (
-              <PolicyCard key={policy.id} policy={policy} />
+            {groupedByStatus.draft.map((procedure) => (
+              <ProcedureCard key={procedure.id} procedure={procedure} />
             ))}
           </div>
         </section>
       )}
       
       {/* Empty State */}
-      {policies.length === 0 && !isLoading && (
+      {procedures.length === 0 && !isLoading && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-lg font-medium mb-2">No policies yet</p>
+            <p className="text-lg font-medium mb-2">No procedures yet</p>
             <p className="text-muted-foreground text-center mb-4">
-              Create your first policy to get started with compliance documentation.
+              Create your first SOP to document organizational processes.
             </p>
             <Button asChild>
-              <Link href="/docs/documents/new?category=policy">
+              <Link href="/docs/documents/new?category=procedure">
                 <Plus className="mr-2 h-4 w-4" />
-                Create Policy
+                Create Procedure
               </Link>
             </Button>
           </CardContent>
@@ -101,26 +101,26 @@ export default function PoliciesPage() {
   )
 }
 
-function PolicyCard({ policy }: { policy: DocumentWithRelations }) {
-  const config = statusConfig[policy.status]
+function ProcedureCard({ procedure }: { procedure: DocumentWithRelations }) {
+  const config = statusConfig[procedure.status]
   
   return (
-    <Link href={`/docs/documents/${policy.slug}`}>
+    <Link href={`/docs/documents/${procedure.slug}`}>
       <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between">
-            <CardTitle className="text-base">{policy.title}</CardTitle>
+            <CardTitle className="text-base">{procedure.title}</CardTitle>
             <StatusBadge variant={config.variant}>{config.label}</StatusBadge>
           </div>
           <CardDescription className="text-xs">
-            v{policy.currentVersion}
-            {policy.owner && ` • ${policy.owner.name}`}
+            v{procedure.currentVersion}
+            {procedure.owner && ` • ${procedure.owner.name}`}
           </CardDescription>
         </CardHeader>
-        {policy.description && (
+        {procedure.description && (
           <CardContent>
             <p className="text-sm text-muted-foreground line-clamp-2">
-              {policy.description}
+              {procedure.description}
             </p>
           </CardContent>
         )}
@@ -128,3 +128,4 @@ function PolicyCard({ policy }: { policy: DocumentWithRelations }) {
     </Link>
   )
 }
+

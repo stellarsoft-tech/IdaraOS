@@ -65,6 +65,13 @@ export const MODULE_REGISTRY = [
   { slug: "security.settings", name: "Security Settings", description: "Configure security module settings", category: "Security", icon: "Settings", sortOrder: "308" },
   { slug: "security.clauses", name: "ISMS Clauses", description: "Manage ISMS clause compliance tracking", category: "Security", icon: "FileCheck2", sortOrder: "309" },
   
+  // Documentation
+  { slug: "docs.overview", name: "Docs Overview", description: "View documentation dashboard", category: "Documentation", icon: "FileText", sortOrder: "500" },
+  { slug: "docs.documents", name: "Document Library", description: "Manage documents and policies", category: "Documentation", icon: "Files", sortOrder: "501" },
+  { slug: "docs.rollouts", name: "Document Rollouts", description: "Manage document rollouts", category: "Documentation", icon: "Users", sortOrder: "502" },
+  { slug: "docs.acknowledgments", name: "Acknowledgments", description: "View document acknowledgments", category: "Documentation", icon: "CheckSquare", sortOrder: "503" },
+  { slug: "docs.settings", name: "Docs Settings", description: "Configure documentation settings", category: "Documentation", icon: "Settings", sortOrder: "504" },
+  
   // Workflows
   { slug: "workflows.overview", name: "Workflows Overview", description: "View workflows dashboard", category: "Workflows", icon: "Workflow", sortOrder: "400" },
   { slug: "workflows.templates", name: "Workflow Templates", description: "Manage workflow templates", category: "Workflows", icon: "FileCode2", sortOrder: "401" },

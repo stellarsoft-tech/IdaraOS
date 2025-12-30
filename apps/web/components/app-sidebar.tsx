@@ -163,10 +163,12 @@ const navigationData: NavItem[] = [
     icon: FileText,
     items: [
       { title: "Overview", url: "/docs", module: "docs.overview" },
-      { title: "Policy Library", url: "/docs/policies", module: "docs.policies" },
-      { title: "Procedures / SOPs", url: "/docs/procedures", module: "docs.procedures" },
-      { title: "Attestations", url: "/docs/attestations", module: "docs.attestations" },
-      { title: "Approvals", url: "/docs/approvals", module: "docs.approvals" },
+      { title: "Document Library", url: "/docs/documents", module: "docs.documents" },
+      { title: "My Documents", url: "/docs/my-documents", module: "docs.overview" },
+      { title: "Policies", url: "/docs/policies", module: "docs.documents" },
+      { title: "Procedures / SOPs", url: "/docs/procedures", module: "docs.documents" },
+      { title: "Attestations", url: "/docs/attestations", module: "docs.acknowledgments" },
+      { title: "Settings", url: "/docs/settings", module: "docs.settings" },
     ],
   },
   {
