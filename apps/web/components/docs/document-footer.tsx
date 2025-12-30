@@ -5,12 +5,14 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
-import { CheckCircle2, Clock, History, User } from "lucide-react"
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { CheckCircle2, Clock, History } from "lucide-react"
 
 /**
  * Version history entry
@@ -40,8 +42,7 @@ interface DocumentFooterProps {
 
 /**
  * Document Footer Component
- * Displays version history, approval info, and disclaimers
- * Can be included in MDX files with <DocumentFooter ... />
+ * Displays version history as a table, approval info, and disclaimers
  */
 export function DocumentFooter({
   showVersionHistory = true,
@@ -54,111 +55,115 @@ export function DocumentFooter({
   className,
 }: DocumentFooterProps) {
   return (
-    <div className={cn("mt-12 space-y-6", className)}>
+    <div className={cn("mt-8 space-y-4", className)}>
       <Separator />
-      
-      {/* Approval Info */}
-      {(approvedBy || approvedAt) && (
-        <div className="flex items-center gap-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-          <div>
-            <p className="font-medium text-green-700 dark:text-green-300">Document Approved</p>
-            <p className="text-sm text-muted-foreground">
-              {approvedBy && `Approved by ${approvedBy}`}
-              {approvedBy && approvedAt && " on "}
-              {approvedAt && new Date(approvedAt).toLocaleDateString()}
-            </p>
-          </div>
-        </div>
-      )}
       
       {/* Review Schedule */}
       {(lastReviewedAt || nextReviewAt) && (
-        <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
-          <Clock className="h-5 w-5 text-muted-foreground" />
-          <div className="flex-1 grid grid-cols-2 gap-4 text-sm">
+        <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50 text-sm">
+          <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+          <div className="flex flex-wrap gap-x-6 gap-y-1">
             {lastReviewedAt && (
-              <div>
-                <p className="text-muted-foreground">Last Reviewed</p>
-                <p className="font-medium">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Last Reviewed:</span>
+                <span className="font-medium">
                   {new Date(lastReviewedAt).toLocaleDateString()}
-                </p>
+                </span>
               </div>
             )}
             {nextReviewAt && (
-              <div>
-                <p className="text-muted-foreground">Next Review Due</p>
-                <p className="font-medium">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Next Review:</span>
+                <span className="font-medium">
                   {new Date(nextReviewAt).toLocaleDateString()}
-                </p>
+                </span>
               </div>
             )}
           </div>
         </div>
       )}
       
-      {/* Version History */}
+      {/* Approval Info */}
+      {(approvedBy || approvedAt) && (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+          <div>
+            <span className="font-medium text-green-700 dark:text-green-300">Approved</span>
+            <span className="text-muted-foreground">
+              {approvedBy && ` by ${approvedBy}`}
+              {approvedAt && ` on ${new Date(approvedAt).toLocaleDateString()}`}
+            </span>
+          </div>
+        </div>
+      )}
+      
+      {/* Version History Table */}
       {showVersionHistory && versions.length > 0 && (
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="version-history" className="border rounded-lg">
-            <AccordionTrigger className="px-4 hover:no-underline">
-              <div className="flex items-center gap-2">
-                <History className="h-4 w-4" />
-                <span>Version History</span>
-                <Badge variant="secondary" className="ml-2">
-                  {versions.length} {versions.length === 1 ? "version" : "versions"}
-                </Badge>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="px-4 pb-4">
-              <div className="space-y-3">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <History className="h-4 w-4" />
+            <span>Version History</span>
+            <Badge variant="secondary" className="text-xs">
+              {versions.length}
+            </Badge>
+          </div>
+          
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-[100px]">Version</TableHead>
+                  <TableHead className="w-[120px]">Date</TableHead>
+                  <TableHead className="w-[150px]">Author</TableHead>
+                  <TableHead>Changes</TableHead>
+                  <TableHead className="w-[150px]">Approved By</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {versions.map((entry, index) => (
-                  <div
+                  <TableRow 
                     key={entry.version}
-                    className={cn(
-                      "flex gap-4 p-3 rounded-lg",
-                      index === 0 ? "bg-primary/5 border border-primary/20" : "bg-muted/30"
-                    )}
+                    className={index === 0 ? "bg-primary/5" : ""}
                   >
-                    <div className="shrink-0">
-                      <Badge variant={index === 0 ? "default" : "outline"}>
+                    <TableCell>
+                      <Badge variant={index === 0 ? "default" : "outline"} className="font-mono">
                         v{entry.version}
                       </Badge>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                        <span>{new Date(entry.date).toLocaleDateString()}</span>
-                        {entry.author && (
-                          <>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              {entry.author}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {new Date(entry.date).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {entry.author || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm max-w-[300px]">
+                      <span className="line-clamp-2">{entry.changes || "—"}</span>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {entry.approvedBy ? (
+                        <div>
+                          <span>{entry.approvedBy}</span>
+                          {entry.approvedAt && (
+                            <span className="text-muted-foreground text-xs block">
+                              {new Date(entry.approvedAt).toLocaleDateString()}
                             </span>
-                          </>
-                        )}
-                      </div>
-                      {entry.changes && (
-                        <p className="text-sm">{entry.changes}</p>
+                          )}
+                        </div>
+                      ) : (
+                        "—"
                       )}
-                      {entry.approvedBy && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Approved by {entry.approvedBy}
-                          {entry.approvedAt && ` on ${new Date(entry.approvedAt).toLocaleDateString()}`}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       )}
       
       {/* Disclaimer */}
       {disclaimer && (
-        <div className="p-4 rounded-lg bg-muted/30 border">
+        <div className="p-3 rounded-lg bg-muted/30 border">
           <p className="text-xs text-muted-foreground leading-relaxed">
             {disclaimer}
           </p>
@@ -167,4 +172,3 @@ export function DocumentFooter({
     </div>
   )
 }
-

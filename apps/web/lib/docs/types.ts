@@ -58,10 +58,16 @@ export const CreateDocumentSchema = z.object({
   linkedControlIds: z.array(z.string().uuid()).optional(),
   linkedFrameworkCodes: z.array(z.string()).optional(),
   metadata: z.object({
+    referenceId: z.string().optional(), // Document reference code (e.g., "SS-ORG-01")
     effectiveDate: z.string().optional(),
     expiryDate: z.string().optional(),
     department: z.string().optional(),
     confidentiality: z.enum(["public", "internal", "confidential", "restricted"]).optional(),
+    ownerRole: z.string().optional(), // Owner's role/title
+    approvedBy: z.object({
+      name: z.string().optional(),
+      role: z.string().optional(),
+    }).optional(),
   }).passthrough().optional(),
   content: z.string().optional(), // MDX content to write to file
 })

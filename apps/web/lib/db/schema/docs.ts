@@ -98,10 +98,13 @@ export const documents = pgTable(
     
     // Additional metadata
     metadata: jsonb("metadata").$type<{
+      referenceId?: string // Document reference code (e.g., "SS-ORG-01")
       effectiveDate?: string
       expiryDate?: string
       department?: string
       confidentiality?: "public" | "internal" | "confidential" | "restricted"
+      ownerRole?: string // Owner's role/title
+      approvedBy?: { name?: string; role?: string } // Approval info
       [key: string]: unknown
     }>(),
     

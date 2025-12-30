@@ -96,6 +96,7 @@ export const ACTION_REGISTRY = [
   { slug: "create", name: "Create", description: "Create new records", sortOrder: "3" },
   { slug: "edit", name: "Edit", description: "Edit existing records", sortOrder: "4" },
   { slug: "delete", name: "Delete", description: "Delete records", sortOrder: "5" },
+  { slug: "print", name: "Print", description: "Print or export documents", sortOrder: "6" },
 ] as const
 
 /**

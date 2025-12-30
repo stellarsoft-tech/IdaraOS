@@ -8,15 +8,20 @@ import {
   CheckCircle,
   FileText,
   Loader2,
+  Maximize2,
+  Minimize2,
   PenLine,
+  Printer,
+  List,
+  X,
 } from "lucide-react"
 
-import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,10 +32,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { MDXRenderer, DocumentHeader, DocumentFooter } from "@/components/docs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { MDXRenderer, DocumentHeader, DocumentFooter, TableOfContents } from "@/components/docs"
 import { useDocument, useMyDocuments, useUpdateAcknowledgment } from "@/lib/api/docs"
+import { usePermission } from "@/lib/rbac/hooks"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 export default function DocumentViewerPage() {
   const params = useParams()
@@ -40,10 +51,18 @@ export default function DocumentViewerPage() {
   const { data: myDocsData, refetch: refetchMyDocs } = useMyDocuments()
   const updateAcknowledgment = useUpdateAcknowledgment()
   
+  // Permission check for printing
+  const canPrint = usePermission("docs.documents", "print")
+  
   const [showAckDialog, setShowAckDialog] = React.useState(false)
   const [showSignDialog, setShowSignDialog] = React.useState(false)
   const [signatureConfirmed, setSignatureConfirmed] = React.useState(false)
   const [typedSignature, setTypedSignature] = React.useState("")
+  const [isFullscreen, setIsFullscreen] = React.useState(false)
+  const [showToc, setShowToc] = React.useState(true)
+  
+  // Ref for the content container (for ToC heading extraction)
+  const contentRef = React.useRef<HTMLDivElement>(null)
   
   const doc = docData?.data
   const myDocs = myDocsData?.data || []
@@ -56,13 +75,28 @@ export default function DocumentViewerPage() {
   // Mark as viewed when document loads
   React.useEffect(() => {
     if (myDocRecord && myDocRecord.acknowledgmentStatus === "pending") {
-      // Auto-mark as viewed
       updateAcknowledgment.mutate({
         id: myDocRecord.acknowledgmentId!,
         data: { status: "viewed" },
       })
     }
   }, [myDocRecord?.acknowledgmentId])
+  
+  // Handle Escape key for fullscreen
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isFullscreen])
+  
+  // Handle print
+  const handlePrint = () => {
+    window.print()
+  }
   
   const handleAcknowledge = async () => {
     if (!myDocRecord?.acknowledgmentId) return
@@ -126,75 +160,157 @@ export default function DocumentViewerPage() {
     )
   }
   
+  // Extract metadata for header
+  const referenceId = doc.metadata?.referenceId as string | undefined
+  const effectiveDate = doc.metadata?.effectiveDate as string | undefined
+  const approvedByMeta = doc.metadata?.approvedBy as { name?: string; role?: string } | undefined
+  
+  // Get the latest version's approver for header
+  const latestVersion = doc.versions?.[0]
+  // Build approvedBy ensuring name is present (required by DocumentHeader)
+  const approvedBy = (() => {
+    if (approvedByMeta?.name) {
+      return { name: approvedByMeta.name, role: approvedByMeta.role }
+    }
+    if (latestVersion?.approvedBy?.name) {
+      return { name: latestVersion.approvedBy.name, role: undefined }
+    }
+    return undefined
+  })()
+  
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-1 pb-4">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/docs">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">{doc.title}</h1>
-              <p className="text-sm text-muted-foreground">{`v${doc.currentVersion}`}</p>
-            </div>
-          </div>
-        {needsAcknowledgment && (
+    <div
+      className={cn(
+        "transition-all duration-300",
+        isFullscreen && "fixed inset-0 z-50 bg-background overflow-auto p-6"
+      )}
+    >
+      {/* Top Bar */}
+      <div className="flex items-center justify-between gap-4 mb-4 print:hidden">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" asChild className={cn(isFullscreen && "hidden")}>
+            <Link href="/docs">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
           <div className="flex items-center gap-2">
-            {needsSignature ? (
-              <Button onClick={() => setShowSignDialog(true)}>
-                <PenLine className="mr-2 h-4 w-4" />
-                Sign Document
-              </Button>
-            ) : (
-              <Button onClick={() => setShowAckDialog(true)}>
-                <CheckCircle className="mr-2 h-4 w-4" />
-                Acknowledge
-              </Button>
+            <Badge variant="outline">{doc.category}</Badge>
+            {doc.status === "published" && (
+              <Badge variant="default">Published</Badge>
             )}
           </div>
-        )}
+        </div>
         
-        {myDocRecord && !needsAcknowledgment && (
-          <div className="flex items-center gap-2 text-green-600">
-            <CheckCircle className="h-4 w-4" />
-            <span className="text-sm">
-              {myDocRecord.acknowledgmentStatus === "signed" ? "Signed" : "Acknowledged"}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-1">
+          {/* Acknowledgment Status */}
+          {myDocRecord && !needsAcknowledgment && (
+            <div className="flex items-center gap-1 text-green-600 mr-2">
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-sm">
+                {myDocRecord.acknowledgmentStatus === "signed" ? "Signed" : "Acknowledged"}
+              </span>
+            </div>
+          )}
+          
+          {/* Acknowledgment/Sign Button */}
+          {needsAcknowledgment && (
+            needsSignature ? (
+              <Button size="sm" onClick={() => setShowSignDialog(true)}>
+                <PenLine className="mr-1 h-3 w-3" />
+                Sign
+              </Button>
+            ) : (
+              <Button size="sm" onClick={() => setShowAckDialog(true)}>
+                <CheckCircle className="mr-1 h-3 w-3" />
+                Acknowledge
+              </Button>
+            )
+          )}
+          
+          {/* ToC Toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowToc(!showToc)}
+                className="h-8 w-8"
+              >
+                {showToc ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {showToc ? "Hide contents" : "Show contents"}
+            </TooltipContent>
+          </Tooltip>
+          
+          {/* Print Button */}
+          {canPrint && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePrint}
+                  className="h-8 w-8"
+                >
+                  <Printer className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Print document</TooltipContent>
+            </Tooltip>
+          )}
+          
+          {/* Fullscreen Toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="h-8 w-8"
+              >
+                {isFullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {isFullscreen ? "Exit fullscreen (Esc)" : "Enter fullscreen"}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
       
       {/* Pending Action Banner */}
       {needsAcknowledgment && (
-        <Card className="border-yellow-500/50 bg-yellow-500/5">
-          <CardContent className="flex items-center justify-between py-4">
+        <Card className="border-yellow-500/50 bg-yellow-500/5 mb-4 print:hidden">
+          <CardContent className="flex items-center justify-between py-3 px-4">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                <FileText className="h-4 w-4 text-yellow-600" />
+              <div className="h-7 w-7 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                <FileText className="h-3.5 w-3.5 text-yellow-600" />
               </div>
               <div>
-                <p className="font-medium">
+                <p className="text-sm font-medium">
                   {needsSignature ? "Signature Required" : "Acknowledgment Required"}
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {myDocRecord.dueDate
-                    ? `Please complete by ${new Date(myDocRecord.dueDate).toLocaleDateString()}`
-                    : "Please review and acknowledge this document"}
+                    ? `Due by ${new Date(myDocRecord.dueDate).toLocaleDateString()}`
+                    : "Please review and acknowledge"}
                 </p>
               </div>
             </div>
             {needsSignature ? (
-              <Button onClick={() => setShowSignDialog(true)}>
-                <PenLine className="mr-2 h-4 w-4" />
-                Sign Document
+              <Button size="sm" onClick={() => setShowSignDialog(true)}>
+                <PenLine className="mr-1 h-3 w-3" />
+                Sign
               </Button>
             ) : (
-              <Button onClick={() => setShowAckDialog(true)}>
-                <CheckCircle className="mr-2 h-4 w-4" />
+              <Button size="sm" onClick={() => setShowAckDialog(true)}>
+                <CheckCircle className="mr-1 h-3 w-3" />
                 Acknowledge
               </Button>
             )}
@@ -202,25 +318,34 @@ export default function DocumentViewerPage() {
         </Card>
       )}
       
-      {/* Document Content */}
-      <Card>
-        <CardContent className="p-8">
+      {/* Main Layout: Content + ToC Sidebar */}
+      <div className="flex gap-6">
+        {/* Document Content */}
+        <div className={cn("flex-1 min-w-0", showToc ? "lg:pr-0" : "")}>
           {/* Document Header */}
           {doc.showHeader && (
             <DocumentHeader
               title={doc.title}
+              referenceId={referenceId}
               version={doc.currentVersion}
               status={doc.status}
               category={doc.category}
-              owner={doc.owner || undefined}
-              effectiveDate={doc.metadata?.effectiveDate as string}
-              confidentiality={doc.metadata?.confidentiality as "public" | "internal" | "confidential" | "restricted"}
+              owner={doc.owner ? {
+                name: doc.owner.name,
+                role: doc.metadata?.ownerRole as string | undefined,
+              } : undefined}
+              effectiveDate={effectiveDate}
+              approvedBy={approvedBy}
               tags={doc.tags || undefined}
+              compact={true}
             />
           )}
           
           {/* Main Content */}
-          <div className="prose prose-neutral dark:prose-invert max-w-none">
+          <div
+            ref={contentRef}
+            className="prose prose-neutral dark:prose-invert max-w-none prose-headings:scroll-mt-24"
+          >
             {doc.content ? (
               <MDXRenderer content={doc.content} />
             ) : (
@@ -244,8 +369,20 @@ export default function DocumentViewerPage() {
               nextReviewAt={doc.nextReviewAt || undefined}
             />
           )}
-        </CardContent>
-      </Card>
+        </div>
+        
+        {/* Table of Contents Sidebar */}
+        {showToc && (
+          <aside className="hidden lg:block w-64 shrink-0 print:hidden">
+            <div className="sticky top-20">
+              <TableOfContents
+                contentRef={contentRef}
+                collapsible={false}
+              />
+            </div>
+          </aside>
+        )}
+      </div>
       
       {/* Acknowledge Dialog */}
       <AlertDialog open={showAckDialog} onOpenChange={setShowAckDialog}>
@@ -319,4 +456,3 @@ export default function DocumentViewerPage() {
     </div>
   )
 }
-
