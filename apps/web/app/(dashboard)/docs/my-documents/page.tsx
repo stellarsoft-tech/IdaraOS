@@ -138,7 +138,7 @@ const columns: ColumnDef<PendingDocument>[] = [
     accessorKey: "requirement",
     header: "Type",
     cell: ({ row }) => {
-      const requirement = row.getValue("requirement") as string
+      const requirement = row.original.requirement
       const needsSignature = requirement === "required_with_signature"
       
       return (
@@ -181,7 +181,7 @@ const columns: ColumnDef<PendingDocument>[] = [
     accessorKey: "acknowledgmentStatus",
     header: "Status",
     cell: ({ row }) => {
-      const status = row.getValue("acknowledgmentStatus") as string
+      const status = row.original.acknowledgmentStatus
       const config = statusConfig[status]
       
       return (
