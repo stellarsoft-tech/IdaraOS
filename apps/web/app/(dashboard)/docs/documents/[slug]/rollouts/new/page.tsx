@@ -79,7 +79,17 @@ export default function NewRolloutPage() {
   
   const doc = docData?.data
   
+  // Generate default name with current date in dd/mm/yy format
+  const defaultRolloutName = React.useMemo(() => {
+    const now = new Date()
+    const day = String(now.getDate()).padStart(2, "0")
+    const month = String(now.getMonth() + 1).padStart(2, "0")
+    const year = String(now.getFullYear()).slice(-2)
+    return `Rollout - ${day}/${month}/${year}`
+  }, [])
+  
   // Form state
+  const [name, setName] = React.useState<string>(defaultRolloutName)
   const [targetType, setTargetType] = React.useState<RolloutTargetType>("organization")
   const [targetId, setTargetId] = React.useState<string>("")
   const [requirement, setRequirement] = React.useState<RolloutRequirement>("required")
@@ -101,6 +111,7 @@ export default function NewRolloutPage() {
     try {
       await createRollout.mutateAsync({
         documentId: doc.id,
+        name: name || defaultRolloutName,
         targetType,
         targetId: targetType === "organization" ? undefined : targetId,
         requirement,
@@ -152,6 +163,31 @@ export default function NewRolloutPage() {
       
       <form onSubmit={handleSubmit}>
         <div className="grid gap-6 lg:grid-cols-2">
+          {/* Rollout Name */}
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Rollout Name</CardTitle>
+              <CardDescription>
+                Give this rollout a descriptive name for easy identification
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Label htmlFor="rolloutName">Name</Label>
+                <Input
+                  id="rolloutName"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={defaultRolloutName}
+                  className="max-w-md"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Defaults to &quot;Rollout - dd/mm/yy&quot; if left empty
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          
           {/* Target Selection */}
           <Card>
             <CardHeader>

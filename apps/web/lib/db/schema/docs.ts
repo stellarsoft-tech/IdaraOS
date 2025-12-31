@@ -175,6 +175,9 @@ export const documentRollouts = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     documentId: uuid("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
     
+    // Rollout name (defaults to "Rollout - dd/mm/yy" if not provided)
+    name: text("name"),
+    
     // Target definition
     targetType: text("target_type", { enum: rolloutTargetTypeValues }).notNull(),
     targetId: uuid("target_id"), // team_id, role_id, or user_id (null for org-wide)

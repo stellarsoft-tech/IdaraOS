@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       .select({
         id: documentRollouts.id,
         documentId: documentRollouts.documentId,
+        name: documentRollouts.name,
         documentTitle: documents.title,
         documentSlug: documents.slug,
         targetType: documentRollouts.targetType,
@@ -210,6 +211,7 @@ export async function POST(request: NextRequest) {
       .insert(documentRollouts)
       .values({
         documentId: data.documentId,
+        name: data.name,
         targetType: data.targetType,
         targetId: data.targetType === "organization" ? null : data.targetId,
         requirement: data.requirement,

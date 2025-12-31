@@ -197,16 +197,14 @@ export function RolloutDetailDrawer({ rollout, open, onOpenChange }: RolloutDeta
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl w-full overflow-y-auto">
-        <SheetHeader className="space-y-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="flex items-center gap-2">
-              {targetTypeIcons[rollout.targetType]}
-              <span>{rollout.targetName || rollout.targetType}</span>
-            </SheetTitle>
-          </div>
-          <SheetDescription>
-            View acknowledgment progress for this rollout
+      <SheetContent className="sm:max-w-4xl w-full overflow-y-auto p-6">
+        <SheetHeader className="space-y-2">
+          <SheetTitle className="text-xl">
+            {rollout.name || `Rollout - ${new Date(rollout.createdAt).toLocaleDateString("en-GB")}`}
+          </SheetTitle>
+          <SheetDescription className="flex items-center gap-2">
+            {targetTypeIcons[rollout.targetType]}
+            <span>{rollout.targetName || rollout.targetType}</span>
           </SheetDescription>
         </SheetHeader>
         

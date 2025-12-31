@@ -738,22 +738,27 @@ flowchart LR
                         className="p-4 rounded-lg border hover:border-primary/50 hover:bg-muted/50 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            {rollout.targetType === "organization" && <Globe className="h-4 w-4 text-muted-foreground" />}
-                            {rollout.targetType === "team" && <Users className="h-4 w-4 text-muted-foreground" />}
-                            {rollout.targetType === "role" && <Shield className="h-4 w-4 text-muted-foreground" />}
-                            {rollout.targetType === "user" && <User className="h-4 w-4 text-muted-foreground" />}
-                            <div>
-                              <p className="font-medium">
-                                {rollout.targetName || rollout.targetType}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {rollout.requirement.replace(/_/g, " ")}
-                                {rollout.dueDate && ` • Due: ${new Date(rollout.dueDate).toLocaleDateString()}`}
-                              </p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">
+                              {rollout.name || `Rollout - ${new Date(rollout.createdAt).toLocaleDateString("en-GB")}`}
+                            </p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                              {rollout.targetType === "organization" && <Globe className="h-3 w-3" />}
+                              {rollout.targetType === "team" && <Users className="h-3 w-3" />}
+                              {rollout.targetType === "role" && <Shield className="h-3 w-3" />}
+                              {rollout.targetType === "user" && <User className="h-3 w-3" />}
+                              <span>{rollout.targetName || rollout.targetType}</span>
+                              <span>•</span>
+                              <span>{rollout.requirement.replace(/_/g, " ")}</span>
+                              {rollout.dueDate && (
+                                <>
+                                  <span>•</span>
+                                  <span>Due: {new Date(rollout.dueDate).toLocaleDateString()}</span>
+                                </>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                             <Badge variant={rollout.isActive ? "default" : "secondary"}>
                               {rollout.isActive ? "Active" : "Inactive"}
                             </Badge>

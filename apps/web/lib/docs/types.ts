@@ -89,6 +89,7 @@ export type UpdateDocument = z.infer<typeof UpdateDocumentSchema>
  */
 export const CreateRolloutSchema = z.object({
   documentId: z.string().uuid(),
+  name: z.string().max(200).optional(), // Defaults to "Rollout - dd/mm/yy" if not provided
   targetType: rolloutTargetTypeEnum,
   targetId: z.string().uuid().optional().nullable(),
   requirement: rolloutRequirementEnum.default("optional"),
@@ -224,6 +225,7 @@ export interface DocumentVersionWithRelations {
 export interface RolloutWithTarget {
   id: string
   documentId: string
+  name: string | null
   targetType: RolloutTargetType
   targetId: string | null
   targetName?: string | null
