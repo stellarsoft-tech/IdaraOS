@@ -150,11 +150,13 @@ jobs:
           
           echo "📋 Pushing schema to database (prototyping mode)..."
           
-          # Use yes to auto-accept any prompts, with timeout to prevent hanging
-          timeout 120 bash -c 'yes "" | npx drizzle-kit push --force' || {
+          # Send newlines to accept default options, increased timeout
+          printf '\n\n\n\n\n' | timeout 180 npx drizzle-kit push --force || {
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Push timed out, but schema may have been applied"
+              echo "⚠️  Push timed out after 180s, but schema may have been applied"
+            else
+              echo "⚠️  Push exited with code $EXIT_CODE"
             fi
           }
           
@@ -495,11 +497,13 @@ jobs:
           
           echo "📋 Pushing schema to database (prototyping mode)..."
           
-          # Use yes to auto-accept any prompts, with timeout to prevent hanging
-          timeout 120 bash -c 'yes "" | npx drizzle-kit push --force' || {
+          # Send newlines to accept default options, increased timeout
+          printf '\n\n\n\n\n' | timeout 180 npx drizzle-kit push --force || {
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Push timed out, but schema may have been applied"
+              echo "⚠️  Push timed out after 180s, but schema may have been applied"
+            else
+              echo "⚠️  Push exited with code $EXIT_CODE"
             fi
           }
           
@@ -824,11 +828,13 @@ jobs:
           
           echo "📋 Pushing schema to database (prototyping mode)..."
           
-          # Use yes to auto-accept any prompts, with timeout to prevent hanging
-          timeout 120 bash -c 'yes "" | npx drizzle-kit push --force' || {
+          # Send newlines to accept default options, increased timeout
+          printf '\n\n\n\n\n' | timeout 180 npx drizzle-kit push --force || {
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Push timed out, but schema may have been applied"
+              echo "⚠️  Push timed out after 180s, but schema may have been applied"
+            else
+              echo "⚠️  Push exited with code $EXIT_CODE"
             fi
           }
           
