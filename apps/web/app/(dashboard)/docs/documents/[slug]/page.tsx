@@ -740,7 +740,7 @@ flowchart LR
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium truncate">
-                              {rollout.name || `Rollout - ${new Date(rollout.createdAt).toLocaleDateString("en-GB")}`}
+                              {rollout.name || `Rollout - ${new Date(rollout.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
                             </p>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                               {rollout.targetType === "organization" && <Globe className="h-3 w-3" />}

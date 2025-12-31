@@ -79,12 +79,12 @@ export default function NewRolloutPage() {
   
   const doc = docData?.data
   
-  // Generate default name with current date in dd/mm/yy format
+  // Generate default name with current date in dd/mm/yyyy format
   const defaultRolloutName = React.useMemo(() => {
     const now = new Date()
     const day = String(now.getDate()).padStart(2, "0")
     const month = String(now.getMonth() + 1).padStart(2, "0")
-    const year = String(now.getFullYear()).slice(-2)
+    const year = now.getFullYear()
     return `Rollout - ${day}/${month}/${year}`
   }, [])
   
@@ -182,7 +182,7 @@ export default function NewRolloutPage() {
                   className="max-w-md"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Defaults to &quot;Rollout - dd/mm/yy&quot; if left empty
+                  Defaults to &quot;Rollout - dd/mm/yyyy&quot; if left empty
                 </p>
               </div>
             </CardContent>
