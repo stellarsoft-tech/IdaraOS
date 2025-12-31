@@ -99,11 +99,34 @@ export function TableOfContents({
   const [headings, setHeadings] = React.useState<TocHeading[]>([])
   const [activeId, setActiveId] = React.useState<string>("")
   const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed)
+  const [maxHeight, setMaxHeight] = React.useState("calc(100vh - 100px)")
   const observerRef = React.useRef<IntersectionObserver | null>(null)
+  const navRef = React.useRef<HTMLElement>(null)
 
   // Inject scrollbar styles on mount
   React.useEffect(() => {
     injectScrollbarStyles()
+  }, [])
+
+  // Calculate max height based on nav position
+  React.useEffect(() => {
+    const calculateHeight = () => {
+      if (navRef.current) {
+        const rect = navRef.current.getBoundingClientRect()
+        // Available height = viewport height - top position - small bottom margin
+        const available = window.innerHeight - Math.max(rect.top, 0) - 20
+        setMaxHeight(`${Math.max(available, 200)}px`)
+      }
+    }
+
+    calculateHeight()
+    window.addEventListener("scroll", calculateHeight)
+    window.addEventListener("resize", calculateHeight)
+    
+    return () => {
+      window.removeEventListener("scroll", calculateHeight)
+      window.removeEventListener("resize", calculateHeight)
+    }
   }, [])
 
   // Extract headings when content changes
@@ -215,6 +238,7 @@ export function TableOfContents({
 
   return (
     <nav
+      ref={navRef}
       className={cn("relative", className)}
       aria-label="Table of contents"
     >
@@ -234,12 +258,12 @@ export function TableOfContents({
         )}
       </div>
 
-      {/* ToC List - handle-only scrollbar */}
+      {/* ToC List - dynamically sized to fit available space */}
       {!isCollapsed && (
         <ul 
-          className="toc-scroll space-y-1 text-sm overflow-y-auto pb-12"
+          className="toc-scroll space-y-1 text-sm overflow-y-auto"
           style={{ 
-            maxHeight: "calc(100vh - 32px)",
+            maxHeight,
             scrollbarWidth: "thin",
             scrollbarColor: "rgba(155, 155, 155, 0.4) transparent",
           }}
