@@ -59,6 +59,32 @@ function extractHeadings(container: HTMLElement): TocHeading[] {
   return headings
 }
 
+// Scrollbar CSS injected once
+const scrollbarStyleId = "toc-scrollbar-styles"
+function injectScrollbarStyles() {
+  if (typeof document === "undefined") return
+  if (document.getElementById(scrollbarStyleId)) return
+  
+  const style = document.createElement("style")
+  style.id = scrollbarStyleId
+  style.textContent = `
+    .toc-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .toc-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .toc-scroll::-webkit-scrollbar-thumb {
+      background: rgba(155, 155, 155, 0.4);
+      border-radius: 3px;
+    }
+    .toc-scroll::-webkit-scrollbar-thumb:hover {
+      background: rgba(155, 155, 155, 0.6);
+    }
+  `
+  document.head.appendChild(style)
+}
+
 /**
  * Table of Contents Component
  * Displays a scrollspy-enabled table of contents for document navigation
@@ -74,6 +100,11 @@ export function TableOfContents({
   const [activeId, setActiveId] = React.useState<string>("")
   const [isCollapsed, setIsCollapsed] = React.useState(defaultCollapsed)
   const observerRef = React.useRef<IntersectionObserver | null>(null)
+
+  // Inject scrollbar styles on mount
+  React.useEffect(() => {
+    injectScrollbarStyles()
+  }, [])
 
   // Extract headings when content changes
   React.useEffect(() => {
@@ -203,9 +234,16 @@ export function TableOfContents({
         )}
       </div>
 
-      {/* ToC List with minimal scrollbar */}
+      {/* ToC List - handle-only scrollbar */}
       {!isCollapsed && (
-        <ul className="space-y-1 text-sm max-h-[calc(100vh-40px)] overflow-y-auto toc-scroll pb-8">
+        <ul 
+          className="toc-scroll space-y-1 text-sm overflow-y-auto pb-12"
+          style={{ 
+            maxHeight: "calc(100vh - 32px)",
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(155, 155, 155, 0.4) transparent",
+          }}
+        >
           {headings.map((heading) => {
             const indent = heading.level - minLevel
             const isActive = activeId === heading.id
@@ -233,27 +271,6 @@ export function TableOfContents({
           })}
         </ul>
       )}
-
-      {/* Minimal scrollbar - handle only, no track background */}
-      <style jsx>{`
-        .toc-scroll::-webkit-scrollbar {
-          width: 6px;
-        }
-        .toc-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .toc-scroll::-webkit-scrollbar-thumb {
-          background: hsl(var(--muted-foreground) / 0.3);
-          border-radius: 3px;
-        }
-        .toc-scroll::-webkit-scrollbar-thumb:hover {
-          background: hsl(var(--muted-foreground) / 0.5);
-        }
-        .toc-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
-        }
-      `}</style>
     </nav>
   )
 }
