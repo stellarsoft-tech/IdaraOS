@@ -113,8 +113,8 @@ export function TableOfContents({
     const calculateHeight = () => {
       if (navRef.current) {
         const rect = navRef.current.getBoundingClientRect()
-        // Available height = viewport height - top position (no bottom margin needed)
-        const available = window.innerHeight - Math.max(rect.top, 0)
+        // Available height = viewport height - top position - bottom margin
+        const available = window.innerHeight - Math.max(rect.top, 0) - 40
         setMaxHeight(`${Math.max(available, 200)}px`)
       }
     }
