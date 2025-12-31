@@ -205,7 +205,7 @@ export function TableOfContents({
 
       {/* ToC List with minimal scrollbar */}
       {!isCollapsed && (
-        <ul className="space-y-1 text-sm max-h-[calc(100vh-60px)] overflow-y-auto toc-scroll pb-4">
+        <ul className="space-y-1 text-sm max-h-[calc(100vh-40px)] overflow-y-auto toc-scroll pb-8">
           {headings.map((heading) => {
             const indent = heading.level - minLevel
             const isActive = activeId === heading.id
@@ -234,25 +234,24 @@ export function TableOfContents({
         </ul>
       )}
 
-      {/* Minimal scrollbar styles */}
+      {/* Minimal scrollbar - handle only, no track background */}
       <style jsx>{`
         .toc-scroll::-webkit-scrollbar {
           width: 6px;
         }
         .toc-scroll::-webkit-scrollbar-track {
-          background: hsl(var(--muted) / 0.5);
-          border-radius: 3px;
+          background: transparent;
         }
         .toc-scroll::-webkit-scrollbar-thumb {
-          background: hsl(var(--muted-foreground) / 0.4);
+          background: hsl(var(--muted-foreground) / 0.3);
           border-radius: 3px;
         }
         .toc-scroll::-webkit-scrollbar-thumb:hover {
-          background: hsl(var(--muted-foreground) / 0.6);
+          background: hsl(var(--muted-foreground) / 0.5);
         }
         .toc-scroll {
           scrollbar-width: thin;
-          scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--muted) / 0.5);
+          scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
         }
       `}</style>
     </nav>
