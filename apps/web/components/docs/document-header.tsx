@@ -71,17 +71,17 @@ export function DocumentHeader({
   const hasMetadata = referenceId || version || owner || effectiveDate || approvedBy
 
   return (
-    <div className={cn("mb-6", className)}>
+    <div className={cn("mb-4", className)}>
       {/* Title row with optional actions */}
-      <div className="flex items-start justify-between gap-4 mb-4">
-        <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+      <div className="flex items-start justify-between gap-4 mb-2">
+        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         {actions}
       </div>
       
       {/* Metadata Box - 2 row grid layout like reference */}
       {hasMetadata && (
-        <div className="rounded-lg border bg-card/50 p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+        <div className="rounded-lg border bg-card/50 px-4 py-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5 text-sm">
             {/* Row 1 */}
             {/* Reference ID */}
             {referenceId && (
