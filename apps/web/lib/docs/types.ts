@@ -271,14 +271,21 @@ export interface PendingDocument {
   documentId: string
   documentSlug: string
   documentTitle: string
+  documentDescription: string | null
   documentCategory: DocumentCategory
   documentVersion: string
   rolloutId: string
+  rolloutName: string | null
   requirement: RolloutRequirement
   dueDate: string | null
   acknowledgmentId: string | null
   acknowledgmentStatus: AcknowledgmentStatus
+  versionAcknowledged: string | null
+  viewedAt: string | null
+  acknowledgedAt: string | null
+  signedAt: string | null
   isOverdue: boolean
+  needsSignature: boolean
 }
 
 // ============================================================================

@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
         documentStatus: documents.status,
         // Rollout info
         rolloutId: documentRollouts.id,
+        rolloutName: documentRollouts.name,
         requirement: documentRollouts.requirement,
         dueDate: documentRollouts.dueDate,
         // Acknowledgment info
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
       documentCategory: doc.documentCategory,
       documentVersion: doc.documentVersion,
       rolloutId: doc.rolloutId,
+      rolloutName: doc.rolloutName,
       requirement: doc.requirement,
       dueDate: doc.dueDate,
       acknowledgmentId: doc.acknowledgmentId,
