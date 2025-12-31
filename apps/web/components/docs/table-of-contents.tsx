@@ -205,7 +205,7 @@ export function TableOfContents({
 
       {/* ToC List with minimal scrollbar */}
       {!isCollapsed && (
-        <ul className="space-y-1 text-sm max-h-[calc(100vh-80px)] overflow-y-auto toc-scroll">
+        <ul className="space-y-1 text-sm max-h-[calc(100vh-60px)] overflow-y-auto toc-scroll pb-4">
           {headings.map((heading) => {
             const indent = heading.level - minLevel
             const isActive = activeId === heading.id
@@ -237,17 +237,22 @@ export function TableOfContents({
       {/* Minimal scrollbar styles */}
       <style jsx>{`
         .toc-scroll::-webkit-scrollbar {
-          width: 4px;
+          width: 6px;
         }
         .toc-scroll::-webkit-scrollbar-track {
-          background: transparent;
+          background: hsl(var(--muted) / 0.5);
+          border-radius: 3px;
         }
         .toc-scroll::-webkit-scrollbar-thumb {
-          background: hsl(var(--muted-foreground) / 0.3);
-          border-radius: 2px;
+          background: hsl(var(--muted-foreground) / 0.4);
+          border-radius: 3px;
         }
         .toc-scroll::-webkit-scrollbar-thumb:hover {
-          background: hsl(var(--muted-foreground) / 0.5);
+          background: hsl(var(--muted-foreground) / 0.6);
+        }
+        .toc-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: hsl(var(--muted-foreground) / 0.4) hsl(var(--muted) / 0.5);
         }
       `}</style>
     </nav>
