@@ -33,7 +33,7 @@ const categoryLabels: Record<string, string> = {
 }
 
 export default function MyDocumentsPage() {
-  const { data, isLoading } = useMyDocuments({ includeOptional: true })
+  const { data, isLoading } = useMyDocuments({ includeOptional: true, status: "all" })
   
   const documents = data?.data || []
   const stats = data?.stats || {

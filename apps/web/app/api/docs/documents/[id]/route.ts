@@ -104,12 +104,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .where(eq(documentVersions.documentId, doc.id))
       .orderBy(desc(documentVersions.createdAt))
     
-    // Get acknowledgment stats
+    // Get acknowledgment stats (only from active rollouts)
     const ackStats = await db
       .select({
         status: documentAcknowledgments.status,
       })
       .from(documentAcknowledgments)
+      .innerJoin(documentRollouts, and(
+        eq(documentAcknowledgments.rolloutId, documentRollouts.id),
+        eq(documentRollouts.isActive, true)
+      ))
       .where(eq(documentAcknowledgments.documentId, doc.id))
     
     const acknowledgmentStats = {

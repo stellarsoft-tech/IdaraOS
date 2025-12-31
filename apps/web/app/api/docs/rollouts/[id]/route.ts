@@ -164,7 +164,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Rollout not found" }, { status: 404 })
     }
     
-    // Delete rollout (cascades to acknowledgments)
+    // Delete acknowledgments first (schema uses onDelete: "set null", not cascade)
+    await db.delete(documentAcknowledgments).where(eq(documentAcknowledgments.rolloutId, id))
+    
+    // Then delete the rollout
     await db.delete(documentRollouts).where(eq(documentRollouts.id, id))
     
     // Audit log
