@@ -324,10 +324,6 @@ export default function DocumentDetailPage() {
             <Users className="mr-1 h-3 w-3" />
             Rollouts ({rollouts.length})
           </TabsTrigger>
-          <TabsTrigger value="acknowledgments">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            Acknowledgments ({doc.acknowledgmentStats?.total || 0})
-          </TabsTrigger>
           <TabsTrigger value="history">
             <History className="mr-1 h-3 w-3" />
             History
@@ -713,6 +709,45 @@ flowchart LR
               </div>
             </CardHeader>
             <CardContent>
+              {/* Acknowledgment Summary Stats */}
+              {doc.acknowledgmentStats && doc.acknowledgmentStats.total > 0 && (
+                <div className="mb-6">
+                  <div className="grid grid-cols-4 gap-4 mb-4">
+                    <div className="text-center p-3 rounded-lg bg-muted/50">
+                      <p className="text-2xl font-bold">{doc.acknowledgmentStats.total}</p>
+                      <p className="text-xs text-muted-foreground">Total</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-yellow-500/10">
+                      <p className="text-2xl font-bold text-yellow-600">{doc.acknowledgmentStats.pending}</p>
+                      <p className="text-xs text-muted-foreground">Pending</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-blue-500/10">
+                      <p className="text-2xl font-bold text-blue-600">{doc.acknowledgmentStats.viewed}</p>
+                      <p className="text-xs text-muted-foreground">Viewed</p>
+                    </div>
+                    <div className="text-center p-3 rounded-lg bg-green-500/10">
+                      <p className="text-2xl font-bold text-green-600">
+                        {doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Completed</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium">Overall Completion</span>
+                      <span className="text-sm text-muted-foreground">
+                        {Math.round(((doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed) / doc.acknowledgmentStats.total) * 100)}%
+                      </span>
+                    </div>
+                    <Progress 
+                      value={((doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed) / doc.acknowledgmentStats.total) * 100} 
+                      className="h-2" 
+                    />
+                  </div>
+                  <Separator className="my-6" />
+                </div>
+              )}
+              
               {rollouts.length === 0 ? (
                 <div className="text-center py-8">
                   <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -775,78 +810,6 @@ flowchart LR
                       </div>
                     )
                   })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        {/* Acknowledgments Tab */}
-        <TabsContent value="acknowledgments" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Acknowledgments Summary</CardTitle>
-              <CardDescription>
-                Overview of document acknowledgment status across all rollouts
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Stats */}
-              {doc.acknowledgmentStats ? (
-                <>
-                  <div className="grid grid-cols-4 gap-4 mb-6">
-                    <div className="text-center p-4 rounded-lg bg-muted/50">
-                      <p className="text-3xl font-bold">{doc.acknowledgmentStats.total}</p>
-                      <p className="text-sm text-muted-foreground">Total</p>
-                    </div>
-                    <div className="text-center p-4 rounded-lg bg-yellow-500/10">
-                      <p className="text-3xl font-bold text-yellow-600">{doc.acknowledgmentStats.pending}</p>
-                      <p className="text-sm text-muted-foreground">Pending</p>
-                    </div>
-                    <div className="text-center p-4 rounded-lg bg-blue-500/10">
-                      <p className="text-3xl font-bold text-blue-600">{doc.acknowledgmentStats.viewed}</p>
-                      <p className="text-sm text-muted-foreground">Viewed</p>
-                    </div>
-                    <div className="text-center p-4 rounded-lg bg-green-500/10">
-                      <p className="text-3xl font-bold text-green-600">
-                        {doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed}
-                      </p>
-                      <p className="text-sm text-muted-foreground">Completed</p>
-                    </div>
-                  </div>
-                  
-                  {/* Progress Overview */}
-                  {doc.acknowledgmentStats.total > 0 && (
-                    <div className="rounded-lg border p-4 mb-6">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">Overall Completion</span>
-                        <span className="text-sm text-muted-foreground">
-                          {Math.round(((doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed) / doc.acknowledgmentStats.total) * 100)}%
-                        </span>
-                      </div>
-                      <Progress 
-                        value={((doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed) / doc.acknowledgmentStats.total) * 100} 
-                        className="h-2" 
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Note about viewing individual records */}
-                  <div className="rounded-lg bg-muted/50 p-4 text-center">
-                    <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      To view individual acknowledgment records, go to the{" "}
-                      <span className="font-medium text-foreground">Rollouts</span> tab and click on a rollout.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No acknowledgments yet</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Add a rollout in the Rollouts tab to start tracking acknowledgments.
-                  </p>
                 </div>
               )}
             </CardContent>

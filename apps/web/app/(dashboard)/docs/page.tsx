@@ -8,15 +8,18 @@ import { StatCard } from "@/components/stat-card"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useDocuments, useMyDocuments } from "@/lib/api/docs"
+import { Progress } from "@/components/ui/progress"
+import { useDocuments, useMyDocuments, useRolloutStats } from "@/lib/api/docs"
 
 export default function DocsOverviewPage() {
   const { data: documentsData, isLoading: docsLoading } = useDocuments()
   const { data: myDocsData, isLoading: myDocsLoading } = useMyDocuments()
+  const { data: rolloutStatsData, isLoading: statsLoading } = useRolloutStats()
   
   const documents = documentsData?.data || []
   const myDocs = myDocsData?.data || []
   const myDocsStats = myDocsData?.stats || { total: 0, pending: 0, overdue: 0 }
+  const rolloutStats = rolloutStatsData?.data
   
   const publishedCount = documents.filter((d) => d.status === "published").length
   const inReviewCount = documents.filter((d) => d.status === "in_review").length
@@ -143,40 +146,43 @@ export default function DocsOverviewPage() {
           </Link>
         </Card>
 
+        {/* Rollout Progress Card */}
         <Card className="hover:border-primary/50 transition-colors">
-          <Link href="/docs/attestations">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4" />
-                Attestations
-              </CardTitle>
-              <CardDescription>Policy acknowledgements</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">View all attestations</span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Rollout Progress
+            </CardTitle>
+            <CardDescription>Organization-wide acknowledgment status</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {statsLoading ? (
+              <div className="animate-pulse space-y-2">
+                <div className="h-4 bg-muted rounded w-1/2" />
+                <div className="h-2 bg-muted rounded w-full" />
               </div>
-            </CardContent>
-          </Link>
-        </Card>
-
-        <Card className="hover:border-primary/50 transition-colors">
-          <Link href="/docs/settings">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                Rollout Management
-              </CardTitle>
-              <CardDescription>Manage document rollouts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Configure rollouts</span>
-                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-              </div>
-            </CardContent>
-          </Link>
+            ) : rolloutStats && rolloutStats.totalAcknowledgments > 0 ? (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {rolloutStats.activeRollouts} active rollouts
+                  </span>
+                  <span className="font-medium">
+                    {rolloutStats.completionPercentage}% complete
+                  </span>
+                </div>
+                <Progress value={rolloutStats.completionPercentage} className="h-2" />
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{rolloutStats.completed} / {rolloutStats.totalAcknowledgments} acknowledged</span>
+                  {rolloutStats.overdue > 0 && (
+                    <StatusBadge variant="danger">{rolloutStats.overdue} overdue</StatusBadge>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No active rollouts</p>
+            )}
+          </CardContent>
         </Card>
       </div>
 

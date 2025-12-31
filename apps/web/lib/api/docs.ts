@@ -31,6 +31,7 @@ export const docsKeys = {
   rollouts: () => [...docsKeys.all, "rollouts"] as const,
   rolloutList: (filters?: RolloutFilters) => [...docsKeys.rollouts(), "list", filters] as const,
   rolloutDetail: (id: string) => [...docsKeys.rollouts(), "detail", id] as const,
+  rolloutStats: () => [...docsKeys.rollouts(), "stats"] as const,
   acknowledgments: () => [...docsKeys.all, "acknowledgments"] as const,
   acknowledgmentList: (filters?: AcknowledgmentFilters) => [...docsKeys.acknowledgments(), "list", filters] as const,
   acknowledgmentDetail: (id: string) => [...docsKeys.acknowledgments(), "detail", id] as const,
@@ -171,6 +172,31 @@ async function deleteRollout(id: string): Promise<void> {
   if (!res.ok) {
     throw new Error("Failed to delete rollout")
   }
+}
+
+// ============================================================================
+// FETCH FUNCTIONS - ROLLOUT STATS
+// ============================================================================
+
+export interface RolloutStats {
+  totalRollouts: number
+  activeRollouts: number
+  totalAcknowledgments: number
+  pending: number
+  viewed: number
+  acknowledged: number
+  signed: number
+  completed: number
+  overdue: number
+  completionPercentage: number
+}
+
+async function fetchRolloutStats(): Promise<{ data: RolloutStats }> {
+  const res = await fetch("/api/docs/rollouts/stats")
+  if (!res.ok) {
+    throw new Error("Failed to fetch rollout stats")
+  }
+  return res.json()
 }
 
 // ============================================================================
@@ -345,6 +371,17 @@ export function useDeleteRollout() {
       // Invalidate all docs queries to ensure fresh data
       queryClient.invalidateQueries({ queryKey: docsKeys.all })
     },
+  })
+}
+
+// ============================================================================
+// REACT QUERY HOOKS - ROLLOUT STATS
+// ============================================================================
+
+export function useRolloutStats() {
+  return useQuery({
+    queryKey: docsKeys.rolloutStats(),
+    queryFn: fetchRolloutStats,
   })
 }
 
