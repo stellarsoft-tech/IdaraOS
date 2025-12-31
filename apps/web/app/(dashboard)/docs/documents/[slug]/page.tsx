@@ -896,6 +896,7 @@ flowchart LR
         rollout={selectedRollout}
         open={rolloutDrawerOpen}
         onOpenChange={setRolloutDrawerOpen}
+        onRolloutUpdated={() => refetch()}
       />
     </div>
   )

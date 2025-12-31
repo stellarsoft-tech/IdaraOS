@@ -2,17 +2,23 @@
 
 import * as React from "react"
 import {
+  Archive,
   Calendar,
   CheckCircle,
   Clock,
   Eye,
   Globe,
+  Loader2,
+  MoreHorizontal,
+  Play,
   Shield,
+  Trash2,
   User,
   Users,
   X,
 } from "lucide-react"
 import { ColumnDef } from "@tanstack/react-table"
+import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,8 +31,26 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { DataTableAdvanced as DataTable } from "@/components/primitives/data-table-advanced"
-import { useAcknowledgments } from "@/lib/api/docs"
+import { useAcknowledgments, useUpdateRollout, useDeleteRollout } from "@/lib/api/docs"
+import { usePermission } from "@/lib/rbac/hooks"
 import type { RolloutWithTarget, AcknowledgmentWithUser } from "@/lib/docs/types"
 
 // Helper functions
@@ -166,16 +190,52 @@ interface RolloutDetailDrawerProps {
   rollout: RolloutWithTarget | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  onRolloutUpdated?: () => void
 }
 
-export function RolloutDetailDrawer({ rollout, open, onOpenChange }: RolloutDetailDrawerProps) {
+export function RolloutDetailDrawer({ rollout, open, onOpenChange, onRolloutUpdated }: RolloutDetailDrawerProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
+  
   const { data: acksData, isLoading } = useAcknowledgments(
     rollout?.id ? { rolloutId: rollout.id } : undefined
   )
+  const updateRollout = useUpdateRollout()
+  const deleteRollout = useDeleteRollout()
+  
+  // RBAC permissions
+  const canDelete = usePermission("docs.rollouts", "delete")
+  const canEdit = usePermission("docs.rollouts", "write")
   
   const acknowledgments = acksData?.data || []
   
   if (!rollout) return null
+  
+  const handleToggleActive = async () => {
+    try {
+      await updateRollout.mutateAsync({
+        id: rollout.id,
+        data: { isActive: !rollout.isActive },
+      })
+      toast.success(rollout.isActive ? "Rollout deactivated" : "Rollout activated")
+      onRolloutUpdated?.()
+    } catch (error) {
+      toast.error("Failed to update rollout")
+    }
+  }
+  
+  const handleDelete = async () => {
+    try {
+      await deleteRollout.mutateAsync(rollout.id)
+      toast.success("Rollout deleted successfully")
+      setShowDeleteDialog(false)
+      onOpenChange(false)
+      onRolloutUpdated?.()
+    } catch (error) {
+      toast.error("Failed to delete rollout")
+    }
+  }
+  
+  const isUpdating = updateRollout.isPending || deleteRollout.isPending
   
   // Calculate stats from acknowledgments
   const stats = {
@@ -196,16 +256,65 @@ export function RolloutDetailDrawer({ rollout, open, onOpenChange }: RolloutDeta
   ]
   
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-4xl w-full overflow-y-auto p-6">
         <SheetHeader className="space-y-2">
-          <SheetTitle className="text-xl">
-            {rollout.name || `Rollout - ${new Date(rollout.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
-          </SheetTitle>
-          <SheetDescription className="flex items-center gap-2">
-            {targetTypeIcons[rollout.targetType]}
-            <span>{rollout.targetName || rollout.targetType}</span>
-          </SheetDescription>
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <SheetTitle className="text-xl">
+                {rollout.name || `Rollout - ${new Date(rollout.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}`}
+              </SheetTitle>
+              <SheetDescription className="flex items-center gap-2">
+                {targetTypeIcons[rollout.targetType]}
+                <span>{rollout.targetName || rollout.targetType}</span>
+              </SheetDescription>
+            </div>
+            
+            {/* Actions Menu */}
+            {(canEdit || canDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" disabled={isUpdating}>
+                    {isUpdating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MoreHorizontal className="h-4 w-4" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEdit && (
+                    <DropdownMenuItem onClick={handleToggleActive}>
+                      {rollout.isActive ? (
+                        <>
+                          <Archive className="mr-2 h-4 w-4" />
+                          Deactivate Rollout
+                        </>
+                      ) : (
+                        <>
+                          <Play className="mr-2 h-4 w-4" />
+                          Activate Rollout
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Rollout
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </SheetHeader>
         
         {/* Rollout Info Header */}
@@ -297,6 +406,31 @@ export function RolloutDetailDrawer({ rollout, open, onOpenChange }: RolloutDeta
         </div>
       </SheetContent>
     </Sheet>
+    
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Rollout</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete this rollout? This will also delete all {acknowledgments.length} acknowledgment records associated with it.
+            This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteRollout.isPending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteRollout.isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleteRollout.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }
 
