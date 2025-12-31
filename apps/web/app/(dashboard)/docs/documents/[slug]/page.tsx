@@ -63,9 +63,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MDXRenderer } from "@/components/docs"
+import { Progress } from "@/components/ui/progress"
+import { MDXRenderer, RolloutDetailDrawer } from "@/components/docs"
 import { useDocument, useUpdateDocument, useDeleteDocument, useRollouts, useAcknowledgments } from "@/lib/api/docs"
-import type { DocumentCategory, DocumentStatus, DocumentVersionWithRelations } from "@/lib/docs/types"
+import type { DocumentCategory, DocumentStatus, DocumentVersionWithRelations, RolloutWithTarget } from "@/lib/docs/types"
 import { toast } from "sonner"
 
 const statusConfig: Record<DocumentStatus, { label: string; variant: "default" | "success" | "warning" | "danger" | "info" | "purple" }> = {
@@ -99,6 +100,8 @@ export default function DocumentDetailPage() {
   const [formData, setFormData] = React.useState<Record<string, unknown>>({})
   const [content, setContent] = React.useState("")
   const [fullscreenMode, setFullscreenMode] = React.useState<"editor" | "preview" | null>(null)
+  const [selectedRollout, setSelectedRollout] = React.useState<RolloutWithTarget | null>(null)
+  const [rolloutDrawerOpen, setRolloutDrawerOpen] = React.useState(false)
   
   const doc = data?.data
   
@@ -720,36 +723,53 @@ flowchart LR
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {rollouts.map((rollout) => (
-                    <div
-                      key={rollout.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                    >
-                      <div className="flex items-center gap-3">
-                        {rollout.targetType === "organization" && <Globe className="h-4 w-4 text-muted-foreground" />}
-                        {rollout.targetType === "team" && <Users className="h-4 w-4 text-muted-foreground" />}
-                        {rollout.targetType === "role" && <Shield className="h-4 w-4 text-muted-foreground" />}
-                        {rollout.targetType === "user" && <User className="h-4 w-4 text-muted-foreground" />}
-                        <div>
-                          <p className="font-medium">
-                            {rollout.targetName || rollout.targetType}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {rollout.requirement.replace("_", " ")}
-                            {rollout.dueDate && ` • Due: ${new Date(rollout.dueDate).toLocaleDateString()}`}
-                          </p>
+                  {rollouts.map((rollout) => {
+                    const total = rollout.targetCount || 0
+                    const completed = rollout.acknowledgedCount || 0
+                    const progress = total > 0 ? Math.round((completed / total) * 100) : 0
+                    
+                    return (
+                      <div
+                        key={rollout.id}
+                        onClick={() => {
+                          setSelectedRollout(rollout)
+                          setRolloutDrawerOpen(true)
+                        }}
+                        className="p-4 rounded-lg border hover:border-primary/50 hover:bg-muted/50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            {rollout.targetType === "organization" && <Globe className="h-4 w-4 text-muted-foreground" />}
+                            {rollout.targetType === "team" && <Users className="h-4 w-4 text-muted-foreground" />}
+                            {rollout.targetType === "role" && <Shield className="h-4 w-4 text-muted-foreground" />}
+                            {rollout.targetType === "user" && <User className="h-4 w-4 text-muted-foreground" />}
+                            <div>
+                              <p className="font-medium">
+                                {rollout.targetName || rollout.targetType}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {rollout.requirement.replace(/_/g, " ")}
+                                {rollout.dueDate && ` • Due: ${new Date(rollout.dueDate).toLocaleDateString()}`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={rollout.isActive ? "default" : "secondary"}>
+                              {rollout.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                        </div>
+                        {/* Progress bar */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Progress</span>
+                            <span className="text-muted-foreground">{completed}/{total} acknowledged</span>
+                          </div>
+                          <Progress value={progress} className="h-1.5" />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={rollout.isActive ? "default" : "secondary"}>
-                          {rollout.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                        <span className="text-sm text-muted-foreground">
-                          {rollout.acknowledgedCount || 0}/{rollout.targetCount || 0} acknowledged
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
@@ -760,72 +780,68 @@ flowchart LR
         <TabsContent value="acknowledgments" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Acknowledgments</CardTitle>
+              <CardTitle>Acknowledgments Summary</CardTitle>
               <CardDescription>
-                Track who has viewed and acknowledged this document
+                Overview of document acknowledgment status across all rollouts
               </CardDescription>
             </CardHeader>
             <CardContent>
               {/* Stats */}
-              {doc.acknowledgmentStats && (
-                <div className="grid grid-cols-4 gap-4 mb-6">
-                  <div className="text-center p-3 rounded-lg bg-muted/50">
-                    <p className="text-2xl font-bold">{doc.acknowledgmentStats.total}</p>
-                    <p className="text-xs text-muted-foreground">Total</p>
+              {doc.acknowledgmentStats ? (
+                <>
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <p className="text-3xl font-bold">{doc.acknowledgmentStats.total}</p>
+                      <p className="text-sm text-muted-foreground">Total</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-yellow-500/10">
+                      <p className="text-3xl font-bold text-yellow-600">{doc.acknowledgmentStats.pending}</p>
+                      <p className="text-sm text-muted-foreground">Pending</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-blue-500/10">
+                      <p className="text-3xl font-bold text-blue-600">{doc.acknowledgmentStats.viewed}</p>
+                      <p className="text-sm text-muted-foreground">Viewed</p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-green-500/10">
+                      <p className="text-3xl font-bold text-green-600">
+                        {doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Completed</p>
+                    </div>
                   </div>
-                  <div className="text-center p-3 rounded-lg bg-yellow-500/10">
-                    <p className="text-2xl font-bold text-yellow-600">{doc.acknowledgmentStats.pending}</p>
-                    <p className="text-xs text-muted-foreground">Pending</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-blue-500/10">
-                    <p className="text-2xl font-bold text-blue-600">{doc.acknowledgmentStats.viewed}</p>
-                    <p className="text-xs text-muted-foreground">Viewed</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-green-500/10">
-                    <p className="text-2xl font-bold text-green-600">
-                      {doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed}
+                  
+                  {/* Progress Overview */}
+                  {doc.acknowledgmentStats.total > 0 && (
+                    <div className="rounded-lg border p-4 mb-6">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">Overall Completion</span>
+                        <span className="text-sm text-muted-foreground">
+                          {Math.round(((doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed) / doc.acknowledgmentStats.total) * 100)}%
+                        </span>
+                      </div>
+                      <Progress 
+                        value={((doc.acknowledgmentStats.acknowledged + doc.acknowledgmentStats.signed) / doc.acknowledgmentStats.total) * 100} 
+                        className="h-2" 
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Note about viewing individual records */}
+                  <div className="rounded-lg bg-muted/50 p-4 text-center">
+                    <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      To view individual acknowledgment records, go to the{" "}
+                      <span className="font-medium text-foreground">Rollouts</span> tab and click on a rollout.
                     </p>
-                    <p className="text-xs text-muted-foreground">Completed</p>
                   </div>
-                </div>
-              )}
-              
-              {acknowledgments.length === 0 ? (
+                </>
+              ) : (
                 <div className="text-center py-8">
                   <CheckCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">No acknowledgments yet</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {acknowledgments.map((ack) => (
-                    <div
-                      key={ack.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
-                    >
-                      <div>
-                        <p className="font-medium">{ack.userName}</p>
-                        <p className="text-xs text-muted-foreground">{ack.userEmail}</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <StatusBadge
-                          variant={
-                            ack.status === "signed" || ack.status === "acknowledged"
-                              ? "success"
-                              : ack.status === "viewed"
-                              ? "warning"
-                              : "default"
-                          }
-                        >
-                          {ack.status}
-                        </StatusBadge>
-                        {ack.acknowledgedAt && (
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(ack.acknowledgedAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Add a rollout in the Rollouts tab to start tracking acknowledgments.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -906,6 +922,13 @@ flowchart LR
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Rollout Detail Drawer */}
+      <RolloutDetailDrawer
+        rollout={selectedRollout}
+        open={rolloutDrawerOpen}
+        onOpenChange={setRolloutDrawerOpen}
+      />
     </div>
   )
 }

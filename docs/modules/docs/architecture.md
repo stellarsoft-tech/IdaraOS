@@ -256,6 +256,32 @@ flowchart TB
     R10 --> A1
 ```
 
+## Admin Acknowledgment Tracking UX
+
+Acknowledgments are accessed through a document-centric workflow:
+
+```mermaid
+flowchart LR
+    subgraph DocEdit [Document Edit Page]
+        A[Rollouts Tab] --> B[Click Rollout Card]
+        B --> C[Rollout Detail Drawer]
+        C --> D[Acknowledgments DataTable]
+    end
+    
+    subgraph Summary [Acknowledgments Tab]
+        E[Stats Summary Only]
+        E --> F[Total/Pending/Viewed/Completed]
+        E --> G[Link to Rollouts Tab]
+    end
+```
+
+**Key UX Decisions:**
+- No standalone attestations page - acknowledgments are per-document
+- Rollout cards are clickable and show progress bars
+- Clicking a rollout opens a slide-out drawer with a paginated DataTable
+- Acknowledgments tab shows only aggregate statistics
+- Edit button on document view page (RBAC-gated)
+
 ## Acknowledgment State Machine
 
 ```mermaid
@@ -412,7 +438,7 @@ apps/web/
 │   │   │   └── [id]/
 │   │   │       └── route.ts       # Get/update/delete rollout
 │   │   ├── acknowledgments/
-│   │   │   ├── route.ts           # List acknowledgments
+│   │   │   ├── route.ts           # List acknowledgments (supports rolloutId filter)
 │   │   │   └── [id]/
 │   │   │       └── route.ts       # Update acknowledgment
 │   │   └── my-documents/
@@ -424,7 +450,7 @@ apps/web/
 │       │   ├── new/
 │       │   │   └── page.tsx       # Create document
 │       │   └── [slug]/
-│       │       ├── page.tsx       # Edit document
+│       │       ├── page.tsx       # Edit document (with rollout drawer)
 │       │       └── rollouts/
 │       │           └── new/
 │       │               └── page.tsx # Create rollout
@@ -432,13 +458,11 @@ apps/web/
 │       │   └── page.tsx           # My pending docs
 │       ├── view/
 │       │   └── [slug]/
-│       │       └── page.tsx       # Document viewer
+│       │       └── page.tsx       # Document viewer (with edit button)
 │       ├── policies/
 │       │   └── page.tsx           # Policy documents
 │       ├── procedures/
 │       │   └── page.tsx           # SOP documents
-│       ├── attestations/
-│       │   └── page.tsx           # Attestation tracking
 │       └── settings/
 │           └── page.tsx           # Module settings
 ├── components/docs/
@@ -447,7 +471,9 @@ apps/web/
 │   ├── document-header.tsx        # Header component
 │   ├── document-footer.tsx        # Footer component
 │   ├── mermaid-diagram.tsx        # Mermaid with pan/zoom
-│   └── callout.tsx                # Callout boxes
+│   ├── callout.tsx                # Callout boxes
+│   ├── table-of-contents.tsx      # ToC with scrollspy
+│   └── rollout-detail-drawer.tsx  # Rollout acknowledgments drawer
 ├── content/docs/
 │   └── *.mdx                      # MDX document files
 └── lib/

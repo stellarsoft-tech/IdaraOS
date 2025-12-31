@@ -9,6 +9,7 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
+  Pencil,
   PenLine,
   Printer,
   List,
@@ -49,8 +50,9 @@ export default function DocumentViewerPage() {
   const { data: myDocsData, refetch: refetchMyDocs } = useMyDocuments()
   const updateAcknowledgment = useUpdateAcknowledgment()
   
-  // Permission check for printing
+  // Permission checks
   const canPrint = usePermission("docs.documents", "print")
+  const canEdit = usePermission("docs.documents", "edit")
   
   const [showAckDialog, setShowAckDialog] = React.useState(false)
   const [showSignDialog, setShowSignDialog] = React.useState(false)
@@ -221,6 +223,20 @@ export default function DocumentViewerPage() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>Print document</TooltipContent>
+        </Tooltip>
+      )}
+      
+      {/* Edit Button */}
+      {canEdit && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+              <Link href={`/docs/documents/${slug}`}>
+                <Pencil className="h-4 w-4" />
+              </Link>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Edit document</TooltipContent>
         </Tooltip>
       )}
       

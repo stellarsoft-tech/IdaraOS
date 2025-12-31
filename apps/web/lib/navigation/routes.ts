@@ -232,12 +232,6 @@ export const routes: Record<string, RouteConfig> = {
     parent: "docs",
     description: "Documents assigned to you",
   },
-  "docs.attestations": {
-    path: "/docs/attestations",
-    label: "Attestations",
-    parent: "docs",
-    description: "Policy acknowledgements and sign-offs",
-  },
   "docs.settings": {
     path: "/docs/settings",
     label: "Settings",

@@ -167,7 +167,6 @@ const navigationData: NavItem[] = [
       { title: "My Documents", url: "/docs/my-documents", module: "docs.overview" },
       { title: "Policies", url: "/docs/policies", module: "docs.documents" },
       { title: "Procedures / SOPs", url: "/docs/procedures", module: "docs.documents" },
-      { title: "Attestations", url: "/docs/attestations", module: "docs.acknowledgments" },
       { title: "Settings", url: "/docs/settings", module: "docs.settings" },
     ],
   },

@@ -181,6 +181,7 @@ async function fetchAcknowledgments(filters?: AcknowledgmentFilters): Promise<{ 
   const params = new URLSearchParams()
   
   if (filters?.documentId) params.set("documentId", filters.documentId)
+  if (filters?.rolloutId) params.set("rolloutId", filters.rolloutId)
   if (filters?.userId) params.set("userId", filters.userId)
   if (filters?.status) {
     params.set("status", Array.isArray(filters.status) ? filters.status.join(",") : filters.status)

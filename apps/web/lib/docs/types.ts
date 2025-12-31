@@ -299,6 +299,7 @@ export interface RolloutFilters {
 
 export interface AcknowledgmentFilters {
   documentId?: string
+  rolloutId?: string
   userId?: string
   status?: AcknowledgmentStatus | AcknowledgmentStatus[]
 }
