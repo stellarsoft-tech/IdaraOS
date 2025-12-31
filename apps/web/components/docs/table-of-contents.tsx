@@ -263,7 +263,7 @@ export function TableOfContents({
       {/* ToC List - dynamically sized to fit available space */}
       {!isCollapsed && (
         <ul 
-          className="toc-scroll space-y-1 text-sm overflow-y-auto"
+          className="toc-scroll space-y-1 text-sm overflow-y-auto pb-6"
           style={{ 
             maxHeight,
             scrollbarWidth: "thin",
