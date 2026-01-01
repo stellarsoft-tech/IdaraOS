@@ -9,6 +9,8 @@ import {
   Trash2,
   Users,
   Loader2,
+  Maximize2,
+  Minimize2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -100,6 +102,7 @@ export default function RolesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [selectedRole, setSelectedRole] = React.useState<Role | null>(null)
   const [selectedModule, setSelectedModule] = React.useState<string | null>(null)
+  const [permissionsFullscreen, setPermissionsFullscreen] = React.useState(false)
   const [formData, setFormData] = React.useState({
     name: "",
     description: "",
@@ -168,6 +171,7 @@ export default function RolesPage() {
   const handleOpenCreate = () => {
     setSelectedRole(null)
     setSelectedModule(null)
+    setPermissionsFullscreen(false)
     setFormData({
       name: "",
       description: "",
@@ -180,8 +184,21 @@ export default function RolesPage() {
   const handleOpenEdit = (role: Role) => {
     setSelectedRole(role)
     setSelectedModule(null)
+    setPermissionsFullscreen(false)
     setDrawerOpen(true)
   }
+
+  // Handle Escape key for fullscreen permissions
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && permissionsFullscreen) {
+        e.stopPropagation()
+        setPermissionsFullscreen(false)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown, true)
+    return () => window.removeEventListener("keydown", handleKeyDown, true)
+  }, [permissionsFullscreen])
 
   const handleOpenDelete = (role: Role) => {
     setSelectedRole(role)
@@ -206,6 +223,25 @@ export default function RolesPage() {
       permissionIds: checked
         ? [...new Set([...prev.permissionIds, ...modulePermIds])]
         : prev.permissionIds.filter((id) => !modulePermIds.includes(id)),
+    }))
+  }
+
+  const handleToggleCategoryPermissions = (category: string, checked: boolean) => {
+    // Get all modules in this category
+    const categoryModules = modulesByCategory.get(category) || []
+    
+    // Get all permission IDs for all modules in this category
+    const categoryPermIds: string[] = []
+    for (const data of categoryModules) {
+      const modulePerms = allPermissions?.filter((p) => p.moduleSlug === data.module.slug) || []
+      categoryPermIds.push(...modulePerms.map((p) => p.id))
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      permissionIds: checked
+        ? [...new Set([...prev.permissionIds, ...categoryPermIds])]
+        : prev.permissionIds.filter((id) => !categoryPermIds.includes(id)),
     }))
   }
 
@@ -445,9 +481,32 @@ export default function RolesPage() {
               </div>
 
               {/* Permissions - Two Panel Layout */}
-              <div className="flex-1 overflow-hidden">
-                <Label className="mb-3 block">Permissions</Label>
-                <div className="grid grid-cols-[280px_1fr] gap-4 h-[calc(100%-32px)]">
+              <div className={`flex-1 overflow-hidden ${permissionsFullscreen ? "fixed inset-0 z-50 bg-background p-6" : ""}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <Label>Permissions</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setPermissionsFullscreen(!permissionsFullscreen)}
+                        >
+                          {permissionsFullscreen ? (
+                            <Minimize2 className="h-4 w-4" />
+                          ) : (
+                            <Maximize2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {permissionsFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className={`grid grid-cols-[280px_1fr] gap-4 ${permissionsFullscreen ? "h-[calc(100%-48px)]" : "h-[calc(100%-32px)]"}`}>
                   {/* Left: Module Tree */}
                   <div className="border rounded-lg overflow-hidden">
                     <ModuleTree
@@ -456,6 +515,7 @@ export default function RolesPage() {
                       onSelectModule={setSelectedModule}
                       permissionIds={formData.permissionIds}
                       allPermissions={allPermissions}
+                      onToggleCategoryPermissions={handleToggleCategoryPermissions}
                     />
                   </div>
 

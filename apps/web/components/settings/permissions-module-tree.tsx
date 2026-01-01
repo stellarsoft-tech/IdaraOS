@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, ChevronRight, Check, Minus, Circle } from "lucide-react"
+import { ChevronDown, ChevronRight, Check, Minus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Module, Permission } from "@/lib/api/rbac"
 
@@ -11,6 +11,7 @@ interface ModuleTreeProps {
   onSelectModule: (slug: string) => void
   permissionIds: string[]
   allPermissions: Permission[] | undefined
+  onToggleCategoryPermissions: (category: string, checked: boolean) => void
 }
 
 export function ModuleTree({
@@ -19,6 +20,7 @@ export function ModuleTree({
   onSelectModule,
   permissionIds,
   allPermissions,
+  onToggleCategoryPermissions,
 }: ModuleTreeProps) {
   const [expandedCategories, setExpandedCategories] = React.useState<Set<string>>(() => {
     // Start with all categories expanded
@@ -48,6 +50,23 @@ export function ModuleTree({
     return "some"
   }
 
+  // Get category permission state (none, some, all)
+  const getCategoryPermissionState = (categoryModules: Array<{ module: Module; permissions: Permission[] }>): "none" | "some" | "all" => {
+    // Get all permissions in this category
+    const categoryPermIds: string[] = []
+    for (const data of categoryModules) {
+      const modulePerms = allPermissions?.filter((p) => p.moduleSlug === data.module.slug) || []
+      categoryPermIds.push(...modulePerms.map((p) => p.id))
+    }
+    
+    if (categoryPermIds.length === 0) return "none"
+    
+    const selectedCount = categoryPermIds.filter((id) => permissionIds.includes(id)).length
+    if (selectedCount === 0) return "none"
+    if (selectedCount === categoryPermIds.length) return "all"
+    return "some"
+  }
+
   // Get category summary
   const getCategorySummary = (categoryModules: Array<{ module: Module; permissions: Permission[] }>) => {
     let assigned = 0
@@ -63,6 +82,14 @@ export function ModuleTree({
     return { assigned, total }
   }
 
+  // Handle category checkbox click
+  const handleCategoryCheckboxClick = (e: React.MouseEvent, category: string, categoryModules: Array<{ module: Module; permissions: Permission[] }>) => {
+    e.stopPropagation() // Don't toggle expand/collapse
+    const state = getCategoryPermissionState(categoryModules)
+    // If all or some selected, clear all. If none, select all.
+    onToggleCategoryPermissions(category, state === "none")
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 py-2 border-b bg-muted/50">
@@ -72,6 +99,7 @@ export function ModuleTree({
         {Array.from(modulesByCategory.entries()).map(([category, categoryModules]) => {
           const isExpanded = expandedCategories.has(category)
           const summary = getCategorySummary(categoryModules)
+          const categoryState = getCategoryPermissionState(categoryModules)
 
           return (
             <div key={category}>
@@ -87,6 +115,27 @@ export function ModuleTree({
                   ) : (
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
+                  {/* Category Checkbox */}
+                  <div
+                    role="checkbox"
+                    aria-checked={categoryState === "all" ? true : categoryState === "some" ? "mixed" : false}
+                    onClick={(e) => handleCategoryCheckboxClick(e, category, categoryModules)}
+                    className="flex items-center justify-center w-4 h-4 shrink-0 cursor-pointer"
+                  >
+                    {categoryState === "all" && (
+                      <div className="w-4 h-4 rounded-sm bg-primary flex items-center justify-center">
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                    {categoryState === "some" && (
+                      <div className="w-4 h-4 rounded-sm bg-primary/60 flex items-center justify-center">
+                        <Minus className="h-3 w-3 text-primary-foreground" />
+                      </div>
+                    )}
+                    {categoryState === "none" && (
+                      <div className="w-4 h-4 rounded-sm border-2 border-muted-foreground/30 hover:border-muted-foreground/50" />
+                    )}
+                  </div>
                   <span className="text-sm font-medium">{category}</span>
                 </div>
                 <span className="text-xs text-muted-foreground">
@@ -107,7 +156,7 @@ export function ModuleTree({
                         type="button"
                         onClick={() => onSelectModule(data.module.slug)}
                         className={cn(
-                          "flex items-center gap-2 w-full px-3 py-1.5 pl-9 text-left text-sm transition-colors",
+                          "flex items-center gap-2 w-full px-3 py-1.5 pl-11 text-left text-sm transition-colors",
                           isSelected
                             ? "bg-primary/10 text-primary"
                             : "hover:bg-muted/50"
