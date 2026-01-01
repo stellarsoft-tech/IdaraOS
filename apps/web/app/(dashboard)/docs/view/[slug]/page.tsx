@@ -262,10 +262,10 @@ export default function DocumentViewerPage() {
       {/* Pending Action Banner */}
       {needsAcknowledgment && (
         <Card className="border-yellow-500/50 bg-yellow-500/5 mb-4 print:hidden">
-          <CardContent className="flex items-center justify-between py-3 px-4">
-            <div className="flex items-center gap-3">
-              <div className="h-7 w-7 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                <FileText className="h-3.5 w-3.5 text-yellow-600" />
+          <CardContent className="flex items-center justify-between py-2 px-3">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                <FileText className="h-3 w-3 text-yellow-600" />
               </div>
               <div>
                 <p className="text-sm font-medium">
