@@ -163,7 +163,7 @@ const navigationData: NavItem[] = [
     icon: FileText,
     items: [
       { title: "Overview", url: "/docs", module: "docs.overview" },
-      { title: "Document Library", url: "/docs/documents", module: "docs.documents.all" },
+      { title: "Document Library", url: "/docs/documents", module: "docs.documents" },
       { title: "My Documents", url: "/docs/my-documents", module: "docs.overview" },
       { title: "Settings", url: "/docs/settings", module: "docs.settings" },
     ],
