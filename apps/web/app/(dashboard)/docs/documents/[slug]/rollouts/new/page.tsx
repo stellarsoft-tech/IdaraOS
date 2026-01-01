@@ -79,17 +79,32 @@ export default function NewRolloutPage() {
   
   const doc = docData?.data
   
-  // Generate default name with current date in dd/mm/yyyy format
-  const defaultRolloutName = React.useMemo(() => {
+  // Generate default name with document name, version, and current date
+  const generateDefaultName = React.useCallback((docTitle?: string, docVersion?: string) => {
     const now = new Date()
     const day = String(now.getDate()).padStart(2, "0")
     const month = String(now.getMonth() + 1).padStart(2, "0")
     const year = now.getFullYear()
-    return `Rollout - ${day}/${month}/${year}`
+    const dateStr = `${day}/${month}/${year}`
+    
+    if (docTitle) {
+      const versionStr = docVersion ? ` v${docVersion}` : ""
+      return `${docTitle}${versionStr} Rollout - ${dateStr}`
+    }
+    return `Rollout - ${dateStr}`
   }, [])
   
   // Form state
-  const [name, setName] = React.useState<string>(defaultRolloutName)
+  const [name, setName] = React.useState<string>("")
+  const [hasSetInitialName, setHasSetInitialName] = React.useState(false)
+  
+  // Update default name when doc loads
+  React.useEffect(() => {
+    if (doc && !hasSetInitialName) {
+      setName(generateDefaultName(doc.title, doc.currentVersion))
+      setHasSetInitialName(true)
+    }
+  }, [doc, hasSetInitialName, generateDefaultName])
   const [targetType, setTargetType] = React.useState<RolloutTargetType>("organization")
   const [targetId, setTargetId] = React.useState<string>("")
   const [requirement, setRequirement] = React.useState<RolloutRequirement>("required")
@@ -111,7 +126,7 @@ export default function NewRolloutPage() {
     try {
       await createRollout.mutateAsync({
         documentId: doc.id,
-        name: name || defaultRolloutName,
+        name: name || generateDefaultName(doc.title, doc.currentVersion),
         targetType,
         targetId: targetType === "organization" ? undefined : targetId,
         requirement,
@@ -178,11 +193,11 @@ export default function NewRolloutPage() {
                   id="rolloutName"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder={defaultRolloutName}
+                  placeholder={doc ? generateDefaultName(doc.title, doc.currentVersion) : "Loading..."}
                   className="max-w-md"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Defaults to &quot;Rollout - dd/mm/yyyy&quot; if left empty
+                  Format: &quot;Document Name vX.X Rollout - dd/mm/yyyy&quot;
                 </p>
               </div>
             </CardContent>
