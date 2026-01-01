@@ -238,6 +238,12 @@ export const permissions: Record<string, LegacyPermission> = {
     roles: ["User", "HR", "Security", "Auditor", "Admin", "Owner"],
     scope: "org",
   },
+  "docs.documents.all": {
+    resource: "docs.documents",
+    actions: ["read_all"],
+    roles: ["HR", "Security", "Auditor", "Admin", "Owner"],
+    scope: "org",
+  },
   "docs.documents.write": {
     resource: "docs.documents",
     actions: ["create", "edit"],

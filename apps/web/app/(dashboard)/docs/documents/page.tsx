@@ -10,6 +10,7 @@ import {
   Edit,
   Eye,
   FileText,
+  Lock,
   MoreHorizontal,
   Pen,
   Plus,
@@ -49,6 +50,7 @@ import {
 import { useDocuments, useDeleteDocument } from "@/lib/api/docs"
 import type { DocumentWithRelations, DocumentCategory, DocumentStatus } from "@/lib/docs/types"
 import { toast } from "sonner"
+import { usePermission } from "@/lib/rbac/hooks"
 
 const statusConfig: Record<DocumentStatus, { label: string; variant: "default" | "success" | "warning" | "danger" | "info" | "purple" }> = {
   draft: { label: "Draft", variant: "default" },
@@ -73,6 +75,9 @@ export default function DocumentsListPage() {
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
   const [deleteId, setDeleteId] = React.useState<string | null>(null)
   
+  // Check if user has permission to view all documents
+  const canViewAll = usePermission("docs.documents", "read_all")
+  
   const { data, isLoading, refetch } = useDocuments({
     search: search || undefined,
     category: categoryFilter !== "all" ? categoryFilter as DocumentCategory : undefined,
@@ -81,6 +86,28 @@ export default function DocumentsListPage() {
   const deleteDocument = useDeleteDocument()
   
   const documents = data?.data || []
+  
+  // Show access denied if user doesn't have permission
+  if (!canViewAll) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+          <Lock className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-semibold">Access Restricted</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          You don&apos;t have permission to view all documents. Please visit{" "}
+          <Link href="/docs/my-documents" className="text-primary underline">
+            My Documents
+          </Link>{" "}
+          to see documents assigned to you.
+        </p>
+        <Button asChild>
+          <Link href="/docs/my-documents">Go to My Documents</Link>
+        </Button>
+      </div>
+    )
+  }
   
   const handleDelete = async () => {
     if (!deleteId) return

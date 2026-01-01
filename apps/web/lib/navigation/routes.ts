@@ -212,19 +212,7 @@ export const routes: Record<string, RouteConfig> = {
     path: "/docs/documents",
     label: "Document Library",
     parent: "docs",
-    description: "All organizational documents",
-  },
-  "docs.policies": {
-    path: "/docs/policies",
-    label: "Policies",
-    parent: "docs",
-    description: "Organizational policies",
-  },
-  "docs.procedures": {
-    path: "/docs/procedures",
-    label: "Procedures",
-    parent: "docs",
-    description: "Standard operating procedures",
+    description: "All organizational documents (requires docs.documents.all permission)",
   },
   "docs.my-documents": {
     path: "/docs/my-documents",
