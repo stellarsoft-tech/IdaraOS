@@ -242,6 +242,7 @@ async function seedRBAC() {
   // 3. Seed Permissions (only for actions defined per module)
   console.log("\n🔑 Seeding permissions...")
   const permissionMap: Record<string, string> = {} // "module.action" -> permission id
+  const validPermissionIds: Set<string> = new Set()
   
   for (const mod of DEFAULT_MODULES) {
     // Only create permissions for the actions defined in this module
@@ -257,16 +258,43 @@ async function seedRBAC() {
       
       if (existing) {
         permissionMap[key] = existing.id
+        validPermissionIds.add(existing.id)
       } else {
         const [created] = await db.insert(schema.permissions).values({
           moduleId: moduleMap[mod.slug],
           actionId: actionMap[actSlug],
         }).returning()
         permissionMap[key] = created.id
+        validPermissionIds.add(created.id)
       }
     }
   }
   console.log(`  ✓ ${Object.keys(permissionMap).length} permissions configured`)
+
+  // 3b. Clean up stale permissions (permissions that no longer match module actions)
+  console.log("\n🧹 Cleaning up stale permissions...")
+  const allExistingPermissions = await db.query.permissions.findMany()
+  const stalePermissionIds = allExistingPermissions
+    .filter((p) => !validPermissionIds.has(p.id))
+    .map((p) => p.id)
+
+  if (stalePermissionIds.length > 0) {
+    // First, remove role_permissions referencing stale permissions
+    for (const permId of stalePermissionIds) {
+      await db.delete(schema.rolePermissions).where(
+        eq(schema.rolePermissions.permissionId, permId)
+      )
+    }
+    // Then delete the stale permissions
+    for (const permId of stalePermissionIds) {
+      await db.delete(schema.permissions).where(
+        eq(schema.permissions.id, permId)
+      )
+    }
+    console.log(`  - Removed ${stalePermissionIds.length} stale permissions`)
+  } else {
+    console.log(`  ✓ No stale permissions found`)
+  }
 
   // 4. Seed Roles and Role Permissions
   console.log("\n👤 Seeding roles...")
