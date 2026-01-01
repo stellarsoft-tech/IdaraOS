@@ -70,7 +70,7 @@ function formatDate(dateString: string | null): string {
 // Column definitions for the table
 const columns: ColumnDef<PendingDocument>[] = [
   {
-    id: "document",
+    id: "documentTitle",
     accessorKey: "documentTitle",
     header: "Document",
     cell: ({ row }) => {
