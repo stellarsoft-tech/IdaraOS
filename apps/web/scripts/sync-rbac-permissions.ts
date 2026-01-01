@@ -235,7 +235,10 @@ async function syncRBACPermissions() {
   // 4. Update Owner role for ALL organizations
   console.log("\n👑 Syncing Owner role permissions across all organizations...")
   
-  const orgs = await db.query.organizations.findMany()
+  // Only select the columns we need to avoid schema mismatch issues during migrations
+  const orgs = await db
+    .select({ id: schema.organizations.id, name: schema.organizations.name })
+    .from(schema.organizations)
   
   for (const org of orgs) {
     // Find Owner role for this org
