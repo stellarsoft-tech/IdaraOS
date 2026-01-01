@@ -239,17 +239,18 @@ async function seedRBAC() {
     }
   }
 
-  // 3. Seed Permissions (all module+action combinations)
+  // 3. Seed Permissions (only for actions defined per module)
   console.log("\n🔑 Seeding permissions...")
   const permissionMap: Record<string, string> = {} // "module.action" -> permission id
   
-  for (const modSlug of Object.keys(moduleMap)) {
-    for (const actSlug of Object.keys(actionMap)) {
-      const key = `${modSlug}:${actSlug}`
+  for (const mod of DEFAULT_MODULES) {
+    // Only create permissions for the actions defined in this module
+    for (const actSlug of mod.actions) {
+      const key = `${mod.slug}:${actSlug}`
       
       const existing = await db.query.permissions.findFirst({
         where: and(
-          eq(schema.permissions.moduleId, moduleMap[modSlug]),
+          eq(schema.permissions.moduleId, moduleMap[mod.slug]),
           eq(schema.permissions.actionId, actionMap[actSlug])
         ),
       })
@@ -258,7 +259,7 @@ async function seedRBAC() {
         permissionMap[key] = existing.id
       } else {
         const [created] = await db.insert(schema.permissions).values({
-          moduleId: moduleMap[modSlug],
+          moduleId: moduleMap[mod.slug],
           actionId: actionMap[actSlug],
         }).returning()
         permissionMap[key] = created.id
@@ -303,21 +304,14 @@ async function seedRBAC() {
     // Add role permissions
     const rolePermsToInsert: { roleId: string; permissionId: string }[] = []
 
-    // Handle wildcard (*) - gives all permissions
+    // Handle wildcard (*) - gives all permissions that exist for each module
     if (roleData.permissions["*"]) {
-      const wildcardPerms = roleData.permissions["*"]
-      for (const modSlug of Object.keys(moduleMap)) {
-        for (const actSlug of Object.keys(actionMap)) {
-          if (wildcardPerms[actSlug]) {
-            const key = `${modSlug}:${actSlug}`
-            if (permissionMap[key]) {
-              rolePermsToInsert.push({
-                roleId: role.id,
-                permissionId: permissionMap[key],
-              })
-            }
-          }
-        }
+      // For wildcard, give all permissions that actually exist in permissionMap
+      for (const key of Object.keys(permissionMap)) {
+        rolePermsToInsert.push({
+          roleId: role.id,
+          permissionId: permissionMap[key],
+        })
       }
     } else {
       // Handle specific module permissions

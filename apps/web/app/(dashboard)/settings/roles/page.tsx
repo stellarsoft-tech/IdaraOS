@@ -9,7 +9,6 @@ import {
   Trash2,
   Users,
   Loader2,
-  Info,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -17,7 +16,6 @@ import { PageShell } from "@/components/primitives/page-shell"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -66,6 +64,8 @@ import {
   type Permission,
   type Module,
 } from "@/lib/api/rbac"
+import { ModuleTree } from "@/components/settings/permissions-module-tree"
+import { PermissionDetail } from "@/components/settings/permissions-detail"
 
 // Color options for role badges
 const ROLE_COLORS = [
@@ -99,6 +99,7 @@ export default function RolesPage() {
   const [drawerOpen, setDrawerOpen] = React.useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
   const [selectedRole, setSelectedRole] = React.useState<Role | null>(null)
+  const [selectedModule, setSelectedModule] = React.useState<string | null>(null)
   const [formData, setFormData] = React.useState({
     name: "",
     description: "",
@@ -152,8 +153,21 @@ export default function RolesPage() {
     return map
   }, [permissionsByModule])
 
+  // Get permissions for the selected module
+  const selectedModulePerms = React.useMemo(() => {
+    if (!selectedModule) return []
+    return allPermissions?.filter((p) => p.moduleSlug === selectedModule) || []
+  }, [selectedModule, allPermissions])
+
+  // Get the selected module data
+  const selectedModuleData = React.useMemo(() => {
+    if (!selectedModule) return undefined
+    return permissionsByModule.get(selectedModule)?.module
+  }, [selectedModule, permissionsByModule])
+
   const handleOpenCreate = () => {
     setSelectedRole(null)
+    setSelectedModule(null)
     setFormData({
       name: "",
       description: "",
@@ -165,6 +179,7 @@ export default function RolesPage() {
 
   const handleOpenEdit = (role: Role) => {
     setSelectedRole(role)
+    setSelectedModule(null)
     setDrawerOpen(true)
   }
 
@@ -366,7 +381,7 @@ export default function RolesPage() {
 
         {/* Create/Edit Role Drawer */}
         <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent className="w-full sm:max-w-2xl flex flex-col">
+          <SheetContent className="w-full sm:max-w-4xl flex flex-col">
             <SheetHeader>
               <SheetTitle>
                 {selectedRole ? "Edit Role" : "Create Role"}
@@ -378,18 +393,42 @@ export default function RolesPage() {
               </SheetDescription>
             </SheetHeader>
 
-            <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+            <div className="flex-1 overflow-hidden flex flex-col px-6 pb-2">
               {/* Role Details */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Role Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g., HR Manager"
-                    disabled={selectedRole?.isSystem}
-                  />
+              <div className="space-y-4 pb-4 border-b mb-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Role Name</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., HR Manager"
+                      disabled={selectedRole?.isSystem}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Badge Color</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ROLE_COLORS.map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
+                          className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+                            formData.color === color.value
+                              ? "border-primary ring-2 ring-primary/20"
+                              : "border-border hover:bg-muted"
+                          }`}
+                          disabled={selectedRole?.isSystem}
+                          title={color.label}
+                        >
+                          <div className={`h-4 w-4 rounded-full ${color.className.split(" ")[0]}`} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -403,109 +442,40 @@ export default function RolesPage() {
                     disabled={selectedRole?.isSystem}
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Badge Color</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {ROLE_COLORS.map((color) => (
-                      <button
-                        key={color.value}
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, color: color.value }))}
-                        className={`flex h-8 items-center gap-2 rounded-md border px-3 text-sm transition-colors ${
-                          formData.color === color.value
-                            ? "border-primary bg-primary/10"
-                            : "border-border hover:bg-muted"
-                        }`}
-                        disabled={selectedRole?.isSystem}
-                      >
-                        <div className={`h-3 w-3 rounded-full ${color.className.split(" ")[0]}`} />
-                        {color.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
 
-              {/* Permissions Matrix */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Label>Permissions</Label>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p>Select which actions users with this role can perform on each module.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
+              {/* Permissions - Two Panel Layout */}
+              <div className="flex-1 overflow-hidden">
+                <Label className="mb-3 block">Permissions</Label>
+                <div className="grid grid-cols-[280px_1fr] gap-4 h-[calc(100%-32px)]">
+                  {/* Left: Module Tree */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <ModuleTree
+                      modulesByCategory={modulesByCategory}
+                      selectedModule={selectedModule}
+                      onSelectModule={setSelectedModule}
+                      permissionIds={formData.permissionIds}
+                      allPermissions={allPermissions}
+                    />
+                  </div>
 
-                <div className="space-y-6">
-                  {Array.from(modulesByCategory.entries()).map(([category, categoryModules]) => (
-                    <div key={category} className="space-y-3">
-                      <h4 className="text-sm font-medium text-muted-foreground">{category}</h4>
-                      <div className="rounded-lg border">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b bg-muted/50">
-                              <th className="px-4 py-2 text-left text-sm font-medium">Module</th>
-                              {actions?.map((action) => (
-                                <th key={action.id} className="px-2 py-2 text-center text-sm font-medium">
-                                  {action.name}
-                                </th>
-                              ))}
-                              <th className="px-2 py-2 text-center text-sm font-medium">All</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {categoryModules.map((data, idx) => (
-                              <tr 
-                                key={data.module.slug} 
-                                className={idx !== categoryModules.length - 1 ? "border-b" : ""}
-                              >
-                                <td className="px-4 py-2 text-sm">{data.module.name}</td>
-                                {actions?.map((action) => {
-                                  const perm = data.permissions.find((p) => p.actionSlug === action.slug)
-                                  if (!perm) {
-                                    return (
-                                      <td key={action.id} className="px-2 py-2 text-center">
-                                        <span className="text-muted-foreground/40">—</span>
-                                      </td>
-                                    )
-                                  }
-                                  return (
-                                    <td key={action.id} className="px-2 py-2 text-center">
-                                      <Checkbox
-                                        checked={formData.permissionIds.includes(perm.id)}
-                                        onCheckedChange={() => handlePermissionToggle(perm.id)}
-                                      />
-                                    </td>
-                                  )
-                                })}
-                                <td className="px-2 py-2 text-center">
-                                  <Checkbox
-                                    checked={isModuleFullySelected(data.module.slug)}
-                                    onCheckedChange={(checked) => 
-                                      handleSelectAllForModule(data.module.slug, checked as boolean)
-                                    }
-                                    className={isModulePartiallySelected(data.module.slug) ? "data-[state=unchecked]:bg-primary/30" : ""}
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
+                  {/* Right: Permission Detail */}
+                  <div className="border rounded-lg p-4 overflow-hidden">
+                    <PermissionDetail
+                      module={selectedModuleData}
+                      permissions={selectedModulePerms}
+                      actions={actions}
+                      permissionIds={formData.permissionIds}
+                      onToggle={handlePermissionToggle}
+                      onSelectAll={() => handleSelectAllForModule(selectedModule!, true)}
+                      onClearAll={() => handleSelectAllForModule(selectedModule!, false)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            <SheetFooter>
+            <SheetFooter className="px-6">
               <Button variant="outline" onClick={() => setDrawerOpen(false)}>
                 Cancel
               </Button>
