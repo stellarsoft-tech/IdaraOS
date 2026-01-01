@@ -214,7 +214,7 @@ export function MermaidDiagram({ chart, title, className }: MermaidDiagramProps)
       onMouseLeave={handleMouseLeave}
     >
       {/* Toolbar */}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-background/80 backdrop-blur-sm rounded-md border p-1">
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-background/80 backdrop-blur-sm rounded-md border p-1 print:hidden">
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -283,7 +283,7 @@ export function MermaidDiagram({ chart, title, className }: MermaidDiagramProps)
       </div>
       
       {/* Pan indicator */}
-      <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 text-xs text-muted-foreground bg-background/60 backdrop-blur-sm rounded px-2 py-1">
+      <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 text-xs text-muted-foreground bg-background/60 backdrop-blur-sm rounded px-2 py-1 print:hidden">
         <Move className="h-3 w-3" />
         <span>Drag to pan</span>
       </div>
