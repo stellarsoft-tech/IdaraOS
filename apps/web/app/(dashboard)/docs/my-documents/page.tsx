@@ -231,7 +231,7 @@ const columns: ColumnDef<PendingDocument>[] = [
       return (
         <div className="flex justify-end">
           <Button variant={isPending ? "default" : "outline"} size="sm" asChild>
-            <Link href={`/docs/view/${doc.documentSlug}`}>
+            <Link href={`/docs/view/${doc.documentSlug}?rolloutId=${doc.rolloutId}`}>
               {isPending ? (
                 needsSignature ? (
                   <>

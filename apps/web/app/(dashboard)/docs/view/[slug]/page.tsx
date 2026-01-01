@@ -1,12 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   CheckCircle,
   FileText,
   Loader2,
+  Lock,
   Maximize2,
   Minimize2,
   Pencil,
@@ -44,15 +45,30 @@ import { cn } from "@/lib/utils"
 
 export default function DocumentViewerPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const slug = params.slug as string
   
-  const { data: docData, isLoading: docLoading } = useDocument(slug)
-  const { data: myDocsData, refetch: refetchMyDocs } = useMyDocuments()
+  // Get rolloutId from URL params (used when coming from my-documents)
+  const urlRolloutId = searchParams.get("rolloutId")
+  
+  // Fetch my documents first to determine if user has an assigned rollout
+  const { data: myDocsData, refetch: refetchMyDocs } = useMyDocuments({ status: "all", includeOptional: true })
+  const myDocs = myDocsData?.data || []
+  
+  // Find if this document is in the user's pending list
+  const myDocRecord = myDocs.find((d) => d.documentSlug === slug)
+  
+  // Determine which rolloutId to use: URL param > myDocRecord rollout
+  const effectiveRolloutId = urlRolloutId || myDocRecord?.rolloutId
+  
+  // Fetch document with rollout-specific content if applicable
+  const { data: docData, isLoading: docLoading } = useDocument(slug, effectiveRolloutId || undefined)
   const updateAcknowledgment = useUpdateAcknowledgment()
   
   // Permission checks
   const canPrint = usePermission("docs.documents", "print")
   const canEdit = usePermission("docs.documents", "edit")
+  const canViewAll = usePermission("docs.documents", "read_all")
   
   const [showAckDialog, setShowAckDialog] = React.useState(false)
   const [showSignDialog, setShowSignDialog] = React.useState(false)
@@ -65,10 +81,7 @@ export default function DocumentViewerPage() {
   const contentRef = React.useRef<HTMLDivElement>(null)
   
   const doc = docData?.data
-  const myDocs = myDocsData?.data || []
   
-  // Find if this document is in the user's pending list
-  const myDocRecord = myDocs.find((d) => d.documentSlug === slug)
   const needsAcknowledgment = myDocRecord && ["pending", "viewed"].includes(myDocRecord.acknowledgmentStatus)
   const needsSignature = myDocRecord?.requirement === "required_with_signature"
   
@@ -148,13 +161,31 @@ export default function DocumentViewerPage() {
     )
   }
   
+  // Access control: if user doesn't have read_all permission and no assigned document, deny access
+  if (!canViewAll && !myDocRecord) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
+          <Lock className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-semibold">Access Restricted</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          This document has not been assigned to you. You can only view documents that have been rolled out to you.
+        </p>
+        <Button asChild>
+          <Link href="/docs/my-documents">Go to My Documents</Link>
+        </Button>
+      </div>
+    )
+  }
+  
   if (!doc) {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4">
         <FileText className="h-12 w-12 text-muted-foreground" />
         <p className="text-muted-foreground">Document not found</p>
         <Button asChild>
-          <Link href="/docs">Back to Docs</Link>
+          <Link href="/docs/my-documents">Back to My Documents</Link>
         </Button>
       </div>
     )

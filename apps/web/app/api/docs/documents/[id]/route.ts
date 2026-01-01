@@ -33,6 +33,9 @@ interface RouteContext {
 
 /**
  * GET /api/docs/documents/[id]
+ * Query params:
+ * - content: "false" to exclude content
+ * - rolloutId: if provided, returns the content snapshot from that rollout
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
@@ -43,6 +46,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     
     const { id } = await context.params
     const includeContent = request.nextUrl.searchParams.get("content") !== "false"
+    const rolloutId = request.nextUrl.searchParams.get("rolloutId")
     
     // Find document
     const [doc] = await db
@@ -124,10 +128,35 @@ export async function GET(request: NextRequest, context: RouteContext) {
       signed: ackStats.filter((a) => a.status === "signed").length,
     }
     
-    // Read content from file
+    // Read content - either from rollout snapshot or from file
     let content: string | null = null
+    let rolloutVersion: string | null = null
+    
     if (includeContent) {
-      content = await readDocumentContent(doc.slug)
+      if (rolloutId) {
+        // Get content snapshot from the specific rollout
+        const [rollout] = await db
+          .select({
+            contentSnapshot: documentRollouts.contentSnapshot,
+            versionAtRollout: documentRollouts.versionAtRollout,
+          })
+          .from(documentRollouts)
+          .where(and(
+            eq(documentRollouts.id, rolloutId),
+            eq(documentRollouts.documentId, doc.id)
+          ))
+          .limit(1)
+        
+        if (rollout) {
+          content = rollout.contentSnapshot
+          rolloutVersion = rollout.versionAtRollout
+        }
+      }
+      
+      // If no rollout content found, read from file
+      if (!content) {
+        content = await readDocumentContent(doc.slug)
+      }
     }
     
     // Build response
@@ -137,6 +166,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
         ? { id: doc.ownerId, name: doc.ownerName, email: doc.ownerEmail }
         : null,
       content,
+      // If viewing rollout-specific content, show the version at rollout time
+      currentVersion: rolloutVersion || doc.currentVersion,
+      displayVersion: rolloutVersion || doc.currentVersion,
+      isRolloutContent: !!rolloutVersion,
       versions: versions.map((v) => ({
         ...v,
         approvedBy: v.approvedById

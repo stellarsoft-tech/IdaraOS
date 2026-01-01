@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/schema"
 import { CreateRolloutSchema } from "@/lib/docs/types"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { readDocumentContent } from "@/lib/docs/mdx"
 
 /**
  * GET /api/docs/rollouts
@@ -171,9 +172,13 @@ export async function POST(request: NextRequest) {
     
     const data = parseResult.data
     
-    // Verify document exists and belongs to org
+    // Verify document exists and belongs to org, and get version/content
     const [doc] = await db
-      .select({ id: documents.id })
+      .select({ 
+        id: documents.id, 
+        slug: documents.slug,
+        currentVersion: documents.currentVersion,
+      })
       .from(documents)
       .where(and(eq(documents.id, data.documentId), eq(documents.orgId, session.orgId)))
       .limit(1)
@@ -181,6 +186,9 @@ export async function POST(request: NextRequest) {
     if (!doc) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 })
     }
+    
+    // Get current document content to snapshot
+    const contentSnapshot = await readDocumentContent(doc.slug)
     
     // Validate target exists if specified
     if (data.targetType !== "organization" && data.targetId) {
@@ -206,12 +214,14 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Create rollout
+    // Create rollout with version snapshot
     const [created] = await db
       .insert(documentRollouts)
       .values({
         documentId: data.documentId,
         name: data.name,
+        versionAtRollout: doc.currentVersion,
+        contentSnapshot: contentSnapshot,
         targetType: data.targetType,
         targetId: data.targetType === "organization" ? null : data.targetId,
         requirement: data.requirement,

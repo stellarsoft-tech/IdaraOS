@@ -71,8 +71,12 @@ async function fetchDocuments(filters?: DocumentFilters): Promise<DocumentListRe
   return res.json()
 }
 
-async function fetchDocument(idOrSlug: string): Promise<{ data: DocumentWithRelations }> {
-  const res = await fetch(`/api/docs/documents/${idOrSlug}`)
+async function fetchDocument(idOrSlug: string, rolloutId?: string): Promise<{ data: DocumentWithRelations }> {
+  const params = new URLSearchParams()
+  if (rolloutId) params.set("rolloutId", rolloutId)
+  
+  const url = `/api/docs/documents/${idOrSlug}${params.toString() ? `?${params}` : ""}`
+  const res = await fetch(url)
   if (!res.ok) {
     throw new Error("Failed to fetch document")
   }
@@ -274,10 +278,12 @@ export function useDocuments(filters?: DocumentFilters) {
   })
 }
 
-export function useDocument(idOrSlug: string | undefined) {
+export function useDocument(idOrSlug: string | undefined, rolloutId?: string) {
   return useQuery({
-    queryKey: docsKeys.documentDetail(idOrSlug!),
-    queryFn: () => fetchDocument(idOrSlug!),
+    queryKey: rolloutId 
+      ? [...docsKeys.documentDetail(idOrSlug!), "rollout", rolloutId]
+      : docsKeys.documentDetail(idOrSlug!),
+    queryFn: () => fetchDocument(idOrSlug!, rolloutId),
     enabled: !!idOrSlug,
   })
 }

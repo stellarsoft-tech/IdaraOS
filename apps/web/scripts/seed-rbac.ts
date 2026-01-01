@@ -91,6 +91,12 @@ const SYSTEM_ROLES: Record<string, {
       "workflows.tasks": { view: true, write: true, create: true, edit: true, delete: true },
       "workflows.board": { view: true, write: true, create: true, edit: true, delete: true },
       "workflows.settings": { view: true, write: true, create: true, edit: true, delete: true },
+      // Documentation - Full access including read_all
+      "docs.overview": { view: true, write: true, create: true, edit: true, delete: true },
+      "docs.documents": { view: true, write: true, create: true, edit: true, delete: true, read_all: true },
+      "docs.rollouts": { view: true, write: true, create: true, edit: true, delete: true },
+      "docs.acknowledgments": { view: true, write: true, create: true, edit: true, delete: true },
+      "docs.settings": { view: true, write: true, create: true, edit: true, delete: true },
       // Settings - Limited
       "settings.organization": { view: true, write: true, create: true, edit: true, delete: false },
       "settings.users": { view: true, write: true, create: true, edit: true, delete: true },

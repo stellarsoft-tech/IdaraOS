@@ -178,6 +178,10 @@ export const documentRollouts = pgTable(
     // Rollout name (defaults to "Rollout - dd/mm/yy" if not provided)
     name: text("name"),
     
+    // Version snapshot - captures document state at rollout time
+    versionAtRollout: text("version_at_rollout"), // e.g., "1.0", "2.0"
+    contentSnapshot: text("content_snapshot"), // MDX content at rollout time
+    
     // Target definition
     targetType: text("target_type", { enum: rolloutTargetTypeValues }).notNull(),
     targetId: uuid("target_id"), // team_id, role_id, or user_id (null for org-wide)

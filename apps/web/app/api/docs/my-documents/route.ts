@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         rolloutName: documentRollouts.name,
         requirement: documentRollouts.requirement,
         dueDate: documentRollouts.dueDate,
+        rolloutVersion: documentRollouts.versionAtRollout,
         // Acknowledgment info
         acknowledgmentId: documentAcknowledgments.id,
         acknowledgmentStatus: documentAcknowledgments.status,
@@ -91,9 +92,12 @@ export async function GET(request: NextRequest) {
       documentTitle: doc.documentTitle,
       documentDescription: doc.documentDescription,
       documentCategory: doc.documentCategory,
-      documentVersion: doc.documentVersion,
+      // Use the rollout version (version at time of rollout) for display
+      documentVersion: doc.rolloutVersion || doc.documentVersion,
+      latestDocumentVersion: doc.documentVersion,
       rolloutId: doc.rolloutId,
       rolloutName: doc.rolloutName,
+      rolloutVersion: doc.rolloutVersion,
       requirement: doc.requirement,
       dueDate: doc.dueDate,
       acknowledgmentId: doc.acknowledgmentId,
