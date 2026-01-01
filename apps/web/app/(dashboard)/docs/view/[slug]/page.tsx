@@ -261,25 +261,23 @@ export default function DocumentViewerPage() {
     >
       {/* Pending Action Banner */}
       {needsAcknowledgment && (
-        <Card className="border-yellow-500/50 bg-yellow-500/5 mb-4 print:hidden">
-          <CardContent className="flex items-center justify-between py-2 px-3">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                <FileText className="h-3 w-3 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">
-                  {needsSignature ? "Signature Required" : "Acknowledgment Required"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {myDocRecord.dueDate
-                    ? `Due by ${new Date(myDocRecord.dueDate).toLocaleDateString()}`
-                    : "Please review and acknowledge"}
-                </p>
-              </div>
+        <div className="flex items-center justify-between rounded-lg border border-yellow-500/50 bg-yellow-500/5 py-2 px-3 mb-4 print:hidden">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
+              <FileText className="h-3 w-3 text-yellow-600" />
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <p className="text-sm font-medium">
+                {needsSignature ? "Signature Required" : "Acknowledgment Required"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {myDocRecord.dueDate
+                  ? `Due by ${new Date(myDocRecord.dueDate).toLocaleDateString()}`
+                  : "Please review and acknowledge"}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Main Layout: Content + ToC Sidebar */}
