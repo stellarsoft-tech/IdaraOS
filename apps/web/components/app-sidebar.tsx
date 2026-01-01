@@ -212,8 +212,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user, isLoading, canAccess } = useUser()
   const { data: org } = useOrganization()
   
-  // App name from organization settings, fallback to default
+  // App name and tagline from organization settings, fallback to default
   const appName = org?.appName || "IdaraOS"
+  const tagline = org?.tagline ?? "Company OS" // Default to "Company OS", empty string hides it
 
   const isActive = (url: string) => {
     if (url === "/dashboard") return pathname === "/dashboard"
@@ -269,7 +270,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">{appName}</span>
-                  <span className="truncate text-xs text-muted-foreground">Company OS</span>
+                  {tagline && (
+                    <span className="truncate text-xs text-muted-foreground">{tagline}</span>
+                  )}
                 </div>
               </Link>
             </SidebarMenuButton>

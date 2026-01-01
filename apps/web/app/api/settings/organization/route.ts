@@ -17,6 +17,7 @@ const UpdateOrganizationSchema = z.object({
   domain: z.string().max(255).optional().nullable(),
   logo: z.string().url().optional().nullable(),
   appName: z.string().min(3, "Application name must be at least 3 characters").max(50).optional(),
+  tagline: z.string().max(100).optional().nullable(),
   // Social & professional links
   linkedIn: z.string().url().max(255).optional().nullable(),
   twitter: z.string().url().max(255).optional().nullable(),
@@ -131,6 +132,7 @@ export async function PUT(request: NextRequest) {
           domain: existing.domain,
           logo: existing.logo,
           appName: existing.appName,
+          tagline: existing.tagline,
           timezone: existing.timezone,
           dateFormat: existing.dateFormat,
           currency: existing.currency,
@@ -143,6 +145,7 @@ export async function PUT(request: NextRequest) {
           domain: updated.domain,
           logo: updated.logo,
           appName: updated.appName,
+          tagline: updated.tagline,
           timezone: updated.timezone,
           dateFormat: updated.dateFormat,
           currency: updated.currency,

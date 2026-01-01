@@ -80,6 +80,7 @@ export default function SettingsPage() {
   const [formData, setFormData] = useState({
     name: "",
     appName: "",
+    tagline: "",
     domain: "",
     linkedIn: "",
     twitter: "",
@@ -99,6 +100,7 @@ export default function SettingsPage() {
       setFormData({
         name: org.name,
         appName: org.appName || "IdaraOS",
+        tagline: org.tagline ?? "Company OS",
         domain: domainValue,
         linkedIn: org.linkedIn || "",
         twitter: org.twitter || "",
@@ -134,6 +136,7 @@ export default function SettingsPage() {
       await updateOrg.mutateAsync({
         name: formData.name,
         appName: formData.appName.trim(),
+        tagline: formData.tagline.trim() || null,
         domain: domainValue,
         linkedIn: normalizeUrl(formData.linkedIn) || null,
         twitter: normalizeUrl(formData.twitter) || null,
@@ -234,7 +237,7 @@ export default function SettingsPage() {
               </div>
 
               {/* App Settings */}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="appName" className="text-sm font-medium">
                     Application Name
@@ -256,6 +259,20 @@ export default function SettingsPage() {
                       Displayed in the header and login page
                     </p>
                   )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tagline" className="text-sm font-medium">
+                    Tagline / Subtitle
+                  </Label>
+                  <Input
+                    id="tagline"
+                    value={formData.tagline}
+                    onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+                    placeholder="e.g., Company OS (leave empty to hide)"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Shown below the app name. Leave empty to hide.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="domain" className="text-sm font-medium flex items-center gap-2">

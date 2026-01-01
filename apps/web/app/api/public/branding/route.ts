@@ -16,6 +16,7 @@ export async function GET() {
     const [org] = await db
       .select({
         appName: organizations.appName,
+        tagline: organizations.tagline,
         logo: organizations.logo,
       })
       .from(organizations)
@@ -24,18 +25,22 @@ export async function GET() {
     if (!org) {
       return NextResponse.json({
         appName: "IdaraOS",
+        tagline: "Company OS",
         logo: null,
       })
     }
 
     return NextResponse.json({
       appName: org.appName || "IdaraOS",
+      // Pass empty string if set to "", otherwise use actual value or default
+      tagline: org.tagline === "" ? "" : (org.tagline ?? "Company OS"),
       logo: org.logo,
     })
   } catch (error) {
     console.error("Error fetching branding:", error)
     return NextResponse.json({
       appName: "IdaraOS",
+      tagline: "Company OS",
       logo: null,
     })
   }

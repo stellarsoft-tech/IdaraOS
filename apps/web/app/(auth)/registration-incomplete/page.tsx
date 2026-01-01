@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Building2, UserX, Mail, ArrowLeft, Loader2 } from "lucide-react"
@@ -11,6 +11,22 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 function RegistrationIncompleteContent() {
   const searchParams = useSearchParams()
   const email = searchParams.get("email")
+  const [appName, setAppName] = useState("IdaraOS")
+  const [tagline, setTagline] = useState<string>("Company OS")
+
+  // Fetch public branding
+  useEffect(() => {
+    fetch("/api/public/branding")
+      .then(res => res.json())
+      .then(data => {
+        if (data.appName) setAppName(data.appName)
+        // Empty string means hide, null/undefined defaults to "Company OS"
+        setTagline(data.tagline === "" ? "" : (data.tagline ?? "Company OS"))
+      })
+      .catch(() => {
+        // Keep default on error
+      })
+  }, [])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-muted/50 p-4">
@@ -21,8 +37,8 @@ function RegistrationIncompleteContent() {
             <Building2 className="h-7 w-7 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">IdaraOS</h1>
-            <p className="text-sm text-muted-foreground">Company OS</p>
+            <h1 className="text-2xl font-bold tracking-tight">{appName}</h1>
+            {tagline && <p className="text-sm text-muted-foreground">{tagline}</p>}
           </div>
         </div>
 

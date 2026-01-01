@@ -16,6 +16,9 @@ export const organizations = pgTable("core_organizations", {
   // Application branding name - shown in header, login, etc.
   // Defaults to "IdaraOS", minimum 3 characters
   appName: text("app_name").notNull().default("IdaraOS"),
+  // Application tagline/subtitle - shown below app name in sidebar and login
+  // Defaults to "Company OS", if empty/null will be hidden
+  tagline: text("tagline").default("Company OS"),
   // Social & professional links
   linkedIn: text("linked_in"),
   twitter: text("twitter"),

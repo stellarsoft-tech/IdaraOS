@@ -40,6 +40,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSSOLoading, setIsSSOLoading] = useState(false)
   const [appName, setAppName] = useState("IdaraOS")
+  const [tagline, setTagline] = useState<string>("Company OS")
   const [ssoConfig, setSSOConfig] = useState<SSOConfig | null>(null)
 
   // Check for error in URL params
@@ -60,6 +61,8 @@ export default function LoginPage() {
       .then(res => res.json())
       .then(data => {
         if (data.appName) setAppName(data.appName)
+        // Empty string means hide, null/undefined defaults to "Company OS"
+        setTagline(data.tagline === "" ? "" : (data.tagline ?? "Company OS"))
       })
       .catch(() => {
         // Keep default on error
@@ -134,7 +137,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{appName}</h1>
-            <p className="text-sm text-muted-foreground">Company OS</p>
+            {tagline && <p className="text-sm text-muted-foreground">{tagline}</p>}
           </div>
         </div>
 

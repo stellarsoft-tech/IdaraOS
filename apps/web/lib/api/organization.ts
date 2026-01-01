@@ -24,6 +24,7 @@ export type UpdateOrganization = Partial<{
   domain: string | null
   logo: string | null
   appName: string
+  tagline: string | null
   // Social & professional links
   linkedIn: string | null
   twitter: string | null
