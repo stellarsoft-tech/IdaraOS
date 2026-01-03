@@ -116,12 +116,13 @@ const statusVariants: Record<string, "default" | "destructive" | "secondary" | "
 }
 
 // Edit form schema
+// Note: "assigned" status is NOT included - it's managed via Assign/Return buttons only
 const editAssetSchema = z.object({
   assetTag: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
   categoryId: z.string().optional().nullable(),
-  status: z.enum(["available", "assigned", "maintenance", "retired", "disposed"]).optional(),
+  status: z.enum(["available", "maintenance", "retired", "disposed"]).optional(),
   serialNumber: z.string().optional().nullable(),
   manufacturer: z.string().optional().nullable(),
   model: z.string().optional().nullable(),
@@ -194,12 +195,13 @@ export default function AssetDetailPage({ params }: PageProps) {
       placeholder: "Select category", 
       options: categories.map(c => ({ value: c.id, label: c.name })),
     },
+    // Status options exclude "assigned" - that's set via Assign button only
     status: { 
       component: "select" as const,
       label: "Status", 
+      description: "Use Assign/Return buttons to change assignment status",
       options: [
         { value: "available", label: "Available" },
-        { value: "assigned", label: "Assigned" },
         { value: "maintenance", label: "Maintenance" },
         { value: "retired", label: "Retired" },
         { value: "disposed", label: "Disposed" },
@@ -251,16 +253,13 @@ export default function AssetDetailPage({ params }: PageProps) {
     },
   }
   
-  // Show assignment fields only when status is "assigned" or asset is already assigned
-  const showAssignmentFields = asset?.status === "assigned" || asset?.assignedToId
-  
+  // Assignment is managed via Assign/Return buttons, not the edit form
+  // Status field is disabled when asset is assigned (must use Return button first)
   const editFields = [
     "assetTag", "name", "description", "categoryId", "status",
     "serialNumber", "manufacturer", "model",
     "purchaseDate", "purchaseCost", "warrantyEnd",
-    "location", 
-    ...(showAssignmentFields ? ["assignedToId", "assignedAt"] : []),
-    "notes"
+    "location", "notes"
   ]
   
   // Handlers
@@ -778,9 +777,12 @@ export default function AssetDetailPage({ params }: PageProps) {
         open={editOpen}
         onOpenChange={setEditOpen}
         title={`Edit ${asset.name}`}
-        description={asset.source === "intune_sync" && asset.syncEnabled
-          ? "Some fields are managed by Intune sync"
-          : "Update asset information"
+        description={
+          asset.source === "intune_sync" && asset.syncEnabled
+            ? "Some fields are managed by Intune sync"
+            : asset.status === "assigned"
+            ? "Status cannot be changed while assigned. Use Return button first."
+            : "Update asset information"
         }
         schema={editAssetSchema}
         config={formConfig}
@@ -791,7 +793,8 @@ export default function AssetDetailPage({ params }: PageProps) {
           name: asset.name,
           description: asset.description || "",
           categoryId: asset.categoryId || "",
-          status: asset.status,
+          // Only include status if not assigned (assigned status is managed via Assign/Return)
+          status: asset.status === "assigned" ? undefined : asset.status,
           serialNumber: asset.serialNumber || "",
           manufacturer: asset.manufacturer || "",
           model: asset.model || "",
@@ -800,15 +803,16 @@ export default function AssetDetailPage({ params }: PageProps) {
           warrantyEnd: asset.warrantyEnd || "",
           location: asset.location || "",
           notes: asset.notes || "",
-          assignedToId: asset.assignedToId || "__none__",
-          assignedAt: asset.assignedAt || "",
         }}
         onSubmit={handleEdit}
-        disabledFields={
-          asset.source === "intune_sync" && asset.syncEnabled
-            ? ["assetTag", "name", "serialNumber", "manufacturer", "model", "assignedToId", "assignedAt"]
-            : []
-        }
+        disabledFields={[
+          // Disable Intune-synced fields
+          ...(asset.source === "intune_sync" && asset.syncEnabled
+            ? ["assetTag", "name", "serialNumber", "manufacturer", "model"]
+            : []),
+          // Disable status when asset is assigned (must use Return button)
+          ...(asset.status === "assigned" ? ["status"] : []),
+        ]}
         infoBanner={
           asset.source === "intune_sync" && asset.syncEnabled ? (
             <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">

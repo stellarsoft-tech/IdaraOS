@@ -113,12 +113,13 @@ const statusVariants: Record<string, "default" | "destructive" | "secondary" | "
 }
 
 // Form schemas
+// Note: Status is NOT included in create schema - new assets always start as "available"
+// Status changes happen through Assign/Return buttons, not manual editing
 const createAssetSchema = z.object({
   assetTag: z.string().min(1, "Asset tag is required"),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
   categoryId: z.string().optional(),
-  status: z.enum(["available", "assigned", "maintenance", "retired", "disposed"]).default("available"),
   serialNumber: z.string().optional(),
   manufacturer: z.string().optional(),
   model: z.string().optional(),
@@ -129,7 +130,11 @@ const createAssetSchema = z.object({
   notes: z.string().optional(),
 })
 
-const editAssetSchema = createAssetSchema.partial()
+// Edit schema allows status changes only to maintenance/retired/disposed
+// "available" is restored via Return button, "assigned" is set via Assign button
+const editAssetSchema = createAssetSchema.extend({
+  status: z.enum(["available", "maintenance", "retired", "disposed"]).optional(),
+}).partial()
 
 // Form configuration for FormDrawer
 const formConfig = {
@@ -137,12 +142,13 @@ const formConfig = {
   name: { component: "input" as const, label: "Name", placeholder: "e.g., MacBook Pro 16" },
   description: { component: "textarea" as const, label: "Description", placeholder: "Asset description" },
   categoryId: { component: "select" as const, label: "Category", placeholder: "Select category", options: [] as { value: string; label: string }[] },
+  // Status options exclude "assigned" - that's set via Assign button only
   status: { 
     component: "select" as const,
     label: "Status", 
+    description: "Use Assign/Return buttons to change assignment status",
     options: [
       { value: "available", label: "Available" },
-      { value: "assigned", label: "Assigned" },
       { value: "maintenance", label: "Maintenance" },
       { value: "retired", label: "Retired" },
       { value: "disposed", label: "Disposed" },
@@ -158,14 +164,21 @@ const formConfig = {
   notes: { component: "textarea" as const, label: "Notes", placeholder: "Additional notes" },
 }
 
+// Create form doesn't include status - new assets are always "available"
 const createFields = [
-  "assetTag", "name", "description", "categoryId", "status",
+  "assetTag", "name", "description", "categoryId",
   "serialNumber", "manufacturer", "model",
   "purchaseDate", "purchaseCost", "warrantyEnd",
   "location", "notes"
 ]
 
-const editFields = createFields
+// Edit form includes status but excludes "assigned" option
+const editFields = [
+  "assetTag", "name", "description", "categoryId", "status",
+  "serialNumber", "manufacturer", "model",
+  "purchaseDate", "purchaseCost", "warrantyEnd",
+  "location", "notes"
+]
 
 // Stats card component
 interface StatsCardProps {
@@ -719,6 +732,8 @@ export default function InventoryPage() {
           title={`Edit ${selectedAsset.name}`}
           description={selectedAsset.source === "intune_sync" 
             ? "Some fields are managed by Intune sync"
+            : selectedAsset.status === "assigned"
+            ? "Status cannot be changed while assigned. Use Return button first."
             : "Update asset information"
           }
           schema={editAssetSchema}
@@ -730,7 +745,8 @@ export default function InventoryPage() {
             name: selectedAsset.name,
             description: selectedAsset.description || "",
             categoryId: selectedAsset.categoryId || "",
-            status: selectedAsset.status,
+            // Only include status if not assigned (assigned status is managed via Assign/Return)
+            status: selectedAsset.status === "assigned" ? undefined : selectedAsset.status,
             serialNumber: selectedAsset.serialNumber || "",
             manufacturer: selectedAsset.manufacturer || "",
             model: selectedAsset.model || "",
@@ -741,11 +757,14 @@ export default function InventoryPage() {
             notes: selectedAsset.notes || "",
           }}
           onSubmit={handleEdit}
-          disabledFields={
-            selectedAsset.source === "intune_sync" && selectedAsset.syncEnabled
+          disabledFields={[
+            // Disable Intune-synced fields
+            ...(selectedAsset.source === "intune_sync" && selectedAsset.syncEnabled
               ? ["assetTag", "name", "serialNumber", "manufacturer", "model"]
-              : []
-          }
+              : []),
+            // Disable status when asset is assigned (must use Return button)
+            ...(selectedAsset.status === "assigned" ? ["status"] : []),
+          ]}
         />
       )}
       
