@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Archive,
   CheckCircle,
@@ -71,8 +71,11 @@ const categoryLabels: Record<DocumentCategory, string> = {
 
 export default function DocumentsListPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [search, setSearch] = React.useState("")
-  const [categoryFilter, setCategoryFilter] = React.useState<string>("all")
+  const [categoryFilter, setCategoryFilter] = React.useState<string>(
+    searchParams.get("category") || "all"
+  )
   const [deleteId, setDeleteId] = React.useState<string | null>(null)
   
   // Check if user has permission to view all documents

@@ -85,7 +85,7 @@ export default function DocsOverviewPage() {
         </Card>
 
         <Card className="hover:border-primary/50 transition-colors">
-          <Link href="/docs/policies">
+          <Link href="/docs/documents?category=policy">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ScrollText className="h-4 w-4" />
@@ -105,7 +105,7 @@ export default function DocsOverviewPage() {
         </Card>
 
         <Card className="hover:border-primary/50 transition-colors">
-          <Link href="/docs/procedures">
+          <Link href="/docs/documents?category=procedure">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileCheck className="h-4 w-4" />
