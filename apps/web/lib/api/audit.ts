@@ -121,6 +121,46 @@ export function useSettingsAuditLogs(filters: Omit<AuditLogFilters, "modulePrefi
 }
 
 /**
+ * Hook to fetch audit logs for Assets module
+ */
+export function useAssetsAuditLogs(filters: Omit<AuditLogFilters, "modulePrefix"> = {}) {
+  return useAuditLogs({
+    ...filters,
+    modulePrefix: "assets.",
+  })
+}
+
+/**
+ * Hook to fetch audit logs for Security module
+ */
+export function useSecurityAuditLogs(filters: Omit<AuditLogFilters, "modulePrefix"> = {}) {
+  return useAuditLogs({
+    ...filters,
+    modulePrefix: "security.",
+  })
+}
+
+/**
+ * Hook to fetch audit logs for Documentation module
+ */
+export function useDocsAuditLogs(filters: Omit<AuditLogFilters, "modulePrefix"> = {}) {
+  return useAuditLogs({
+    ...filters,
+    modulePrefix: "docs.",
+  })
+}
+
+/**
+ * Hook to fetch audit logs for Workflows module
+ */
+export function useWorkflowsAuditLogs(filters: Omit<AuditLogFilters, "modulePrefix"> = {}) {
+  return useAuditLogs({
+    ...filters,
+    modulePrefix: "workflows.",
+  })
+}
+
+/**
  * Generate export URL for audit logs
  */
 export function getAuditLogsExportUrl(

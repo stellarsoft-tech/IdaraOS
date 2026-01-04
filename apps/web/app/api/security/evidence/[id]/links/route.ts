@@ -13,7 +13,7 @@ import {
 } from "@/lib/db/schema/security"
 import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -162,17 +162,15 @@ export async function POST(
       .returning()
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "create",
-      entityType: "security_evidence_link",
-      entityId: link.id,
-      userId: session.userId,
-      orgId: session.orgId,
-      newValues: { 
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logCreate("security.evidence", "evidence_link", {
+        id: link.id,
+        name: `${evidence.title} → ${control.controlId}`,
         evidenceTitle: evidence.title,
         controlId: control.controlId,
-      },
-    })
+      })
+    }
 
     return NextResponse.json({ data: link }, { status: 201 })
   } catch (error) {
@@ -238,14 +236,13 @@ export async function DELETE(
     }
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "delete",
-      entityType: "security_evidence_link",
-      entityId: linkId,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: deleted,
-    })
+    const auditDel = await getAuditLogger()
+    if (auditDel) {
+      await auditDel.logDelete("security.evidence", "evidence_link", {
+        ...deleted,
+        name: linkId,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

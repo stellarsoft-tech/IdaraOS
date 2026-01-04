@@ -14,7 +14,7 @@ import {
 import { persons } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -150,15 +150,17 @@ export async function PATCH(
       .where(eq(securityClauseCompliance.id, id))
       .returning()
 
-    await createSimpleAuditLog({
-      action: "update",
-      entityType: "security_clause_compliance",
-      entityId: result.id,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: existing,
-      newValues: result,
-    })
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logUpdate(
+        "security.clauses",
+        "clause_compliance",
+        result.id,
+        result.standardClauseId,
+        existing,
+        result
+      )
+    }
 
     return NextResponse.json({ data: result })
   } catch (error) {
@@ -204,14 +206,13 @@ export async function DELETE(
       .delete(securityClauseCompliance)
       .where(eq(securityClauseCompliance.id, id))
 
-    await createSimpleAuditLog({
-      action: "delete",
-      entityType: "security_clause_compliance",
-      entityId: id,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: existing,
-    })
+    const auditDel = await getAuditLogger()
+    if (auditDel) {
+      await auditDel.logDelete("security.clauses", "clause_compliance", {
+        ...existing,
+        name: existing.standardClauseId,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

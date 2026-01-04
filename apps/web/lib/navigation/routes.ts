@@ -158,6 +158,12 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security",
     description: "Configure security module settings",
   },
+  "security.audit-log": {
+    path: "/security/audit-log",
+    label: "Audit Log",
+    parent: "security",
+    description: "Activity history for security records",
+  },
   
   // Assets
   assets: {
@@ -201,6 +207,12 @@ export const routes: Record<string, RouteConfig> = {
     parent: "assets",
     description: "Configure asset sync and integrations",
   },
+  "assets.audit-log": {
+    path: "/assets/audit-log",
+    label: "Audit Log",
+    parent: "assets",
+    description: "Activity history for asset records",
+  },
   
   // Docs
   docs: {
@@ -225,6 +237,12 @@ export const routes: Record<string, RouteConfig> = {
     label: "Settings",
     parent: "docs",
     description: "Configure documentation module settings",
+  },
+  "docs.audit-log": {
+    path: "/docs/audit-log",
+    label: "Audit Log",
+    parent: "docs",
+    description: "Activity history for documentation records",
   },
   
   // Finance
@@ -273,6 +291,12 @@ export const routes: Record<string, RouteConfig> = {
     label: "Settings",
     parent: "workflows",
     description: "Configure workflow settings",
+  },
+  "workflows.audit-log": {
+    path: "/workflows/audit-log",
+    label: "Audit Log",
+    parent: "workflows",
+    description: "Activity history for workflow records",
   },
   
   // Settings

@@ -16,7 +16,7 @@ import {
 import { persons } from "@/lib/db/schema/people"
 import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -209,15 +209,17 @@ export async function PATCH(
       .returning()
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "update",
-      entityType: "security_control",
-      entityId: id,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: existing,
-      newValues: updated,
-    })
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logUpdate(
+        "security.controls",
+        "control",
+        id,
+        updated.title,
+        existing,
+        updated
+      )
+    }
 
     return NextResponse.json({ data: updated })
   } catch (error) {
@@ -265,14 +267,13 @@ export async function DELETE(
     await db.delete(securityControls).where(eq(securityControls.id, id))
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "delete",
-      entityType: "security_control",
-      entityId: id,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: existing,
-    })
+    const auditDel = await getAuditLogger()
+    if (auditDel) {
+      await auditDel.logDelete("security.controls", "control", {
+        ...existing,
+        name: existing.title,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

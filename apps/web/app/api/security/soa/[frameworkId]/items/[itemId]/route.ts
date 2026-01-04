@@ -15,7 +15,7 @@ import {
 } from "@/lib/db/schema/security"
 import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -124,15 +124,17 @@ export async function PATCH(
       .returning()
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "update",
-      entityType: "security_soa_item",
-      entityId: itemId,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: existing,
-      newValues: updated,
-    })
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logUpdate(
+        "security.soa",
+        "soa_item",
+        itemId,
+        updated.controlId ?? itemId,
+        existing,
+        updated
+      )
+    }
 
     return NextResponse.json({ data: updated })
   } catch (error) {

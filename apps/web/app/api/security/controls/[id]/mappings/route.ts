@@ -13,7 +13,7 @@ import {
 } from "@/lib/db/schema/security"
 import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -170,14 +170,14 @@ export async function POST(
       .returning()
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "create",
-      entityType: "security_control_mapping",
-      entityId: mapping.id,
-      userId: session.userId,
-      orgId: session.orgId,
-      newValues: { ...mapping, controlId: control.controlId },
-    })
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logCreate("security.controls", "control_mapping", {
+        ...mapping,
+        name: control.controlId,
+        controlId: control.controlId,
+      })
+    }
 
     return NextResponse.json({ data: mapping }, { status: 201 })
   } catch (error) {
@@ -243,14 +243,13 @@ export async function DELETE(
     }
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "delete",
-      entityType: "security_control_mapping",
-      entityId: mappingId,
-      userId: session.userId,
-      orgId: session.orgId,
-      oldValues: deleted,
-    })
+    const auditDel = await getAuditLogger()
+    if (auditDel) {
+      await auditDel.logDelete("security.controls", "control_mapping", {
+        ...deleted,
+        name: mappingId,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

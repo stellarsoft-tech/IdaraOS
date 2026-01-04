@@ -16,7 +16,7 @@ import {
 import { persons } from "@/lib/db/schema/people"
 import { getSession } from "@/lib/auth/session"
 import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -239,14 +239,13 @@ export async function POST(request: NextRequest) {
       .returning()
 
     // Audit log
-    await createSimpleAuditLog({
-      action: "create",
-      entityType: "security_control",
-      entityId: control.id,
-      userId: session.userId,
-      orgId: session.orgId,
-      newValues: control,
-    })
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logCreate("security.controls", "control", {
+        ...control,
+        name: control.title,
+      })
+    }
 
     return NextResponse.json({ data: control }, { status: 201 })
   } catch (error) {

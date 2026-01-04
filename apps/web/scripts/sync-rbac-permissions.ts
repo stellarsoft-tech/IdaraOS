@@ -52,6 +52,7 @@ export const MODULE_REGISTRY = [
   { slug: "assets.maintenance", name: "Asset Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "204", actions: ["view", "create", "edit", "delete"] },
   { slug: "assets.lifecycle", name: "Asset Lifecycle", description: "Manage asset lifecycle and disposal", category: "Assets", icon: "RotateCcw", sortOrder: "205", actions: ["view", "create", "edit", "delete"] },
   { slug: "assets.settings", name: "Asset Settings", description: "Configure asset module settings and sync", category: "Assets", icon: "Settings", sortOrder: "206", actions: ["view", "edit"] },
+  { slug: "assets.auditlog", name: "Assets Audit Log", description: "View audit trail for Assets module", category: "Assets", icon: "ScrollText", sortOrder: "207", actions: ["view"] },
   
   // Security
   { slug: "security.overview", name: "Security Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300", actions: ["view"] },
@@ -64,6 +65,7 @@ export const MODULE_REGISTRY = [
   { slug: "security.soa", name: "Statement of Applicability", description: "Manage SoA for frameworks", category: "Security", icon: "FileCheck", sortOrder: "307", actions: ["view", "create", "edit", "delete"] },
   { slug: "security.settings", name: "Security Settings", description: "Configure security module settings", category: "Security", icon: "Settings", sortOrder: "308", actions: ["view", "edit"] },
   { slug: "security.clauses", name: "ISMS Clauses", description: "Manage ISMS clause compliance tracking", category: "Security", icon: "FileCheck2", sortOrder: "309", actions: ["view", "create", "edit", "delete"] },
+  { slug: "security.auditlog", name: "Security Audit Log", description: "View audit trail for Security module", category: "Security", icon: "ScrollText", sortOrder: "310", actions: ["view"] },
   
   // Documentation
   { slug: "docs.overview", name: "Docs Overview", description: "View documentation dashboard", category: "Documentation", icon: "FileText", sortOrder: "500", actions: ["view"] },
@@ -71,6 +73,7 @@ export const MODULE_REGISTRY = [
   { slug: "docs.rollouts", name: "Document Rollouts", description: "Manage document rollouts", category: "Documentation", icon: "Users", sortOrder: "502", actions: ["view", "create", "edit", "delete"] },
   { slug: "docs.acknowledgments", name: "Acknowledgments", description: "View document acknowledgments", category: "Documentation", icon: "CheckSquare", sortOrder: "503", actions: ["view"] },
   { slug: "docs.settings", name: "Docs Settings", description: "Configure documentation settings", category: "Documentation", icon: "Settings", sortOrder: "504", actions: ["view", "edit"] },
+  { slug: "docs.auditlog", name: "Docs Audit Log", description: "View audit trail for Documentation module", category: "Documentation", icon: "ScrollText", sortOrder: "505", actions: ["view"] },
   
   // Workflows
   { slug: "workflows.overview", name: "Workflows Overview", description: "View workflows dashboard", category: "Workflows", icon: "Workflow", sortOrder: "400", actions: ["view"] },
@@ -79,6 +82,7 @@ export const MODULE_REGISTRY = [
   { slug: "workflows.tasks", name: "Workflow Tasks", description: "View and complete assigned tasks", category: "Workflows", icon: "CheckSquare", sortOrder: "403", actions: ["view", "edit"] },
   { slug: "workflows.board", name: "Workflow Board", description: "Kanban board view of workflows", category: "Workflows", icon: "Kanban", sortOrder: "404", actions: ["view"] },
   { slug: "workflows.settings", name: "Workflow Settings", description: "Configure workflow module settings", category: "Workflows", icon: "Settings", sortOrder: "405", actions: ["view", "edit"] },
+  { slug: "workflows.auditlog", name: "Workflows Audit Log", description: "View audit trail for Workflows module", category: "Workflows", icon: "ScrollText", sortOrder: "406", actions: ["view"] },
   
   // Settings
   { slug: "settings.organization", name: "Organization Settings", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900", actions: ["view", "edit"] },

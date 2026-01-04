@@ -15,7 +15,7 @@ import {
 import { persons } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 import { eq, and, asc, sql } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -196,15 +196,17 @@ export async function POST(request: NextRequest) {
         .where(eq(securityClauseCompliance.id, existing.id))
         .returning()
 
-      await createSimpleAuditLog({
-        action: "update",
-        entityType: "security_clause_compliance",
-        entityId: result.id,
-        userId: session.userId,
-        orgId: session.orgId,
-        oldValues: existing,
-        newValues: result,
-      })
+      const audit = await getAuditLogger()
+      if (audit) {
+        await audit.logUpdate(
+          "security.clauses",
+          "clause_compliance",
+          result.id,
+          result.standardClauseId,
+          existing,
+          result
+        )
+      }
     } else {
       // Create new record
       [result] = await db
@@ -223,14 +225,13 @@ export async function POST(request: NextRequest) {
         })
         .returning()
 
-      await createSimpleAuditLog({
-        action: "create",
-        entityType: "security_clause_compliance",
-        entityId: result.id,
-        userId: session.userId,
-        orgId: session.orgId,
-        newValues: result,
-      })
+      const auditNew = await getAuditLogger()
+      if (auditNew) {
+        await auditNew.logCreate("security.clauses", "clause_compliance", {
+          ...result,
+          name: result.standardClauseId,
+        })
+      }
     }
 
     return NextResponse.json({ data: result }, { status: existing ? 200 : 201 })

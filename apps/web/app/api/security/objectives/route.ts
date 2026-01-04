@@ -7,7 +7,7 @@ import {
 } from "@/lib/db/schema/security"
 import { getSession } from "@/lib/auth/session"
 import { eq, and, ilike, count, desc } from "drizzle-orm"
-import { createSimpleAuditLog } from "@/lib/audit"
+import { getAuditLogger } from "@/lib/api/context"
 import { persons } from "@/lib/db/schema"
 import { z } from "zod"
 
@@ -181,14 +181,13 @@ export async function POST(request: NextRequest) {
       .returning()
 
     // Log the creation
-    await createSimpleAuditLog({
-      action: "create",
-      entityType: "security_objective",
-      entityId: objective.id,
-      userId: session.userId,
-      orgId: session.orgId,
-      newValues: objective,
-    })
+    const audit = await getAuditLogger()
+    if (audit) {
+      await audit.logCreate("security.objectives", "objective", {
+        ...objective,
+        name: objective.title,
+      })
+    }
 
     return NextResponse.json({ data: objective }, { status: 201 })
   } catch (error) {
