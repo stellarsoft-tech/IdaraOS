@@ -85,7 +85,7 @@ const navigationData: NavItem[] = [
       { title: "Roles", url: "/people/roles", module: "people.roles" },
       { title: "Workflows", url: "/people/workflows", module: "people.workflows" },
       { title: "Audit Log", url: "/people/audit-log", module: "people.auditlog" },
-      { title: "Settings", url: "/people/settings", module: "people.directory" },
+      { title: "Settings", url: "/people/settings", module: "people.settings" },
     ],
   },
   {
