@@ -109,7 +109,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
 
-      - name: Push database schema
+      - name: Run database migrations
         env:
           CI: "true"
           FORCE_COLOR: "0"
@@ -121,47 +121,26 @@ jobs:
           export DATABASE_URL
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  IdaraOS Database Schema Push"
+          echo "  IdaraOS Database Migrations"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          # Prototyping mode: Drop all tables if schema mismatch detected
-          # This avoids interactive prompts from drizzle-kit push
-          echo "🔍 Checking for schema mismatches..."
-          MISMATCH=$(node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            pool.query(\"SELECT column_name FROM information_schema.columns WHERE table_name = 'people_persons' AND column_name IN ('role', 'team')\")
-              .then(r => { console.log(r.rows.length > 0 ? 'true' : 'false'); pool.end(); })
-              .catch(() => { console.log('false'); pool.end(); });
-          ")
+          # Check migration status
+          echo "🔍 Checking migration status..."
+          npx drizzle-kit migrate:status || true
           
-          if [ "$MISMATCH" = "true" ]; then
-            echo "⚠️  Old schema detected (role/team as text columns)"
-            echo "🗑️  Dropping all tables for clean schema push (prototyping mode)..."
-            node -e "
-              const { Pool } = require('pg');
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-              pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-                .then(() => { console.log('Schema reset complete'); pool.end(); })
-                .catch(e => { console.error('Error:', e.message); pool.end(); process.exit(1); });
-            "
-          fi
+          echo ""
+          echo "📋 Running database migrations..."
           
-          echo "📋 Pushing schema to database (prototyping mode)..."
-          
-          # Send newlines to accept default options, increased timeout
-          printf '\n\n\n\n\n' | timeout 180 npx drizzle-kit push --force || {
+          # Run migrations
+          npx drizzle-kit migrate || {
             EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Push timed out after 180s, but schema may have been applied"
-            else
-              echo "⚠️  Push exited with code $EXIT_CODE"
-            fi
+            echo "⚠️  Migration exited with code $EXIT_CODE"
+            exit $EXIT_CODE
           }
           
           echo ""
-          echo "✅ Database schema push completed!"
+          echo "✅ Database migrations completed!"
           
       - name: Verify database schema
         run: |
@@ -457,7 +436,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
 
-      - name: Push database schema
+      - name: Run database migrations
         env:
           CI: "true"
           FORCE_COLOR: "0"
@@ -469,46 +448,26 @@ jobs:
           export DATABASE_URL
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  IdaraOS Database Schema Push"
+          echo "  IdaraOS Database Migrations"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          # Prototyping mode: Drop all tables if schema mismatch detected
-          echo "🔍 Checking for schema mismatches..."
-          MISMATCH=$(node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            pool.query(\"SELECT column_name FROM information_schema.columns WHERE table_name = 'people_persons' AND column_name IN ('role', 'team')\")
-              .then(r => { console.log(r.rows.length > 0 ? 'true' : 'false'); pool.end(); })
-              .catch(() => { console.log('false'); pool.end(); });
-          ")
+          # Check migration status
+          echo "🔍 Checking migration status..."
+          npx drizzle-kit migrate:status || true
           
-          if [ "$MISMATCH" = "true" ]; then
-            echo "⚠️  Old schema detected (role/team as text columns)"
-            echo "🗑️  Dropping all tables for clean schema push (prototyping mode)..."
-            node -e "
-              const { Pool } = require('pg');
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-              pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-                .then(() => { console.log('Schema reset complete'); pool.end(); })
-                .catch(e => { console.error('Error:', e.message); pool.end(); process.exit(1); });
-            "
-          fi
+          echo ""
+          echo "📋 Running database migrations..."
           
-          echo "📋 Pushing schema to database (prototyping mode)..."
-          
-          # Send newlines to accept default options, increased timeout
-          printf '\n\n\n\n\n' | timeout 180 npx drizzle-kit push --force || {
+          # Run migrations
+          npx drizzle-kit migrate || {
             EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Push timed out after 180s, but schema may have been applied"
-            else
-              echo "⚠️  Push exited with code $EXIT_CODE"
-            fi
+            echo "⚠️  Migration exited with code $EXIT_CODE"
+            exit $EXIT_CODE
           }
           
           echo ""
-          echo "✅ Database schema push completed!"
+          echo "✅ Database migrations completed!"
           
       - name: Verify database schema
         run: |
@@ -788,7 +747,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
 
-      - name: Push database schema
+      - name: Run database migrations
         env:
           CI: "true"
           FORCE_COLOR: "0"
@@ -800,46 +759,26 @@ jobs:
           export DATABASE_URL
           
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  IdaraOS Database Schema Push"
+          echo "  IdaraOS Database Migrations"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo ""
           
-          # Prototyping mode: Drop all tables if schema mismatch detected
-          echo "🔍 Checking for schema mismatches..."
-          MISMATCH=$(node -e "
-            const { Pool } = require('pg');
-            const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-            pool.query(\"SELECT column_name FROM information_schema.columns WHERE table_name = 'people_persons' AND column_name IN ('role', 'team')\")
-              .then(r => { console.log(r.rows.length > 0 ? 'true' : 'false'); pool.end(); })
-              .catch(() => { console.log('false'); pool.end(); });
-          ")
+          # Check migration status
+          echo "🔍 Checking migration status..."
+          npx drizzle-kit migrate:status || true
           
-          if [ "$MISMATCH" = "true" ]; then
-            echo "⚠️  Old schema detected (role/team as text columns)"
-            echo "🗑️  Dropping all tables for clean schema push (prototyping mode)..."
-            node -e "
-              const { Pool } = require('pg');
-              const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-              pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;')
-                .then(() => { console.log('Schema reset complete'); pool.end(); })
-                .catch(e => { console.error('Error:', e.message); pool.end(); process.exit(1); });
-            "
-          fi
+          echo ""
+          echo "📋 Running database migrations..."
           
-          echo "📋 Pushing schema to database (prototyping mode)..."
-          
-          # Send newlines to accept default options, increased timeout
-          printf '\n\n\n\n\n' | timeout 180 npx drizzle-kit push --force || {
+          # Run migrations
+          npx drizzle-kit migrate || {
             EXIT_CODE=$?
-            if [ $EXIT_CODE -eq 124 ]; then
-              echo "⚠️  Push timed out after 180s, but schema may have been applied"
-            else
-              echo "⚠️  Push exited with code $EXIT_CODE"
-            fi
+            echo "⚠️  Migration exited with code $EXIT_CODE"
+            exit $EXIT_CODE
           }
           
           echo ""
-          echo "✅ Database schema push completed!"
+          echo "✅ Database migrations completed!"
           
       - name: Verify database schema
         run: |
