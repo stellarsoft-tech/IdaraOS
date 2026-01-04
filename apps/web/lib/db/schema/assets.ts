@@ -2,7 +2,7 @@
  * Assets Schema - Drizzle ORM table definitions
  */
 
-import { pgTable, uuid, text, timestamp, boolean, index, date, decimal, jsonb, type AnyPgColumn } from "drizzle-orm/pg-core"
+import { pgTable, uuid, text, timestamp, boolean, index, date, decimal, jsonb, integer, type AnyPgColumn } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { organizations } from "./organizations"
 import { persons } from "./people"
@@ -53,6 +53,13 @@ export const assetCategories = pgTable(
     icon: text("icon").default("Box"), // Lucide icon name
     color: text("color").default("gray"), // Badge color
     defaultDepreciationYears: decimal("default_depreciation_years", { precision: 4, scale: 1 }),
+    
+    // Hierarchy and chart designer fields
+    level: integer("level").notNull().default(0), // Depth in hierarchy (0 = top-level)
+    sortOrder: integer("sort_order").notNull().default(0), // Display order within same level
+    positionX: integer("position_x").notNull().default(0), // Canvas X position for chart designer
+    positionY: integer("position_y").notNull().default(0), // Canvas Y position for chart designer
+    
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -60,6 +67,7 @@ export const assetCategories = pgTable(
     index("idx_assets_categories_org").on(table.orgId),
     index("idx_assets_categories_parent").on(table.parentId),
     index("idx_assets_categories_slug").on(table.slug),
+    index("idx_assets_categories_level").on(table.level),
   ]
 )
 

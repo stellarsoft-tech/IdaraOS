@@ -70,20 +70,21 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------------------
-  # Database Migrations & Seeding (Init Container)
+  # Database Schema Push & Seeding (Init Container - DEV MODE)
   # ---------------------------------------------------------------------------
+  # Uses db:push for rapid prototyping. For production, use docker-compose.local.yml
+  # which uses proper migrations via Dockerfile.init
   db-init:
     build:
       context: ../..
-      dockerfile: deployment/docker/Dockerfile.init
+      dockerfile: deployment/docker/Dockerfile.init.dev
     container_name: idaraos-db-init-dev
     environment:
       DATABASE_URL: postgresql://idaraos:localdevpassword@db:5432/idaraos
     depends_on:
       db:
         condition: service_healthy
-    # This container exits after running migrations and seeding
-    # Only runs if database is empty (check volume state)
+    # This container exits after pushing schema and seeding
 
   # ---------------------------------------------------------------------------
   # IdaraOS Web Application (Development Mode)

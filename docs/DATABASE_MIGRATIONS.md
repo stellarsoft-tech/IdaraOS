@@ -1,6 +1,6 @@
 # Database Migrations Guide
 
-This document describes the **correct** workflow for managing database schema changes in IdaraOS using Drizzle ORM.
+This document describes the **production-ready** workflow for managing database schema changes in IdaraOS using Drizzle ORM with PostgreSQL.
 
 ## Quick Reference
 
@@ -8,21 +8,53 @@ This document describes the **correct** workflow for managing database schema ch
 # Generate a new migration from schema changes
 pnpm --filter web db:generate
 
-# Check migration status
-pnpm --filter web db:migrate:status
+# Check migration status (CI/CD friendly)
+pnpm --filter web db:check
 
 # Apply pending migrations
 pnpm --filter web db:migrate:run
 
+# View migration status
+pnpm --filter web db:migrate:status
+
 # View database in browser (dev only)
 pnpm --filter web db:studio
+
+# Run post-migration tasks (data migrations + RBAC sync)
+pnpm --filter web db:post-migrate
 ```
 
-## The Golden Rule
+## The Golden Rules
 
-> **NEVER write SQL migration files by hand. ALWAYS use `drizzle-kit generate`.**
+> **1. NEVER write SQL migration files by hand. ALWAYS use `drizzle-kit generate`.**
 
 Drizzle ORM maintains snapshots of your schema state. When you write SQL manually, the snapshots become out of sync, causing future migrations to be incorrect.
+
+> **2. NEVER use `db:push` in production. ONLY use it for rapid prototyping.**
+
+`db:push` can drop tables and lose data. It has no migration history.
+
+> **3. ALWAYS commit migration files together with schema changes.**
+
+This includes: `*.sql` files, `meta/_journal.json`, and `meta/*_snapshot.json`.
+
+---
+
+## How Migrations Work
+
+### Drizzle vs Entity Framework
+
+| Feature | Drizzle ORM | Entity Framework |
+|---------|-------------|------------------|
+| Schema Definition | TypeScript files | C# classes with attributes |
+| Migration Generation | `drizzle-kit generate` | `Add-Migration` |
+| Migration Format | Pure SQL files | C#/Up-Down methods |
+| Rollback Support | Not supported OOTB | Built-in `Down()` method |
+| Snapshot Tracking | JSON in `meta/` | `__EFMigrationsHistory` |
+| Data Seeding | Separate scripts | `HasData()` configuration |
+| Custom SQL | Full control | Limited via `Sql()` |
+
+**Key Difference:** Drizzle generates pure SQL (more transparent, portable) while EF generates code. Drizzle does not have automatic rollback support - to undo a migration, create a new migration that reverses the changes.
 
 ---
 
@@ -33,15 +65,19 @@ Drizzle ORM maintains snapshots of your schema state. When you write SQL manuall
 Make your changes in `apps/web/lib/db/schema/*.ts`:
 
 ```typescript
-// Example: Change FK from RESTRICT to SET NULL
+// Example: Add a new column
 // Before
-templateStepId: uuid("template_step_id")
-  .notNull()
-  .references(() => workflowTemplateSteps.id, { onDelete: "restrict" }),
+export const users = pgTable("core_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+})
 
 // After  
-templateStepId: uuid("template_step_id")
-  .references(() => workflowTemplateSteps.id, { onDelete: "set null" }),
+export const users = pgTable("core_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  nickname: text("nickname"), // NEW COLUMN
+})
 ```
 
 ### Step 2: Generate the Migration
@@ -64,7 +100,7 @@ Always review what Drizzle generated:
 cat drizzle/XXXX_*.sql
 ```
 
-If the generated SQL isn't what you want:
+If the generated SQL is not what you want:
 1. Adjust your TypeScript schema
 2. Delete the generated files
 3. Run `db:generate` again
@@ -79,7 +115,7 @@ pnpm db:migrate:run
 
 ```bash
 git add apps/web/drizzle/
-git commit -m "feat: add migration for XYZ"
+git commit -m "feat: add nickname column to users"
 ```
 
 **Important:** Commit ALL of these:
@@ -89,13 +125,159 @@ git commit -m "feat: add migration for XYZ"
 
 ---
 
+## Supported Schema Operations
+
+Drizzle automatically handles these operations via `drizzle-kit generate`:
+
+| Operation | Auto-Generated? | Notes |
+|-----------|-----------------|-------|
+| Add table | Yes | Creates `CREATE TABLE` |
+| Drop table | Yes | Creates `DROP TABLE` (prompts) |
+| Add column | Yes | `ALTER TABLE ADD COLUMN` |
+| Drop column | Yes | `ALTER TABLE DROP COLUMN` |
+| Rename column | Prompted | Asks if rename or drop+add |
+| Change column type | Yes | Uses `USING` clause |
+| Add index | Yes | `CREATE INDEX` |
+| Drop index | Yes | `DROP INDEX` |
+| Add foreign key | Yes | With ON DELETE/UPDATE |
+| Change FK action | Yes | Drops and recreates |
+| Add constraint | Yes | Unique, check, etc. |
+| Add schema | Yes | `CREATE SCHEMA` |
+
+### Handling Complex Changes
+
+#### Renaming Columns
+
+When you rename a column, Drizzle will prompt you to confirm whether it is a rename or a drop+add.
+
+#### Changing Column Types
+
+For type changes, Drizzle generates a `USING` clause. You may need to modify this for complex conversions:
+
+```sql
+-- Generated (may need modification)
+ALTER TABLE "users" ALTER COLUMN "status" TYPE integer USING "status"::integer;
+
+-- Modified for safe conversion
+ALTER TABLE "users" ALTER COLUMN "status" TYPE integer 
+  USING CASE 
+    WHEN status = 'active' THEN 1 
+    WHEN status = 'inactive' THEN 0 
+    ELSE 0 
+  END;
+```
+
+---
+
+## Reverting Changes
+
+Drizzle does not auto-generate rollback migrations. To undo a migration:
+
+1. **Modify your schema** to reverse the change (e.g., remove the column you added)
+2. **Run `db:generate`** to create a new migration that drops the column
+3. **Apply the migration** with `db:migrate:run`
+
+This creates a forward-only migration history, which is the recommended approach for production databases.
+
+---
+
+## Data Migrations
+
+For data transformations that accompany schema changes, use the post-migrate system.
+
+### Adding a Data Migration
+
+Edit `apps/web/scripts/post-migrate.ts`:
+
+```typescript
+const DATA_MIGRATIONS: DataMigration[] = [
+  // Existing migrations...
+  
+  {
+    id: "2024-03-15_populate_nicknames",
+    description: "Set default nicknames from user names",
+    run: async (db) => {
+      await db.execute(sql`
+        UPDATE core_users 
+        SET nickname = split_part(name, ' ', 1)
+        WHERE nickname IS NULL
+      `)
+    },
+  },
+]
+```
+
+### Data Migration Rules
+
+1. **Unique ID**: Use `YYYY-MM-DD_descriptive_name` format
+2. **Idempotent**: Safe to run multiple times
+3. **Tracked**: Each migration runs only once (tracked in `data_migrations` table)
+4. **Non-blocking**: Failures do not stop deployment
+
+---
+
+## CI/CD Integration
+
+### Pre-Merge Checks
+
+Add to your CI pipeline:
+
+```yaml
+# Check for schema drift and file integrity
+- name: Check Migrations
+  run: pnpm --filter web db:check:ci
+```
+
+Exit codes:
+- `0` - All checks passed
+- `1` - Schema drift (needs `db:generate`)
+- `2` - Missing migration files
+- `3` - Pending migrations (needs `db:migrate:run`)
+- `4` - Configuration error
+
+### Deployment Flow
+
+```yaml
+deploy:
+  steps:
+    # 1. Run migrations
+    - name: Apply Migrations
+      run: pnpm --filter web db:migrate:run
+    
+    # 2. Run post-migration tasks
+    - name: Post-Migrate
+      run: pnpm --filter web db:post-migrate
+    
+    # 3. Start application
+    - name: Start App
+      run: pnpm --filter web start
+```
+
+### Docker Deployment
+
+The init container automatically runs migrations:
+
+```yaml
+# docker-compose.yml
+db-init:
+  build:
+    dockerfile: deployment/docker/Dockerfile.init
+  # Runs: pnpm db:migrate:run + pnpm db:post-migrate
+```
+
+---
+
 ## Environment-Specific Behavior
 
-### Local Development (Rapid Iteration)
+### Local Development (Rapid Prototyping)
 
 When rapidly prototyping, you CAN use `db:push`:
 
 ```bash
+# Use docker-compose.dev.yml which uses db:push
+docker-compose -f docker-compose.dev.yml up
+
+# Or directly:
 pnpm db:push  # Syncs schema directly, no migrations
 ```
 
@@ -104,14 +286,15 @@ pnpm db:push  # Syncs schema directly, no migrations
 - Lose data
 - Desync from migration state
 
-Use it only when you're iterating fast and don't care about data loss.
+Use it only when you are iterating fast and do not care about data loss.
 
-### CI/CD / Staging / Production
+### Staging / Production
 
 **NEVER use `db:push`**. Only use migrations:
 
 ```bash
 pnpm db:migrate:run
+pnpm db:post-migrate
 ```
 
 The Docker init container runs this automatically on deployment.
@@ -129,25 +312,36 @@ This happens when:
 
 **Fix:**
 ```bash
-# Check what's applied vs pending
+# Check what is applied vs pending
 pnpm db:migrate:status
 
 # If database was created with db:push, baseline it first
 pnpm db:baseline
 ```
 
-### Migration Conflicts
+### "No migrations to apply" but Database is Empty
 
-If you have schema changes that conflict with migrations:
+The migrations table does not exist yet. Run:
 
 ```bash
-# Option 1: Regenerate migrations (loses all migration history)
-rm -rf drizzle/
-pnpm db:generate
+pnpm db:migrate:run
+```
 
-# Option 2: Pull current state and generate diff
-pnpm db:pull  # Creates schema from existing DB
-# Then manually reconcile
+This will create the `drizzle.__drizzle_migrations` table and apply all migrations.
+
+### Migration Conflicts After Merge
+
+If two developers created migrations simultaneously:
+
+```bash
+# Option 1: Regenerate the conflicting migration
+# Delete your local migration files that conflict
+rm drizzle/XXXX_your_migration.sql
+rm drizzle/meta/XXXX_snapshot.json
+
+# Pull latest and regenerate
+git pull
+pnpm db:generate
 ```
 
 ### Foreign Key Constraint Violations
@@ -180,18 +374,21 @@ Then generate a migration: `pnpm db:generate`
 | `db:generate` | Generate migration from schema diff | After editing schema files |
 | `db:migrate:run` | Apply pending migrations | Before testing, in CI/CD |
 | `db:migrate:status` | Show applied/pending migrations | Debugging |
-| `db:push` | Push schema directly (no migration) | Local prototyping ONLY |
+| `db:check` | Validate migration state | In CI/CD pipelines |
+| `db:check:ci` | CI mode validation (strict) | GitHub Actions, etc. |
+| `db:post-migrate` | Run data migrations + RBAC sync | After schema migrations |
+| `db:baseline` | Mark db:push db as migrated | One-time after db:push |
+| `db:push` | Push schema directly (no migration) | **Local prototyping ONLY** |
 | `db:studio` | Open Drizzle Studio GUI | Debugging |
-| `db:baseline` | Mark existing schema as migrated | One-time after db:push |
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### ❌ Writing SQL Migrations by Hand
+### Writing SQL Migrations by Hand
 
 ```sql
--- DON'T DO THIS
+-- DO NOT DO THIS
 ALTER TABLE foo ADD COLUMN bar TEXT;
 ```
 
@@ -199,61 +396,94 @@ ALTER TABLE foo ADD COLUMN bar TEXT;
 
 **Instead:** Edit TypeScript schema, run `db:generate`.
 
-### ❌ Using db:push in Production
+### Using db:push in Production
 
 ```bash
-# DON'T DO THIS IN CI/CD
+# DO NOT DO THIS IN CI/CD
 pnpm db:push --force
 ```
 
-**Why:** Can drop tables, no rollback, no tracking.
+**Why:** Can drop tables, no history, no tracking.
 
 **Instead:** Use `db:migrate:run`.
 
-### ❌ Modifying Applied Migrations
+### Modifying Applied Migrations
 
-**DON'T** edit a migration file after it's been applied to any database.
+**DO NOT** edit a migration file after it has been applied to any database.
 
 **Instead:** Create a new migration that makes corrections.
 
-### ❌ Not Committing Snapshot Files
+### Not Committing Snapshot Files
 
 The `meta/*_snapshot.json` files are REQUIRED for Drizzle to calculate diffs.
 
 **Always commit:** SQL files + journal + snapshots.
+
+### Skipping Code Review for Migrations
+
+Migration SQL can drop data. Always review generated SQL before committing.
+
+---
+
+## Best Practices
+
+### 1. Small, Focused Migrations
+
+Instead of one large migration that adds tables, columns, and constraints, break it into smaller focused changes.
+
+### 2. Test Migrations on Staging First
+
+Never run untested migrations on production. Use a staging environment that mirrors production.
+
+### 3. Use Transactions
+
+Drizzle wraps migrations in transactions by default. For custom SQL that spans multiple operations, ensure it is wrapped in a transaction.
+
+### 4. Monitor Migration Performance
+
+For large tables, schema changes can be slow. Monitor and test migration duration on production-like data volumes.
+
+### 5. Document Breaking Changes
+
+If a migration requires code changes (new required column, removed column), document this in the PR.
 
 ---
 
 ## Docker Migration Flow
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Deployment                          │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│  1. db-init container starts                        │
-│     └─ Runs: pnpm db:migrate:run                    │
-│         └─ Reads drizzle/__drizzle_migrations       │
-│         └─ Applies only NEW migrations              │
-│         └─ Updates tracking table                   │
-│                                                      │
-│  2. db-init container runs seeds                    │
-│     └─ Runs: pnpm db:seed (idempotent)             │
-│     └─ Runs: pnpm db:seed-rbac (idempotent)        │
-│                                                      │
-│  3. db-init container exits (success)              │
-│                                                      │
-│  4. web container starts                            │
-│     └─ App connects to migrated database           │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+Deployment Flow:
+
+1. db-init container starts
+   - Runs: pnpm db:migrate:run
+   - Reads drizzle/__drizzle_migrations
+   - Applies only NEW migrations
+   - Updates tracking table
+
+2. db-init runs post-migration
+   - Runs: pnpm db:post-migrate
+   - Data migrations (idempotent)
+   - RBAC sync
+
+3. db-init runs seeds
+   - Runs: pnpm db:seed (idempotent)
+   - Runs: pnpm db:seed-rbac (idempotent)
+
+4. db-init container exits (success)
+
+5. web container starts
+   - App connects to migrated database
 ```
 
 ---
 
-## Drizzle ORM Resources
+## Resources
 
-- [Official Migrations Guide](https://orm.drizzle.team/docs/migrations)
+- [Drizzle ORM Migrations](https://orm.drizzle.team/docs/migrations)
 - [drizzle-kit Commands](https://orm.drizzle.team/kit-docs/commands)
 - [Schema Declaration](https://orm.drizzle.team/docs/sql-schema-declaration)
+- [PostgreSQL ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)
 
+---
+
+**Last Updated**: January 2026

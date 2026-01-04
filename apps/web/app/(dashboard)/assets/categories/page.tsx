@@ -17,6 +17,11 @@ import {
   Server,
   Printer,
   Package,
+  TreeDeciduous,
+  LayoutGrid,
+  Table2,
+  Layers,
+  FolderOpen,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -27,6 +32,7 @@ import { FormDrawer } from "@/components/primitives/form-drawer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,8 +51,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
+import { StatCard } from "@/components/stat-card"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { z } from "zod"
+
+// Category components
+import { CategoryTreeView } from "@/components/assets/category-tree-view"
+import { CategoryChartDesigner } from "@/components/assets/category-chart-designer"
 
 // API hooks
 import { 
@@ -54,6 +65,7 @@ import {
   useCreateCategory, 
   useUpdateCategory, 
   useDeleteCategory,
+  useBulkUpdateCategories,
   type AssetCategory,
   type CreateCategory,
   type UpdateCategory,
@@ -126,14 +138,18 @@ const editCategorySchema = createCategorySchema.partial()
 
 export default function CategoriesPage() {
   const canAccess = useCanAccess("assets.categories")
+  const canCreate = usePermission("assets.categories", "create")
   const canEdit = usePermission("assets.categories", "edit")
   const canDelete = usePermission("assets.categories", "delete")
   
   // State
+  const [viewMode, setViewMode] = useState<"tree" | "chart" | "table">("tree")
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<AssetCategory | null>(null)
+  const [parentIdForCreate, setParentIdForCreate] = useState<string | null>(null)
+  const [isChartFullscreen, setIsChartFullscreen] = useState(false)
   
   // Fetch data
   const { data: categories = [], isLoading, error } = useCategoriesList()
@@ -142,13 +158,21 @@ export default function CategoriesPage() {
   const createMutation = useCreateCategory()
   const updateMutation = useUpdateCategory()
   const deleteMutation = useDeleteCategory()
+  const bulkUpdateMutation = useBulkUpdateCategories()
+  
+  // Calculate stats
+  const stats = useMemo(() => {
+    const total = categories.length
+    const topLevel = categories.filter(c => !c.parentId).length
+    const withAssets = categories.filter(c => (c.assetCount ?? 0) > 0).length
+    const empty = categories.filter(c => (c.assetCount ?? 0) === 0 && (c.childCount ?? 0) === 0).length
+    
+    return { total, topLevel, withAssets, empty }
+  }, [categories])
   
   // Build parent category options
   const parentOptions = useMemo(() => {
-    // Only allow top-level categories as parents (for simplicity)
-    return categories
-      .filter(c => !c.parentId)
-      .map(c => ({ value: c.id, label: c.name }))
+    return categories.map(c => ({ value: c.id, label: c.name }))
   }, [categories])
   
   // Form config with dynamic parent options
@@ -181,16 +205,14 @@ export default function CategoriesPage() {
   
   const formFields = ["name", "description", "parentId", "icon", "color", "defaultDepreciationYears"]
   
-  // Organize categories into tree structure for display
+  // Organize categories into tree structure for table display
   const organizedCategories = useMemo(() => {
     const topLevel = categories.filter(c => !c.parentId)
     const children = categories.filter(c => c.parentId)
     
-    // Sort by name
-    topLevel.sort((a, b) => a.name.localeCompare(b.name))
-    children.sort((a, b) => a.name.localeCompare(b.name))
+    topLevel.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    children.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
     
-    // Interleave: parent followed by its children
     const result: AssetCategory[] = []
     for (const parent of topLevel) {
       result.push(parent)
@@ -198,7 +220,6 @@ export default function CategoriesPage() {
       result.push(...parentChildren)
     }
     
-    // Add orphans (children without parents in our list)
     const orphans = children.filter(c => !topLevel.some(p => p.id === c.parentId))
     result.push(...orphans)
     
@@ -218,9 +239,7 @@ export default function CategoriesPage() {
         
         return (
           <div className={`flex items-center gap-3 ${isChild ? "ml-8" : ""}`}>
-            <div 
-              className="h-8 w-8 rounded flex items-center justify-center bg-muted"
-            >
+            <div className="h-8 w-8 rounded flex items-center justify-center bg-muted">
               <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex items-center gap-2">
@@ -249,17 +268,32 @@ export default function CategoriesPage() {
       size: 200,
     },
     {
-      id: "icon",
-      header: "Icon",
-      accessorKey: "icon",
+      id: "assetCount",
+      header: "Assets",
+      accessorKey: "assetCount",
       cell: ({ row }) => {
-        const category = row.original
-        const Icon = getIcon(category.icon)
+        const count = row.original.assetCount ?? 0
         return (
-          <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{category.icon}</span>
-          </div>
+          <Badge variant="secondary" className="font-mono">
+            <Package className="h-3 w-3 mr-1" />
+            {count}
+          </Badge>
+        )
+      },
+      size: 80,
+    },
+    {
+      id: "childCount",
+      header: "Sub-categories",
+      accessorKey: "childCount",
+      cell: ({ row }) => {
+        const count = row.original.childCount ?? 0
+        if (count === 0) return <span className="text-muted-foreground">—</span>
+        return (
+          <Badge variant="outline" className="font-mono">
+            <FolderOpen className="h-3 w-3 mr-1" />
+            {count}
+          </Badge>
         )
       },
       size: 100,
@@ -271,25 +305,10 @@ export default function CategoriesPage() {
       cell: ({ row }) => {
         const color = row.original.color
         return (
-          <Badge 
-            variant="outline" 
-            className="text-xs capitalize"
-            style={{ borderColor: `var(--${color}-500)`, color: `var(--${color}-600)` }}
-          >
+          <Badge variant="outline" className="text-xs capitalize">
             {color}
           </Badge>
         )
-      },
-      size: 100,
-    },
-    {
-      id: "depreciation",
-      header: "Depreciation",
-      accessorKey: "defaultDepreciationYears",
-      cell: ({ row }) => {
-        const years = row.original.defaultDepreciationYears
-        if (!years) return <span className="text-muted-foreground">—</span>
-        return <span className="text-sm">{years} years</span>
       },
       size: 100,
     },
@@ -298,43 +317,36 @@ export default function CategoriesPage() {
       header: "Actions",
       cell: ({ row }) => {
         const category = row.original
+        const hasChildrenOrAssets = (category.childCount ?? 0) > 0 || (category.assetCount ?? 0) > 0
         
         return (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-8 w-8"
-                onClick={(e) => e.stopPropagation()}
-              >
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
                 <MoreHorizontal className="h-4 w-4" />
                 <span className="sr-only">Actions</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
               {canEdit && (
-                <DropdownMenuItem 
-                  onSelect={(e) => { 
-                    e.preventDefault()
-                    setSelectedCategory(category)
-                    setEditOpen(true)
-                  }}
-                >
+                <DropdownMenuItem onSelect={() => { setSelectedCategory(category); setEditOpen(true) }}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
+                </DropdownMenuItem>
+              )}
+              {canCreate && (
+                <DropdownMenuItem onSelect={() => { setParentIdForCreate(category.id); setCreateOpen(true) }}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Sub-Category
                 </DropdownMenuItem>
               )}
               {canDelete && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
-                    onSelect={(e) => { 
-                      e.preventDefault()
-                      setSelectedCategory(category)
-                      setDeleteOpen(true)
-                    }}
+                    onSelect={() => { setSelectedCategory(category); setDeleteOpen(true) }}
                     className="text-destructive"
+                    disabled={hasChildrenOrAssets}
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete
@@ -355,11 +367,11 @@ export default function CategoriesPage() {
     try {
       const category = await createMutation.mutateAsync({
         ...values,
-        // Convert __none__ placeholder to undefined
         parentId: values.parentId === "__none__" ? undefined : values.parentId || undefined,
       })
       toast.success(`Category "${category.name}" has been created`)
       setCreateOpen(false)
+      setParentIdForCreate(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create category")
     }
@@ -372,7 +384,6 @@ export default function CategoriesPage() {
         id: selectedCategory.id, 
         data: {
           ...values,
-          // Convert __none__ placeholder to null
           parentId: values.parentId === "__none__" ? null : values.parentId || null,
         }
       })
@@ -396,6 +407,47 @@ export default function CategoriesPage() {
     }
   }
   
+  // Chart designer handlers
+  const handleChartSave = async (updates: Array<{ id: string; positionX: number; positionY: number; level?: number }>) => {
+    try {
+      await bulkUpdateMutation.mutateAsync({ updates })
+      toast.success("Category positions saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save positions")
+    }
+  }
+  
+  const handleChartUpdateParent = async (categoryId: string, newParentId: string | null) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: categoryId,
+        data: { parentId: newParentId },
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update parent")
+    }
+  }
+  
+  // Tree/Chart add handlers
+  const handleTreeAdd = (parentId?: string | null) => {
+    setParentIdForCreate(parentId || null)
+    setCreateOpen(true)
+  }
+  
+  const handleTreeSelect = (category: AssetCategory | null) => {
+    setSelectedCategory(category)
+  }
+  
+  const handleTreeEdit = (category: AssetCategory) => {
+    setSelectedCategory(category)
+    setEditOpen(true)
+  }
+  
+  const handleTreeDelete = (category: AssetCategory) => {
+    setSelectedCategory(category)
+    setDeleteOpen(true)
+  }
+  
   if (!canAccess) {
     return (
       <PageShell title="Categories">
@@ -409,10 +461,7 @@ export default function CategoriesPage() {
 
   if (error) {
     return (
-      <PageShell
-        title="Categories"
-        description="Manage asset categories and types."
-      >
+      <PageShell title="Categories" description="Manage asset categories and types.">
         <div className="flex items-center justify-center h-64 text-destructive">
           Failed to load categories
         </div>
@@ -426,7 +475,7 @@ export default function CategoriesPage() {
       description="Organize assets into categories for better management."
       action={
         <Protected module="assets.categories" action="create">
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => { setParentIdForCreate(null); setCreateOpen(true) }}>
             <Plus className="mr-2 h-4 w-4" />
             Add Category
           </Button>
@@ -434,51 +483,144 @@ export default function CategoriesPage() {
       }
     >
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>All Categories</CardTitle>
-            <CardDescription>
-              Categories help organize your assets by type. Sub-categories are indented under their parent.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable
-              columns={columns}
-              data={organizedCategories}
-              loading={isLoading}
-              searchKey="name"
-              searchPlaceholder="Search categories..."
-              enableSorting
-              emptyState={
-                <div className="text-center py-12">
-                  <FolderTree className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                  <h3 className="mt-4 text-lg font-semibold">No categories yet</h3>
-                  <p className="text-muted-foreground mt-2 mb-4">
-                    Get started by creating your first asset category.
-                  </p>
-                  <Protected module="assets.categories" action="create">
-                    <Button onClick={() => setCreateOpen(true)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create first category
-                    </Button>
-                  </Protected>
-                </div>
-              }
-            />
-          </CardContent>
-        </Card>
+        {/* Stats */}
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard
+            title="Total Categories"
+            value={stats.total}
+            icon={FolderTree}
+            iconColor="bg-primary/10 text-primary"
+          />
+          <StatCard
+            title="Top-Level"
+            value={stats.topLevel}
+            icon={Layers}
+            iconColor="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+          />
+          <StatCard
+            title="With Assets"
+            value={stats.withAssets}
+            icon={Package}
+            iconColor="bg-green-500/10 text-green-600 dark:text-green-400"
+          />
+          <StatCard
+            title="Empty"
+            value={stats.empty}
+            icon={FolderOpen}
+            iconColor="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+          />
+        </div>
+        
+        {/* View Tabs */}
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as typeof viewMode)}>
+          <TabsList>
+            <TabsTrigger value="tree" className="gap-2">
+              <TreeDeciduous className="h-4 w-4" />
+              Tree View
+            </TabsTrigger>
+            <TabsTrigger value="chart" className="gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              Chart
+            </TabsTrigger>
+            <TabsTrigger value="table" className="gap-2">
+              <Table2 className="h-4 w-4" />
+              Table
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="tree" className="mt-4">
+            <Card>
+              <CardContent className="p-0">
+                <CategoryTreeView
+                  categories={categories}
+                  selectedCategoryId={selectedCategory?.id}
+                  onSelect={handleTreeSelect}
+                  onAdd={handleTreeAdd}
+                  onEdit={handleTreeEdit}
+                  onDelete={handleTreeDelete}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  isLoading={isLoading}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="chart" className="mt-4">
+            <Card className={isChartFullscreen ? "fixed inset-0 z-50 rounded-none" : ""}>
+              <CardContent className={isChartFullscreen ? "p-0 h-full" : "p-0 h-[600px]"}>
+                <CategoryChartDesigner
+                  categories={categories}
+                  selectedCategoryId={selectedCategory?.id}
+                  onSelect={handleTreeSelect}
+                  onAdd={handleTreeAdd}
+                  onEdit={handleTreeEdit}
+                  onDelete={handleTreeDelete}
+                  onSave={handleChartSave}
+                  onUpdateParent={handleChartUpdateParent}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  canCreate={canCreate}
+                  isLoading={isLoading}
+                  isSaving={bulkUpdateMutation.isPending}
+                  isFullscreen={isChartFullscreen}
+                  onFullscreenChange={setIsChartFullscreen}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="table" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>All Categories</CardTitle>
+                <CardDescription>
+                  Categories help organize your assets by type. Sub-categories are indented under their parent.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={columns}
+                  data={organizedCategories}
+                  loading={isLoading}
+                  searchKey="name"
+                  searchPlaceholder="Search categories..."
+                  enableSorting
+                  emptyState={
+                    <div className="text-center py-12">
+                      <FolderTree className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                      <h3 className="mt-4 text-lg font-semibold">No categories yet</h3>
+                      <p className="text-muted-foreground mt-2 mb-4">
+                        Get started by creating your first asset category.
+                      </p>
+                      <Protected module="assets.categories" action="create">
+                        <Button onClick={() => setCreateOpen(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          Create first category
+                        </Button>
+                      </Protected>
+                    </div>
+                  }
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
       
       {/* Create Drawer */}
       <FormDrawer
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => { setCreateOpen(open); if (!open) setParentIdForCreate(null) }}
         title="Add Category"
         description="Create a new asset category"
         schema={createCategorySchema}
         config={formConfig}
         fields={formFields}
         mode="create"
+        defaultValues={{
+          parentId: parentIdForCreate || "__none__",
+        }}
         onSubmit={handleCreate}
       />
       
@@ -529,4 +671,3 @@ export default function CategoriesPage() {
     </PageShell>
   )
 }
-

@@ -77,30 +77,15 @@ interface MigrationCheck {
 
 const migrationChecks: MigrationCheck[] = [
   {
-    // Initial schema - check if core_organizations exists
-    tag: "0000_cheerful_dust",
+    // Initial schema - check if core_organizations exists (all 49 tables)
+    tag: "0000_right_flatman",
     verify: async (pool) => tableExists(pool, "core_organizations"),
   },
-  {
-    // People settings - check if people_settings table exists
-    tag: "0001_add_people_settings",
-    verify: async (pool) => tableExists(pool, "people_settings"),
-  },
-  {
-    // People sync fields - check if source column exists on people_persons
-    tag: "0002_furry_smasher",
-    verify: async (pool) => columnExists(pool, "people_persons", "source"),
-  },
-  {
-    // Entra fields - check if entra_created_at column exists on people_persons
-    tag: "0003_add_people_entra_fields",
-    verify: async (pool) => columnExists(pool, "people_persons", "entra_created_at"),
-  },
-  {
-    // Audit logs - check if audit_logs table exists
-    tag: "0004_add_audit_logs",
-    verify: async (pool) => tableExists(pool, "audit_logs"),
-  },
+  // Add new migration checks here as you create migrations:
+  // {
+  //   tag: "0001_<migration_name>",
+  //   verify: async (pool) => tableExists(pool, "new_table") || columnExists(pool, "table", "new_column"),
+  // },
 ]
 
 /**

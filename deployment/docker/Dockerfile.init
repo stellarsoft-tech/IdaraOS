@@ -2,17 +2,18 @@
 # IdaraOS - Database Initialization Container
 # =============================================================================
 #
-# WORKFLOW (Prototyping Phase):
-# -----------------------------
-# Uses db:push to directly sync schema to database (no migration files needed)
-# Schema changes: Edit apps/web/lib/db/schema/*.ts and redeploy
+# PRODUCTION WORKFLOW:
+# --------------------
+# Uses Drizzle migrations for safe, versioned schema changes:
+# 1. Developer makes schema changes in apps/web/lib/db/schema/*.ts
+# 2. Developer runs: pnpm --filter web db:generate
+# 3. Developer commits migration files in apps/web/drizzle/
+# 4. On deployment, this container runs migrations automatically
 #
-# FUTURE (Production with real data):
-# -----------------------------------
-# Switch to migrations when you have production data:
-# 1. Generate: pnpm --filter web db:generate
-# 2. Commit migration files
-# 3. Change this container to use db:migrate:run
+# DEVELOPMENT/PROTOTYPING:
+# ------------------------
+# For rapid iteration without migrations, use docker-compose.dev.yml
+# which uses Dockerfile.init.dev with db:push instead
 #
 # =============================================================================
 
@@ -29,20 +30,27 @@ RUN pnpm install --frozen-lockfile
 
 COPY apps/web ./apps/web
 
-ENV NODE_ENV=development
+ENV NODE_ENV=production
 
 CMD ["sh", "-c", "\
 echo '=========================================='; \
-echo 'IdaraOS Database Schema Push'; \
+echo 'IdaraOS Database Migrations'; \
 echo '=========================================='; \
 cd /app/apps/web; \
 \
 echo ''; \
-echo '📋 Pushing schema to database...'; \
-npx drizzle-kit push --force; \
+echo '📋 Running database migrations...'; \
+pnpm db:migrate:run; \
 \
-if [ $? -ne 0 ]; then \
-  echo '❌ Schema push failed!'; \
+MIGRATE_EXIT=$?; \
+if [ $MIGRATE_EXIT -ne 0 ]; then \
+  echo ''; \
+  echo '❌ Migration failed with exit code: '$MIGRATE_EXIT; \
+  echo ''; \
+  echo 'Troubleshooting:'; \
+  echo '  1. Check if DATABASE_URL is correct'; \
+  echo '  2. Check migration status: pnpm db:migrate:status'; \
+  echo '  3. For db:push databases, run: pnpm db:baseline'; \
   exit 1; \
 fi; \
 \
@@ -55,9 +63,11 @@ echo '📋 Seeding RBAC...'; \
 pnpm db:seed-rbac 2>&1 || true; \
 \
 echo ''; \
+echo '📋 Running post-migration hooks...'; \
+pnpm db:post-migrate 2>&1 || true; \
+\
+echo ''; \
 echo '=========================================='; \
 echo '✅ Database ready!'; \
 echo '=========================================='; \
-echo ''; \
-echo 'Credentials: admin@example.com / Admin123!'; \
 "]

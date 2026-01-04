@@ -1,0 +1,60 @@
+# =============================================================================
+# IdaraOS - Database Initialization Container (Development/Prototyping)
+# =============================================================================
+#
+# WARNING: This file uses db:push which can DROP tables and lose data!
+# Only use this for local development when you don't care about data loss.
+#
+# For production or when you have data you want to keep, use Dockerfile.init
+# which uses proper migrations.
+#
+# =============================================================================
+
+FROM node:22-alpine
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/
+
+RUN pnpm install --frozen-lockfile
+
+COPY apps/web ./apps/web
+
+ENV NODE_ENV=development
+
+CMD ["sh", "-c", "\
+echo '=========================================='; \
+echo 'IdaraOS Database Schema Push (DEV MODE)'; \
+echo '=========================================='; \
+echo ''; \
+echo '⚠️  WARNING: Using db:push - data may be lost!'; \
+echo '    For production, use Dockerfile.init with migrations.'; \
+echo ''; \
+cd /app/apps/web; \
+\
+echo '📋 Pushing schema to database...'; \
+npx drizzle-kit push --force; \
+\
+if [ $? -ne 0 ]; then \
+  echo '❌ Schema push failed!'; \
+  exit 1; \
+fi; \
+\
+echo ''; \
+echo '📋 Seeding database...'; \
+pnpm db:seed 2>&1 || true; \
+\
+echo ''; \
+echo '📋 Seeding RBAC...'; \
+pnpm db:seed-rbac 2>&1 || true; \
+\
+echo ''; \
+echo '=========================================='; \
+echo '✅ Database ready!'; \
+echo '=========================================='; \
+echo ''; \
+echo 'Credentials: admin@example.com / Admin123!'; \
+"]

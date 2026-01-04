@@ -14,10 +14,18 @@ export interface AssetCategory {
   name: string
   slug: string
   description?: string
-  parentId?: string
+  parentId?: string | null
   icon: string
   color: string
   defaultDepreciationYears?: number
+  // Hierarchy and chart designer fields
+  level: number
+  sortOrder: number
+  positionX: number
+  positionY: number
+  // Computed fields
+  childCount?: number
+  assetCount?: number
   createdAt: string
   updatedAt: string
 }
@@ -117,6 +125,10 @@ export interface CreateCategory {
   icon?: string
   color?: string
   defaultDepreciationYears?: number
+  level?: number
+  sortOrder?: number
+  positionX?: number
+  positionY?: number
 }
 
 export interface UpdateCategory {
@@ -126,6 +138,22 @@ export interface UpdateCategory {
   icon?: string
   color?: string
   defaultDepreciationYears?: number | null
+  level?: number
+  sortOrder?: number
+  positionX?: number
+  positionY?: number
+}
+
+/** Bulk update payload for category positions (from chart designer) */
+export interface BulkUpdateCategories {
+  updates: Array<{
+    id: string
+    positionX?: number
+    positionY?: number
+    parentId?: string | null
+    level?: number
+    sortOrder?: number
+  }>
 }
 
 export interface Assignment {
@@ -415,6 +443,21 @@ async function deleteCategory(id: string): Promise<void> {
   }
 }
 
+async function bulkUpdateCategories(data: BulkUpdateCategories): Promise<{ success: boolean; updatedCount: number }> {
+  const res = await fetch(CATEGORIES_BASE, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: "Failed to bulk update categories" }))
+    throw new Error(error.error || "Failed to bulk update categories")
+  }
+  
+  return res.json()
+}
+
 // Assignments
 
 async function fetchAssignments(filters?: { personId?: string; assetId?: string; includeReturned?: boolean }): Promise<Assignment[]> {
@@ -598,6 +641,17 @@ export function useDeleteCategory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: categoriesKeys.lists() })
       queryClient.invalidateQueries({ queryKey: assetsKeys.lists() })
+    },
+  })
+}
+
+export function useBulkUpdateCategories() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: bulkUpdateCategories,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: categoriesKeys.lists() })
     },
   })
 }

@@ -22,6 +22,7 @@
     "db:startup": "tsx scripts/startup-migrations.ts",
     "db:status": "tsx scripts/migrate.ts status",
     "db:check": "tsx scripts/check-migrations.ts --check",
+    "db:check:ci": "tsx scripts/check-migrations.ts --ci --skip-db",
     "db:baseline": "tsx scripts/baseline-migrations.ts",
     "db:repair": "tsx scripts/migrate.ts fix",
     "db:push": "drizzle-kit push",
