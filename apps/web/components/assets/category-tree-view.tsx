@@ -91,6 +91,7 @@ export function CategoryTreeView({
   const config: HierarchyTreeConfig<CategoryTreeItem> = useMemo(() => ({
     labels: {
       itemName: "category",
+      itemNamePlural: "categories",
       addChild: "Add Sub-Category",
       editItem: "Edit Category",
       deleteItem: "Delete Category",

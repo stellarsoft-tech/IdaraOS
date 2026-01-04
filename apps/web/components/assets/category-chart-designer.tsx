@@ -75,27 +75,57 @@ const CATEGORY_COLORS = [
   { value: "pink", label: "Pink" },
 ]
 
-// Available icons for categories
+// Available icons for categories - comprehensive list
 const CATEGORY_ICONS = [
-  { value: "Box", label: "Box" },
+  // Computing devices
   { value: "Laptop", label: "Laptop" },
   { value: "Monitor", label: "Monitor" },
-  { value: "Smartphone", label: "Smartphone" },
+  { value: "Smartphone", label: "Phone" },
   { value: "Tablet", label: "Tablet" },
-  { value: "Headphones", label: "Headphones" },
+  { value: "Tv", label: "TV/Display" },
+  { value: "Watch", label: "Smartwatch" },
+  // Peripherals
   { value: "Keyboard", label: "Keyboard" },
   { value: "Mouse", label: "Mouse" },
-  { value: "Printer", label: "Printer" },
+  { value: "Headphones", label: "Headphones" },
+  { value: "Speaker", label: "Speaker" },
+  { value: "Mic", label: "Microphone" },
   { value: "Camera", label: "Camera" },
+  { value: "Video", label: "Webcam" },
+  { value: "Printer", label: "Printer" },
+  // Cables & Accessories
+  { value: "Usb", label: "USB Device" },
+  { value: "Cable", label: "Cable" },
+  { value: "Plug", label: "Charger/Adapter" },
+  { value: "Battery", label: "Battery/Power" },
+  // Infrastructure & Network
   { value: "Server", label: "Server" },
-  { value: "HardDrive", label: "Hard Drive" },
-  { value: "Cpu", label: "CPU" },
-  { value: "Wifi", label: "Network" },
+  { value: "Database", label: "Database" },
+  { value: "HardDrive", label: "Hard Drive/Storage" },
+  { value: "Cpu", label: "CPU/Processor" },
+  { value: "Router", label: "Router" },
+  { value: "Wifi", label: "Wireless" },
+  { value: "Network", label: "Network Equipment" },
+  { value: "Cloud", label: "Cloud Service" },
+  { value: "Globe", label: "Internet/Web" },
+  // Office & Furniture
+  { value: "Armchair", label: "Chair/Furniture" },
+  { value: "Lamp", label: "Lamp/Lighting" },
+  { value: "Building", label: "Building/Office" },
+  { value: "Briefcase", label: "Briefcase" },
+  // Vehicles
   { value: "Car", label: "Vehicle" },
-  { value: "Building", label: "Furniture" },
-  { value: "Wrench", label: "Tools" },
+  { value: "Truck", label: "Truck/Delivery" },
+  // Generic
+  { value: "Box", label: "Box/Container" },
   { value: "Package", label: "Package" },
+  { value: "Tag", label: "Tagged Item" },
+  { value: "Folder", label: "Folder" },
+  { value: "Archive", label: "Archive" },
   { value: "FolderTree", label: "Category" },
+  { value: "Wrench", label: "Tools/Equipment" },
+  { value: "Settings", label: "Settings/Config" },
+  { value: "Star", label: "Special Item" },
 ]
 
 // Color mapping for badges

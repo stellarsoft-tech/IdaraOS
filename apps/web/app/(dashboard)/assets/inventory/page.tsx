@@ -18,6 +18,42 @@ import {
   Phone,
   Tablet,
   RefreshCw,
+  // Additional icons for categories
+  Keyboard,
+  Headphones,
+  Server,
+  Printer,
+  Package,
+  Mouse,
+  Usb,
+  Cable,
+  Plug,
+  Speaker,
+  Mic,
+  Video,
+  Camera,
+  Armchair,
+  Lamp,
+  Building,
+  Briefcase,
+  Router,
+  Wifi,
+  Network,
+  Globe,
+  Cloud,
+  Database,
+  Cpu,
+  Tag,
+  Folder,
+  Archive,
+  Settings,
+  Star,
+  Tv,
+  Watch,
+  Battery,
+  Truck,
+  Car,
+  FolderTree,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -82,8 +118,61 @@ import {
   type UpdateAsset,
 } from "@/lib/api/assets"
 
-// Icon mapping for asset categories
-const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+// Icon mapping for asset categories (by icon name, matching category.icon field)
+const categoryIconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  // Computing devices
+  Laptop,
+  Monitor,
+  Phone,
+  Tablet,
+  Tv,
+  Watch,
+  // Peripherals
+  Keyboard,
+  Mouse,
+  Headphones,
+  Speaker,
+  Mic,
+  Camera,
+  Video,
+  Printer,
+  // Cables & Accessories
+  Usb,
+  Cable,
+  Plug,
+  Battery,
+  // Infrastructure & Network
+  Server,
+  Database,
+  HardDrive,
+  Cpu,
+  Router,
+  Wifi,
+  Network,
+  Cloud,
+  Globe,
+  // Office & Furniture
+  Armchair,
+  Lamp,
+  Building,
+  Briefcase,
+  // Vehicles
+  Car,
+  Truck,
+  // Generic
+  Box,
+  Package,
+  Tag,
+  Folder,
+  Archive,
+  FolderTree,
+  Wrench,
+  Settings,
+  Star,
+}
+
+// Legacy slug-based lookup (for backward compatibility)
+const categorySlugIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   laptop: Laptop,
   laptops: Laptop,
   desktop: Monitor,
@@ -100,7 +189,12 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
 function getCategoryIcon(categorySlug?: string | null): React.ComponentType<{ className?: string }> {
   if (!categorySlug) return Box
   const key = categorySlug.toLowerCase()
-  return categoryIcons[key] || categoryIcons.default
+  return categorySlugIcons[key] || categorySlugIcons.default
+}
+
+function getCategoryIconByName(iconName?: string): React.ComponentType<{ className?: string }> {
+  if (!iconName) return Box
+  return categoryIconMap[iconName] || Box
 }
 
 // Status badge colors - using available Badge variants
@@ -258,12 +352,16 @@ export default function InventoryPage() {
     return { total, available, assigned, maintenance }
   }, [assets])
   
-  // Form config with dynamic categories
+  // Form config with dynamic categories (including icons)
   const dynamicFormConfig = useMemo(() => ({
     ...formConfig,
     categoryId: {
       ...formConfig.categoryId,
-      options: categories.map(c => ({ value: c.id, label: c.name })),
+      options: categories.map(c => ({ 
+        value: c.id, 
+        label: c.name,
+        icon: getCategoryIconByName(c.icon),
+      })),
     },
   }), [categories])
   

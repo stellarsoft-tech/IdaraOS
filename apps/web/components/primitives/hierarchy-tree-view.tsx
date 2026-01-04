@@ -46,6 +46,7 @@ export interface HierarchyTreeConfig<TItem extends HierarchyItem> {
   /** Custom labels */
   labels?: {
     itemName?: string // e.g., "Role", "Category"
+    itemNamePlural?: string // e.g., "Roles", "Categories" (for irregular plurals)
     addChild?: string // e.g., "Add Sub-Role", "Add Sub-Category"
     editItem?: string // e.g., "Edit Role", "Edit Category"
     deleteItem?: string // e.g., "Delete Role", "Delete Category"
@@ -392,7 +393,7 @@ export function HierarchyTreeView<TItem extends HierarchyItem>({
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="text-sm text-muted-foreground">
-          {items.length} {itemName}{items.length !== 1 ? "s" : ""}
+          {items.length} {items.length !== 1 ? (labels.itemNamePlural || `${itemName}s`) : itemName}
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={handleExpandAll}>

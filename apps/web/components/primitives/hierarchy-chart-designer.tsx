@@ -398,8 +398,26 @@ export function HierarchyChartDesigner<TItem extends HierarchyChartItem>({
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isFullscreen, toggleFullscreen])
   
-  // Convert items to nodes
-  const initialNodes = useMemo(() => items.map(item => itemToNode(item, config)), [items, config])
+  // Convert items to nodes - apply auto-layout if all positions are 0,0
+  const initialNodes = useMemo(() => {
+    const needsAutoLayout = items.length > 0 && items.every(item => 
+      item.positionX === 0 && item.positionY === 0
+    )
+    
+    if (needsAutoLayout) {
+      const positions = autoLayout(items)
+      return items.map(item => {
+        const pos = positions.get(item.id)
+        const node = itemToNode(item, config)
+        if (pos) {
+          return { ...node, position: pos }
+        }
+        return node
+      })
+    }
+    
+    return items.map(item => itemToNode(item, config))
+  }, [items, config])
   const initialEdges = useMemo(() => createEdges(items), [items])
   
   // React Flow state
@@ -428,11 +446,34 @@ export function HierarchyChartDesigner<TItem extends HierarchyChartItem>({
   
   // Sync nodes from items
   useEffect(() => {
-    setNodes(prevNodes => {
-      const existingNodes = items.map(item => itemToNode(item, config))
-      const draftNodesInState = prevNodes.filter(n => n.id.startsWith("draft-"))
-      return [...existingNodes, ...draftNodesInState]
-    })
+    // Check if all items have default positions (0,0) - need auto-layout
+    const needsAutoLayout = items.length > 0 && items.every(item => 
+      item.positionX === 0 && item.positionY === 0
+    )
+    
+    if (needsAutoLayout) {
+      // Apply auto-layout when positions haven't been set
+      const positions = autoLayout(items)
+      
+      setNodes(prevNodes => {
+        const existingNodes = items.map(item => {
+          const pos = positions.get(item.id)
+          const node = itemToNode(item, config)
+          if (pos) {
+            return { ...node, position: pos }
+          }
+          return node
+        })
+        const draftNodesInState = prevNodes.filter(n => n.id.startsWith("draft-"))
+        return [...existingNodes, ...draftNodesInState]
+      })
+    } else {
+      setNodes(prevNodes => {
+        const existingNodes = items.map(item => itemToNode(item, config))
+        const draftNodesInState = prevNodes.filter(n => n.id.startsWith("draft-"))
+        return [...existingNodes, ...draftNodesInState]
+      })
+    }
     
     setEdges(prevEdges => {
       const existingEdges = createEdges(items)

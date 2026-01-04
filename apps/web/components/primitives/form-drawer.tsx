@@ -38,7 +38,7 @@ export interface FormFieldDef {
   required?: boolean
   helpText?: string
   type?: string // for input: text, email, password, number, tel, etc.
-  options?: Array<{ value: string; label: string }>
+  options?: Array<{ value: string; label: string; icon?: React.ComponentType<{ className?: string }>; color?: string }>
   loadOptions?: (search: string) => Promise<Array<{ value: string; label: string }>>
   disabled?: boolean
   // Sync indicator - shows where data comes from or syncs to
@@ -57,7 +57,7 @@ export interface FieldConfig {
   required?: boolean
   helpText?: string
   type?: string
-  options?: Array<{ value: string; label: string }>
+  options?: Array<{ value: string; label: string; icon?: React.ComponentType<{ className?: string }>; color?: string }>
   loadOptions?: (search: string) => Promise<Array<{ value: string; label: string }>>
   ref?: string
   disabled?: boolean
@@ -334,6 +334,40 @@ function SyncIndicator({ type, entraFieldName }: { type: SyncIndicatorType; entr
 }
 
 /**
+ * Color swatch component for select options
+ */
+const colorHexMap: Record<string, string> = {
+  gray: "#6b7280",
+  red: "#ef4444",
+  orange: "#f97316",
+  amber: "#f59e0b",
+  yellow: "#eab308",
+  lime: "#84cc16",
+  green: "#22c55e",
+  emerald: "#10b981",
+  teal: "#14b8a6",
+  cyan: "#06b6d4",
+  sky: "#0ea5e9",
+  blue: "#3b82f6",
+  indigo: "#6366f1",
+  violet: "#8b5cf6",
+  purple: "#a855f7",
+  fuchsia: "#d946ef",
+  pink: "#ec4899",
+  rose: "#f43f5e",
+}
+
+function ColorSwatch({ color }: { color: string }) {
+  const hex = colorHexMap[color] || colorHexMap.gray
+  return (
+    <span 
+      className="h-3 w-3 rounded-full shrink-0 border border-border"
+      style={{ backgroundColor: hex }}
+    />
+  )
+}
+
+/**
  * Async Select Field Component - loads options and renders a Select dropdown
  */
 function AsyncSelectField({
@@ -448,7 +482,13 @@ function renderFormControl(
           <SelectContent>
             {fieldDef.options?.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.label}
+                <span className="flex items-center gap-2">
+                  {option.icon && <option.icon className="h-4 w-4 text-muted-foreground" />}
+                  {option.color && (
+                    <ColorSwatch color={option.color} />
+                  )}
+                  {option.label}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>

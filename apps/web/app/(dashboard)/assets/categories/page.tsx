@@ -22,6 +22,41 @@ import {
   Table2,
   Layers,
   FolderOpen,
+  // Additional peripherals
+  Mouse,
+  Usb,
+  Cable,
+  Plug,
+  Speaker,
+  Mic,
+  Video,
+  Camera,
+  // Office/Furniture
+  Armchair,
+  Lamp,
+  Building,
+  Briefcase,
+  // Network/Infrastructure
+  Router,
+  Wifi,
+  Network,
+  Globe,
+  Cloud,
+  Database,
+  HardDrive,
+  Cpu,
+  // Generic
+  Tag,
+  Folder,
+  Archive,
+  Wrench,
+  Settings,
+  Star,
+  Tv,
+  Watch,
+  Battery,
+  Truck,
+  Car,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -53,6 +88,7 @@ import {
 import { Protected, AccessDenied } from "@/components/primitives/protected"
 import { StatCard } from "@/components/stat-card"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
+import { cn } from "@/lib/utils"
 import { z } from "zod"
 
 // Category components
@@ -71,31 +107,109 @@ import {
   type UpdateCategory,
 } from "@/lib/api/assets"
 
-// Icon mapping
+// Icon mapping - expanded with peripherals, office, network, and generic options
 const iconOptions = [
-  { value: "Box", label: "Box", Icon: Box },
+  // Computing devices
   { value: "Laptop", label: "Laptop", Icon: Laptop },
   { value: "Monitor", label: "Monitor", Icon: Monitor },
   { value: "Phone", label: "Phone", Icon: Phone },
   { value: "Tablet", label: "Tablet", Icon: Tablet },
+  { value: "Tv", label: "TV/Display", Icon: Tv },
+  { value: "Watch", label: "Smartwatch", Icon: Watch },
+  // Peripherals
   { value: "Keyboard", label: "Keyboard", Icon: Keyboard },
+  { value: "Mouse", label: "Mouse", Icon: Mouse },
   { value: "Headphones", label: "Headphones", Icon: Headphones },
-  { value: "Server", label: "Server", Icon: Server },
+  { value: "Speaker", label: "Speaker", Icon: Speaker },
+  { value: "Mic", label: "Microphone", Icon: Mic },
+  { value: "Camera", label: "Camera", Icon: Camera },
+  { value: "Video", label: "Webcam", Icon: Video },
   { value: "Printer", label: "Printer", Icon: Printer },
+  // Cables & Accessories
+  { value: "Usb", label: "USB Device", Icon: Usb },
+  { value: "Cable", label: "Cable", Icon: Cable },
+  { value: "Plug", label: "Charger/Adapter", Icon: Plug },
+  { value: "Battery", label: "Battery/Power", Icon: Battery },
+  // Infrastructure & Network
+  { value: "Server", label: "Server", Icon: Server },
+  { value: "Database", label: "Database", Icon: Database },
+  { value: "HardDrive", label: "Hard Drive/Storage", Icon: HardDrive },
+  { value: "Cpu", label: "CPU/Processor", Icon: Cpu },
+  { value: "Router", label: "Router", Icon: Router },
+  { value: "Wifi", label: "Wireless", Icon: Wifi },
+  { value: "Network", label: "Network Equipment", Icon: Network },
+  { value: "Cloud", label: "Cloud Service", Icon: Cloud },
+  { value: "Globe", label: "Internet/Web", Icon: Globe },
+  // Office & Furniture
+  { value: "Armchair", label: "Chair/Furniture", Icon: Armchair },
+  { value: "Lamp", label: "Lamp/Lighting", Icon: Lamp },
+  { value: "Building", label: "Building/Office", Icon: Building },
+  { value: "Briefcase", label: "Briefcase", Icon: Briefcase },
+  // Vehicles & Transport
+  { value: "Car", label: "Vehicle", Icon: Car },
+  { value: "Truck", label: "Truck/Delivery", Icon: Truck },
+  // Generic
+  { value: "Box", label: "Box/Container", Icon: Box },
   { value: "Package", label: "Package", Icon: Package },
+  { value: "Tag", label: "Tagged Item", Icon: Tag },
+  { value: "Folder", label: "Folder", Icon: Folder },
+  { value: "Archive", label: "Archive", Icon: Archive },
+  { value: "FolderTree", label: "Category", Icon: FolderTree },
+  { value: "Wrench", label: "Tools/Equipment", Icon: Wrench },
+  { value: "Settings", label: "Settings/Config", Icon: Settings },
+  { value: "Star", label: "Special Item", Icon: Star },
 ]
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  Box,
+  // Computing devices
   Laptop,
   Monitor,
   Phone,
   Tablet,
+  Tv,
+  Watch,
+  // Peripherals
   Keyboard,
+  Mouse,
   Headphones,
-  Server,
+  Speaker,
+  Mic,
+  Camera,
+  Video,
   Printer,
+  // Cables & Accessories
+  Usb,
+  Cable,
+  Plug,
+  Battery,
+  // Infrastructure & Network
+  Server,
+  Database,
+  HardDrive,
+  Cpu,
+  Router,
+  Wifi,
+  Network,
+  Cloud,
+  Globe,
+  // Office & Furniture
+  Armchair,
+  Lamp,
+  Building,
+  Briefcase,
+  // Vehicles
+  Car,
+  Truck,
+  // Generic
+  Box,
   Package,
+  Tag,
+  Folder,
+  Archive,
+  FolderTree,
+  Wrench,
+  Settings,
+  Star,
 }
 
 function getIcon(iconName: string): React.ComponentType<{ className?: string }> {
@@ -123,6 +237,28 @@ const colorOptions = [
   { value: "pink", label: "Pink" },
   { value: "rose", label: "Rose" },
 ]
+
+// Color badge variants with proper contrast
+const colorVariants: Record<string, string> = {
+  gray: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  red: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  orange: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  amber: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  yellow: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  lime: "bg-lime-100 text-lime-800 dark:bg-lime-900 dark:text-lime-200",
+  green: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  emerald: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+  teal: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200",
+  cyan: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200",
+  sky: "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200",
+  blue: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  indigo: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+  violet: "bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200",
+  purple: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  fuchsia: "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900 dark:text-fuchsia-200",
+  pink: "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200",
+  rose: "bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-200",
+}
 
 // Form schemas
 const createCategorySchema = z.object({
@@ -188,12 +324,12 @@ export default function CategoriesPage() {
     icon: { 
       component: "select" as const,
       label: "Icon", 
-      options: iconOptions.map(o => ({ value: o.value, label: o.label })),
+      options: iconOptions.map(o => ({ value: o.value, label: o.label, icon: o.Icon })),
     },
     color: { 
       component: "select" as const,
       label: "Color", 
-      options: colorOptions,
+      options: colorOptions.map(c => ({ value: c.value, label: c.label, color: c.value })),
     },
     defaultDepreciationYears: { 
       component: "input" as const,
@@ -205,25 +341,9 @@ export default function CategoriesPage() {
   
   const formFields = ["name", "description", "parentId", "icon", "color", "defaultDepreciationYears"]
   
-  // Organize categories into tree structure for table display
-  const organizedCategories = useMemo(() => {
-    const topLevel = categories.filter(c => !c.parentId)
-    const children = categories.filter(c => c.parentId)
-    
-    topLevel.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-    children.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-    
-    const result: AssetCategory[] = []
-    for (const parent of topLevel) {
-      result.push(parent)
-      const parentChildren = children.filter(c => c.parentId === parent.id)
-      result.push(...parentChildren)
-    }
-    
-    const orphans = children.filter(c => !topLevel.some(p => p.id === c.parentId))
-    result.push(...orphans)
-    
-    return result
+  // Simple alphabetical sort for flat table view
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name))
   }, [categories])
   
   // Table columns
@@ -235,17 +355,13 @@ export default function CategoriesPage() {
       cell: ({ row }) => {
         const category = row.original
         const Icon = getIcon(category.icon)
-        const isChild = !!category.parentId
         
         return (
-          <div className={`flex items-center gap-3 ${isChild ? "ml-8" : ""}`}>
+          <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded flex items-center justify-center bg-muted">
               <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
-            <div className="flex items-center gap-2">
-              {isChild && <span className="text-muted-foreground">└</span>}
-              <span className="font-medium">{category.name}</span>
-            </div>
+            <span className="font-medium">{category.name}</span>
           </div>
         )
       },
@@ -266,6 +382,25 @@ export default function CategoriesPage() {
         )
       },
       size: 200,
+    },
+    {
+      id: "parent",
+      header: "Parent",
+      accessorKey: "parentId",
+      cell: ({ row }) => {
+        const parentId = row.original.parentId
+        if (!parentId) return <span className="text-muted-foreground">—</span>
+        const parent = categories.find(c => c.id === parentId)
+        if (!parent) return <span className="text-muted-foreground">—</span>
+        const ParentIcon = getIcon(parent.icon)
+        return (
+          <div className="flex items-center gap-2">
+            <ParentIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-sm">{parent.name}</span>
+          </div>
+        )
+      },
+      size: 150,
     },
     {
       id: "assetCount",
@@ -305,7 +440,7 @@ export default function CategoriesPage() {
       cell: ({ row }) => {
         const color = row.original.color
         return (
-          <Badge variant="outline" className="text-xs capitalize">
+          <Badge className={cn("text-xs capitalize border-0", colorVariants[color] || colorVariants.gray)}>
             {color}
           </Badge>
         )
@@ -528,8 +663,8 @@ export default function CategoriesPage() {
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="tree" className="mt-4">
-            <Card>
+          <TabsContent value="tree">
+            <Card className="py-0">
               <CardContent className="p-0">
                 <CategoryTreeView
                   categories={categories}
@@ -546,8 +681,8 @@ export default function CategoriesPage() {
             </Card>
           </TabsContent>
           
-          <TabsContent value="chart" className="mt-4">
-            <Card className={isChartFullscreen ? "fixed inset-0 z-50 rounded-none" : ""}>
+          <TabsContent value="chart">
+            <Card className={isChartFullscreen ? "fixed inset-0 z-50 rounded-none py-0" : "py-0"}>
               <CardContent className={isChartFullscreen ? "p-0 h-full" : "p-0 h-[600px]"}>
                 <CategoryChartDesigner
                   categories={categories}
@@ -570,18 +705,18 @@ export default function CategoriesPage() {
             </Card>
           </TabsContent>
           
-          <TabsContent value="table" className="mt-4">
+          <TabsContent value="table">
             <Card>
               <CardHeader>
                 <CardTitle>All Categories</CardTitle>
                 <CardDescription>
-                  Categories help organize your assets by type. Sub-categories are indented under their parent.
+                  Categories help organize your assets by type. Use the Parent column to see hierarchy.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <DataTable
                   columns={columns}
-                  data={organizedCategories}
+                  data={sortedCategories}
                   loading={isLoading}
                   searchKey="name"
                   searchPlaceholder="Search categories..."
