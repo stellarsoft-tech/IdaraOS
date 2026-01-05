@@ -15,6 +15,13 @@
       "when": 1767541449737,
       "tag": "0001_first_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1767568530525,
+      "tag": "0002_tranquil_miracleman",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,12 @@ import Link from "next/link"
 import { 
   ArrowLeft,
   CheckCircle,
+  Download,
+  FileText,
+  FolderArchive,
+  Loader2,
+  MoreHorizontal,
+  Paperclip,
   XCircle,
   Pause,
   Play,
@@ -18,6 +24,8 @@ import {
   Maximize2,
   Minimize2,
   Pencil,
+  Trash2,
+  Upload,
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatDistanceToNow, format } from "date-fns"
@@ -67,6 +75,20 @@ import {
   type WorkflowInstanceStep,
 } from "@/lib/api/workflows"
 import { usePeopleList } from "@/lib/api/people"
+import { FileUpload, CompactFileUpload } from "@/components/primitives/file-upload"
+import {
+  useEntityFiles,
+  useDeleteFile,
+  downloadFile,
+  type FileRecord,
+} from "@/lib/api/files"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -637,6 +659,18 @@ export default function WorkflowInstanceDetailPage({ params }: PageProps) {
                 disabled={showStepDialog?.status === "completed" || instance.status === "completed"}
               />
             </div>
+            
+            <Separator />
+            
+            {/* Attachments */}
+            {showStepDialog && (
+              <StepAttachments
+                stepId={showStepDialog.id}
+                stepName={showStepDialog.name}
+                instanceId={instance.id}
+                readOnly={showStepDialog.status === "completed" || instance.status === "completed"}
+              />
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowStepDialog(null)}>
@@ -932,3 +966,173 @@ function InstanceGraphView({ instance, fullscreen = false }: InstanceGraphViewPr
   )
 }
 
+// ============================================================================
+// Step Attachments Component
+// ============================================================================
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "Unknown"
+  if (bytes === 0) return "0 B"
+  const k = 1024
+  const sizes = ["B", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+interface StepAttachmentsProps {
+  stepId: string
+  stepName: string
+  instanceId: string
+  readOnly?: boolean
+}
+
+function StepAttachments({ stepId, stepName, instanceId, readOnly }: StepAttachmentsProps) {
+  const [showUpload, setShowUpload] = useState(false)
+  const [deletingFile, setDeletingFile] = useState<FileRecord | null>(null)
+  
+  const { data: filesData, isLoading } = useEntityFiles("workflow_step", stepId)
+  const deleteMutation = useDeleteFile()
+  
+  const files = filesData?.data ?? []
+  
+  const handleDownload = async (file: FileRecord) => {
+    try {
+      await downloadFile(file.id, file.name)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to download file")
+    }
+  }
+  
+  const handleDelete = async () => {
+    if (!deletingFile) return
+    try {
+      await deleteMutation.mutateAsync(deletingFile.id)
+      toast.success("File deleted")
+      setDeletingFile(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete file")
+    }
+  }
+  
+  const handleUploadComplete = () => {
+    setShowUpload(false)
+    toast.success("File uploaded")
+  }
+  
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label className="flex items-center gap-2">
+          <Paperclip className="h-4 w-4" />
+          Attachments
+          {files.length > 0 && (
+            <Badge variant="secondary" className="text-xs">
+              {files.length}
+            </Badge>
+          )}
+        </Label>
+        {!readOnly && !showUpload && (
+          <Button variant="outline" size="sm" onClick={() => setShowUpload(true)}>
+            <Upload className="h-3 w-3 mr-1.5" />
+            Upload
+          </Button>
+        )}
+      </div>
+      
+      {showUpload && (
+        <div className="border rounded-lg p-3 bg-muted/30">
+          <CompactFileUpload
+            moduleScope="workflows"
+            entityType="workflow_step"
+            entityId={stepId}
+            multiple
+            maxFiles={5}
+            onUpload={handleUploadComplete}
+          />
+          <div className="mt-2 flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => setShowUpload(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+      
+      {isLoading ? (
+        <div className="py-2 text-center text-sm text-muted-foreground">
+          Loading...
+        </div>
+      ) : files.length === 0 && !showUpload ? (
+        <div className="py-3 text-center border rounded-lg border-dashed">
+          <FolderArchive className="h-6 w-6 text-muted-foreground/50 mx-auto mb-1" />
+          <p className="text-xs text-muted-foreground">
+            No attachments
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {files.map((file) => (
+            <div
+              key={file.id}
+              className="flex items-center gap-2 p-2 rounded border bg-card"
+            >
+              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{file.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatFileSize(file.size)}
+                </p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleDownload(file)}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </DropdownMenuItem>
+                  {!readOnly && (
+                    <DropdownMenuItem
+                      onClick={() => setDeletingFile(file)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* Delete Confirmation */}
+      <Dialog open={!!deletingFile} onOpenChange={(open) => !open && setDeletingFile(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Attachment</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{deletingFile?.name}&quot;?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingFile(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

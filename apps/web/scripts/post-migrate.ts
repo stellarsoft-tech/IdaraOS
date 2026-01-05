@@ -173,11 +173,14 @@ async function postMigrate() {
     return
   }
   
+  // Check if SSL should be disabled (for local Docker dev)
+  const disableSsl = process.env.DB_SSL === "false" || databaseUrl.includes("localhost") || databaseUrl.includes("db:5432")
+  
   const pool = new Pool({
     connectionString: databaseUrl,
-    ssl: process.env.NODE_ENV === "production" 
+    ssl: disableSsl ? false : (process.env.NODE_ENV === "production" 
       ? { rejectUnauthorized: false } 
-      : undefined,
+      : undefined),
   })
   
   const db = drizzle(pool)

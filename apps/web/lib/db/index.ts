@@ -6,12 +6,19 @@ import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
 import * as schema from "./schema"
 
+// Check if SSL should be disabled (for local Docker dev)
+const databaseUrl = process.env.DATABASE_URL
+const disableSsl = process.env.DB_SSL === "false" || databaseUrl?.includes("localhost") || databaseUrl?.includes("db:5432")
+
 // Connection pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  ssl: disableSsl ? false : (process.env.NODE_ENV === "production" 
+    ? { rejectUnauthorized: false } 
+    : undefined),
 })
 
 // Drizzle client with schema

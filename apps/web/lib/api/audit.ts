@@ -161,6 +161,16 @@ export function useWorkflowsAuditLogs(filters: Omit<AuditLogFilters, "modulePref
 }
 
 /**
+ * Hook to fetch audit logs for Filing module
+ */
+export function useFilingAuditLogs(filters: Omit<AuditLogFilters, "modulePrefix"> = {}) {
+  return useAuditLogs({
+    ...filters,
+    modulePrefix: "filing.",
+  })
+}
+
+/**
  * Generate export URL for audit logs
  */
 export function getAuditLogsExportUrl(

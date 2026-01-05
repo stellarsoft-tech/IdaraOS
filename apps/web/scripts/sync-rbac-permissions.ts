@@ -76,6 +76,12 @@ export const MODULE_REGISTRY = [
   { slug: "workflows.settings", name: "Settings", description: "Configure workflow module settings", category: "Workflows", icon: "Settings", sortOrder: "405", actions: ["view", "edit"] },
   { slug: "workflows.auditlog", name: "Audit Log", description: "View audit trail for Workflows module", category: "Workflows", icon: "ScrollText", sortOrder: "406", actions: ["view"] },
   
+  // Filing
+  { slug: "filing.overview", name: "Overview", description: "View filing dashboard and storage stats", category: "Filing", icon: "FolderArchive", sortOrder: "450", actions: ["view"] },
+  { slug: "filing.files", name: "Files", description: "Browse and manage all files", category: "Filing", icon: "Files", sortOrder: "451", actions: ["view", "create", "edit", "delete"] },
+  { slug: "filing.categories", name: "Categories", description: "Manage file categories and storage configuration", category: "Filing", icon: "FolderTree", sortOrder: "452", actions: ["view", "create", "edit", "delete"] },
+  { slug: "filing.auditlog", name: "Audit Log", description: "View audit trail for Filing module", category: "Filing", icon: "ScrollText", sortOrder: "453", actions: ["view"] },
+  
   // Settings
   { slug: "settings.organization", name: "Organization", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900", actions: ["view", "edit"] },
   { slug: "settings.users", name: "Users & Access", description: "Manage system users and invitations", category: "Settings", icon: "Users", sortOrder: "901", actions: ["view", "create", "edit", "delete"] },

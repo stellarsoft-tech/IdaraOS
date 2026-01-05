@@ -1,19 +1,26 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
 import { 
   AlertCircle, 
   AlertTriangle,
   Check, 
   ChevronRight, 
   Copy, 
+  Database,
   ExternalLink, 
+  FolderArchive,
   HardDrive,
   Key, 
   Loader2, 
+  Plus,
   RefreshCw, 
   Settings, 
   Shield, 
+  Trash2,
   Users, 
   Zap 
 } from "lucide-react"
@@ -42,6 +49,47 @@ import {
   useTriggerSync,
   IntegrationError,
 } from "@/lib/api/integrations"
+import {
+  useStorageIntegrationsList,
+  useCreateStorageIntegration,
+  useUpdateStorageIntegration,
+  useDeleteStorageIntegration,
+  useTestStorageIntegration,
+  type StorageIntegration,
+  type CreateStorageIntegrationInput,
+} from "@/lib/api/storage-integrations"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // Microsoft 365 Icon
 function Microsoft365Icon({ className }: { readonly className?: string }) {
@@ -1191,6 +1239,9 @@ export default function IntegrationsPage() {
           </CardContent>
         </Card>
 
+        {/* Storage Integrations */}
+        <StorageIntegrationsSection canEdit={canEdit} />
+
         {/* Other Integrations Placeholder */}
         <Card>
           <CardHeader className="pt-0">
@@ -1224,5 +1275,736 @@ export default function IntegrationsPage() {
         </Card>
       </div>
     </PageShell>
+  )
+}
+
+// ============================================================================
+// STORAGE INTEGRATIONS SECTION
+// ============================================================================
+
+// SharePoint Icon
+function SharePointIcon({ className }: { readonly className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="48" cy="48" r="48" fill="#038387"/>
+      <path d="M48 24c13.255 0 24 10.745 24 24S61.255 72 48 72 24 61.255 24 48s10.745-24 24-24z" fill="#fff" fillOpacity="0.2"/>
+      <path d="M36 40h24v4H36zM36 48h24v4H36zM36 56h16v4H36z" fill="#fff"/>
+    </svg>
+  )
+}
+
+// Azure Blob Icon
+function AzureBlobIcon({ className }: { readonly className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="48" cy="48" r="48" fill="#0089D6"/>
+      <path d="M30 36h36v24H30z" fill="#fff" fillOpacity="0.2"/>
+      <rect x="34" y="40" width="12" height="16" rx="2" fill="#fff"/>
+      <rect x="50" y="40" width="12" height="16" rx="2" fill="#fff"/>
+    </svg>
+  )
+}
+
+interface StorageIntegrationsSectionProps {
+  canEdit: boolean
+}
+
+// Zod schema for storage integration form
+const storageIntegrationSchema = z.object({
+  provider: z.enum(["sharepoint", "azure_blob"]),
+  name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  description: z.string().max(500, "Description must be 500 characters or less").optional().nullable(),
+  // SharePoint fields
+  siteUrl: z.string().url("Must be a valid URL").optional().nullable().or(z.literal("")),
+  driveName: z.string().max(200).optional().nullable(),
+  // Azure Blob fields
+  accountName: z.string().max(100).optional().nullable(),
+  containerName: z.string().max(100).optional().nullable(),
+  connectionString: z.string().optional().nullable(),
+  // Common fields
+  basePath: z.string().max(500).optional().nullable(),
+  useEntraAuth: z.boolean().optional().default(true),
+}).superRefine((data, ctx) => {
+  // SharePoint requires siteUrl
+  if (data.provider === "sharepoint" && (!data.siteUrl || data.siteUrl === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Site URL is required for SharePoint",
+      path: ["siteUrl"],
+    })
+  }
+  // Azure Blob requires accountName and containerName
+  if (data.provider === "azure_blob") {
+    if (!data.accountName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Storage Account Name is required",
+        path: ["accountName"],
+      })
+    }
+    if (!data.containerName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Container Name is required",
+        path: ["containerName"],
+      })
+    }
+  }
+})
+
+type StorageIntegrationFormData = z.infer<typeof storageIntegrationSchema>
+
+function StorageIntegrationsSection({ canEdit }: StorageIntegrationsSectionProps) {
+  const { data: integrations = [], isLoading } = useStorageIntegrationsList()
+  const createMutation = useCreateStorageIntegration()
+  const updateMutation = useUpdateStorageIntegration()
+  const deleteMutation = useDeleteStorageIntegration()
+  const testMutation = useTestStorageIntegration()
+  
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [editingIntegration, setEditingIntegration] = useState<StorageIntegration | null>(null)
+  
+  const form = useForm<StorageIntegrationFormData>({
+    resolver: zodResolver(storageIntegrationSchema),
+    defaultValues: {
+      provider: "sharepoint",
+      name: "",
+      description: "",
+      siteUrl: "",
+      driveName: "",
+      accountName: "",
+      containerName: "",
+      connectionString: "",
+      basePath: "",
+      useEntraAuth: true,
+    },
+  })
+  
+  const selectedProvider = form.watch("provider")
+  
+  const handleOpenSheet = (integration?: StorageIntegration) => {
+    if (integration) {
+      setEditingIntegration(integration)
+      // Cast provider to form type - only sharepoint and azure_blob are editable via this form
+      const provider = integration.provider as "sharepoint" | "azure_blob"
+      form.reset({
+        provider,
+        name: integration.name,
+        description: integration.description ?? "",
+        siteUrl: integration.siteUrl ?? "",
+        driveName: integration.driveName ?? "",
+        accountName: integration.accountName ?? "",
+        containerName: integration.containerName ?? "",
+        connectionString: "",
+        basePath: integration.basePath ?? "",
+        useEntraAuth: integration.useEntraAuth,
+      })
+    } else {
+      setEditingIntegration(null)
+      form.reset({
+        provider: "sharepoint",
+        name: "",
+        description: "",
+        siteUrl: "",
+        driveName: "",
+        accountName: "",
+        containerName: "",
+        connectionString: "",
+        basePath: "",
+        useEntraAuth: true,
+      })
+    }
+    setSheetOpen(true)
+  }
+  
+  const handleCloseSheet = () => {
+    setSheetOpen(false)
+    setEditingIntegration(null)
+    form.reset()
+  }
+  
+  const onSubmit = async (data: StorageIntegrationFormData) => {
+    try {
+      const payload = {
+        ...data,
+        description: data.description || undefined,
+        siteUrl: data.siteUrl || undefined,
+        driveName: data.driveName || undefined,
+        accountName: data.accountName || undefined,
+        containerName: data.containerName || undefined,
+        connectionString: data.connectionString || undefined,
+        basePath: data.basePath || undefined,
+      }
+      
+      if (editingIntegration) {
+        await updateMutation.mutateAsync({
+          id: editingIntegration.id,
+          data: payload,
+        })
+        toast.success("Storage integration updated")
+      } else {
+        await createMutation.mutateAsync(payload)
+        toast.success("Storage integration created")
+      }
+      handleCloseSheet()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save integration")
+    }
+  }
+  
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteMutation.mutateAsync(id)
+      toast.success("Storage integration deleted")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete integration")
+    }
+  }
+  
+  const handleTest = async (id: string) => {
+    try {
+      const result = await testMutation.mutateAsync(id)
+      if (result.success) {
+        toast.success("Connection successful", {
+          description: result.details?.message as string,
+        })
+      } else {
+        toast.error("Connection failed", {
+          description: result.error ?? undefined,
+        })
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to test connection")
+    }
+  }
+  
+  const sharepointIntegrations = integrations.filter(i => i.provider === "sharepoint")
+  const blobIntegrations = integrations.filter(i => i.provider === "azure_blob")
+  const isSubmitting = createMutation.isPending || updateMutation.isPending
+  
+  return (
+    <>
+      <Card>
+        <CardHeader className="pt-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FolderArchive className="h-5 w-5" />
+                File Storage
+              </CardTitle>
+              <CardDescription>
+                Connect cloud storage for file management across modules
+              </CardDescription>
+            </div>
+            {canEdit && (
+              <Button onClick={() => handleOpenSheet()}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Storage
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-6">
+          {isLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          ) : integrations.length === 0 ? (
+            <Alert>
+              <FolderArchive className="h-4 w-4" />
+              <AlertTitle>No Storage Connected</AlertTitle>
+              <AlertDescription>
+                Connect SharePoint or Azure Blob Storage to enable file management in modules like People, Assets, and Workflows.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="space-y-6">
+              {/* SharePoint Integrations */}
+              {sharepointIntegrations.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <SharePointIcon className="h-5 w-5" />
+                    <h3 className="text-sm font-medium">SharePoint</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {sharepointIntegrations.map((integration) => (
+                      <StorageIntegrationCard
+                        key={integration.id}
+                        integration={integration}
+                        canEdit={canEdit}
+                        onEdit={() => handleOpenSheet(integration)}
+                        onDelete={() => handleDelete(integration.id)}
+                        onTest={() => handleTest(integration.id)}
+                        isTesting={testMutation.isPending}
+                        isDeleting={deleteMutation.isPending}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Azure Blob Integrations */}
+              {blobIntegrations.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <AzureBlobIcon className="h-5 w-5" />
+                    <h3 className="text-sm font-medium">Azure Blob Storage</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {blobIntegrations.map((integration) => (
+                      <StorageIntegrationCard
+                        key={integration.id}
+                        integration={integration}
+                        canEdit={canEdit}
+                        onEdit={() => handleOpenSheet(integration)}
+                        onDelete={() => handleDelete(integration.id)}
+                        onTest={() => handleTest(integration.id)}
+                        isTesting={testMutation.isPending}
+                        isDeleting={deleteMutation.isPending}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Info about storage configuration */}
+          <div className="p-4 rounded-lg bg-muted/50 border">
+            <p className="text-sm text-muted-foreground">
+              After connecting storage, go to{" "}
+              <span className="font-medium text-foreground">Filing → Categories</span>{" "}
+              to create file categories and assign them to specific storage locations.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Create/Edit Sheet */}
+      <Sheet open={sheetOpen} onOpenChange={(open) => !open && handleCloseSheet()}>
+        <SheetContent className="sm:max-w-[540px] w-full p-0 flex flex-col h-full">
+          <SheetHeader className="px-6 pt-6 pb-4 shrink-0 border-b">
+            <SheetTitle>
+              {editingIntegration ? "Edit Storage Integration" : "Add Storage Integration"}
+            </SheetTitle>
+            <SheetDescription>
+              Connect a cloud storage provider for file management.
+            </SheetDescription>
+          </SheetHeader>
+          
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
+              <ScrollArea className="flex-1">
+                <div className="px-6 py-4 space-y-6">
+                  {/* Provider Selection */}
+                  {!editingIntegration && (
+                    <FormField
+                      control={form.control}
+                      name="provider"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Provider</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="sharepoint">
+                                <div className="flex items-center gap-2">
+                                  <SharePointIcon className="h-4 w-4" />
+                                  SharePoint
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="azure_blob">
+                                <div className="flex items-center gap-2">
+                                  <AzureBlobIcon className="h-4 w-4" />
+                                  Azure Blob Storage
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  
+                  {/* Name */}
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name <span className="text-destructive">*</span></FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g., HR Documents, Project Files"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  {/* Description */}
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Brief description of this storage"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  {/* SharePoint-specific fields */}
+                  {selectedProvider === "sharepoint" && (
+                    <>
+                      <Separator />
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <SharePointIcon className="h-4 w-4" />
+                          <span className="text-sm font-medium">SharePoint Configuration</span>
+                        </div>
+                        
+                        <FormField
+                          control={form.control}
+                          name="siteUrl"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Site URL <span className="text-destructive">*</span></FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="https://contoso.sharepoint.com/sites/hr"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="driveName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Document Library</FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="Documents"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Leave empty to use the default Documents library
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <Alert className="border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30">
+                          <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          <AlertDescription className="text-blue-700 dark:text-blue-300 text-sm">
+                            SharePoint uses your existing Microsoft 365 connection for authentication.
+                            Make sure the app registration has <code className="bg-muted px-1 rounded">Sites.ReadWrite.All</code> permission.
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Azure Blob-specific fields */}
+                  {selectedProvider === "azure_blob" && (
+                    <>
+                      <Separator />
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <AzureBlobIcon className="h-4 w-4" />
+                          <span className="text-sm font-medium">Azure Blob Configuration</span>
+                        </div>
+                        
+                        <FormField
+                          control={form.control}
+                          name="accountName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Storage Account Name <span className="text-destructive">*</span></FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="mystorageaccount"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="containerName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Container Name <span className="text-destructive">*</span></FormLabel>
+                              <FormControl>
+                                <Input
+                                  placeholder="documents"
+                                  {...field}
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="connectionString"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Connection String</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="password"
+                                  placeholder="DefaultEndpointsProtocol=https;..."
+                                  {...field}
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                Or leave empty to use managed identity (if running in Azure)
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Base Path */}
+                  <FormField
+                    control={form.control}
+                    name="basePath"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Base Path</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="/IdaraOS"
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Root folder for all files. Leave empty to use the root.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </ScrollArea>
+              
+              {/* Sticky footer */}
+              <div className="shrink-0 border-t bg-background px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {editingIntegration ? "Save Changes" : "Add Integration"}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCloseSheet} disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </Form>
+        </SheetContent>
+      </Sheet>
+    </>
+  )
+}
+
+interface StorageIntegrationCardProps {
+  integration: StorageIntegration
+  canEdit: boolean
+  onEdit: () => void
+  onDelete: () => void
+  onTest: () => void
+  isTesting: boolean
+  isDeleting: boolean
+}
+
+function StorageIntegrationCard({
+  integration,
+  canEdit,
+  onEdit,
+  onDelete,
+  onTest,
+  isTesting,
+  isDeleting,
+}: StorageIntegrationCardProps) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  
+  const getStatusBadge = () => {
+    switch (integration.status) {
+      case "connected":
+        return (
+          <StatusBadge variant="success">
+            <Check className="h-3 w-3 mr-1" />
+            Connected
+          </StatusBadge>
+        )
+      case "error":
+        return (
+          <StatusBadge variant="danger">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Error
+          </StatusBadge>
+        )
+      case "pending":
+        return (
+          <StatusBadge variant="warning">
+            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+            Pending
+          </StatusBadge>
+        )
+      default:
+        return <StatusBadge variant="default">Not Connected</StatusBadge>
+    }
+  }
+  
+  const getLocationInfo = () => {
+    if (integration.provider === "sharepoint") {
+      return integration.siteUrl || "No site configured"
+    }
+    if (integration.provider === "azure_blob") {
+      if (integration.accountName && integration.containerName) {
+        return `${integration.accountName}/${integration.containerName}`
+      }
+      return "No container configured"
+    }
+    return "Local storage"
+  }
+  
+  return (
+    <>
+      <div className="p-4 rounded-lg border bg-card">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+              {integration.provider === "sharepoint" ? (
+                <SharePointIcon className="h-6 w-6" />
+              ) : (
+                <AzureBlobIcon className="h-6 w-6" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{integration.name}</span>
+                {getStatusBadge()}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {getLocationInfo()}
+              </p>
+              {integration.description && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {integration.description}
+                </p>
+              )}
+              {integration.lastError && (
+                <p className="text-xs text-destructive mt-1">
+                  Error: {integration.lastError}
+                </p>
+              )}
+            </div>
+          </div>
+          
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onTest}
+                disabled={isTesting}
+              >
+                {isTesting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                <span className="ml-1.5">Test</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEdit}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Storage Integration</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{integration.name}&quot;? This cannot be undone.
+              Any file categories using this integration will need to be reconfigured.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                onDelete()
+                setShowDeleteConfirm(false)
+              }}
+              disabled={isDeleting}
+            >
+              {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

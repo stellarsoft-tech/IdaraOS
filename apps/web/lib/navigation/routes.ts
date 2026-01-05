@@ -299,6 +299,31 @@ export const routes: Record<string, RouteConfig> = {
     description: "Activity history for workflow records",
   },
   
+  // Filing
+  filing: {
+    path: "/filing",
+    label: "Filing",
+    description: "File management across all modules",
+  },
+  "filing.files": {
+    path: "/filing/files",
+    label: "All Files",
+    parent: "filing",
+    description: "Browse and manage all files",
+  },
+  "filing.categories": {
+    path: "/filing/categories",
+    label: "Categories",
+    parent: "filing",
+    description: "File categories and storage configuration",
+  },
+  "filing.audit-log": {
+    path: "/filing/audit-log",
+    label: "Audit Log",
+    parent: "filing",
+    description: "Activity history for file operations",
+  },
+  
   // Settings
   settings: {
     path: "/settings",

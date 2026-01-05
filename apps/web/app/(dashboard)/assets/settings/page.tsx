@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { 
+  AlertTriangle,
+  ArrowRight,
+  FolderArchive,
   HardDrive, 
   Settings, 
   RefreshCw, 
@@ -17,6 +20,7 @@ import {
   Tablet,
   Box,
 } from "lucide-react"
+import Link from "next/link"
 import { toast } from "sonner"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 
@@ -48,6 +52,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Protected, AccessDenied } from "@/components/primitives/protected"
+import { Badge } from "@/components/ui/badge"
+import { useFileCategoriesList } from "@/lib/api/file-categories"
+import { useStorageIntegrationsList } from "@/lib/api/storage-integrations"
 import { useCanAccess, usePermission } from "@/lib/rbac/context"
 import { useCategoriesList } from "@/lib/api/assets"
 
@@ -663,6 +670,9 @@ export default function AssetsSettingsPage() {
             )}
           </CardContent>
         </Card>
+        
+        {/* File Storage */}
+        <FileStorageCard moduleScope="assets" />
       </div>
       
       {/* Sync Confirmation Dialog */}
@@ -714,3 +724,129 @@ export default function AssetsSettingsPage() {
   )
 }
 
+/**
+ * File Storage Card - Read-only summary of file categories for this module
+ */
+function FileStorageCard({ moduleScope }: { moduleScope: string }) {
+  const { data: categories = [], isLoading: categoriesLoading } = useFileCategoriesList({
+    moduleScope,
+    activeOnly: true,
+  })
+  
+  const { data: storageIntegrations = [], isLoading: storageLoading } = useStorageIntegrationsList()
+  
+  const isLoading = categoriesLoading || storageLoading
+  const connectedStorage = storageIntegrations.filter(s => s.status === "connected")
+  
+  // Get unique storage providers used by categories
+  const usedStorageIds = [...new Set(categories.filter(c => c.storageIntegrationId).map(c => c.storageIntegrationId))]
+  const usedStorage = storageIntegrations.filter(s => usedStorageIds.includes(s.id))
+  
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/30">
+              <FolderArchive className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <CardTitle>File Storage</CardTitle>
+              <CardDescription>
+                Document categories for Assets
+              </CardDescription>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/filing/categories">
+              Manage
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Link>
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : categories.length === 0 ? (
+          <div className="text-center py-6">
+            <FolderArchive className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">
+              No file categories configured for this module
+            </p>
+            <Button variant="link" size="sm" asChild className="mt-2">
+              <Link href="/filing/categories">
+                Create categories →
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Storage summary */}
+            {usedStorage.length > 0 && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                <HardDrive className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Storage Providers</p>
+                  <p className="text-xs text-muted-foreground">
+                    {usedStorage.map(s => s.name).join(", ")}
+                  </p>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {usedStorage.length} active
+                </Badge>
+              </div>
+            )}
+            
+            {/* Category list */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">Categories</p>
+              <div className="grid gap-2">
+                {categories.map(category => (
+                  <div
+                    key={category.id}
+                    className="flex items-center justify-between p-2.5 rounded-lg border bg-card"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FolderArchive className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{category.name}</span>
+                      {category.isRequired && (
+                        <Badge variant="secondary" className="text-xs">Required</Badge>
+                      )}
+                    </div>
+                    {category.storageIntegration ? (
+                      <Badge variant="outline" className="text-xs">
+                        {category.storageIntegration.provider === "sharepoint" ? "SharePoint" : "Blob"}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">
+                        No storage
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Warning if no storage configured */}
+            {connectedStorage.length === 0 && (
+              <Alert className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-700 dark:text-amber-300 text-sm">
+                  No storage providers connected.{" "}
+                  <Link href="/settings/integrations" className="underline font-medium">
+                    Configure storage
+                  </Link>{" "}
+                  to enable file uploads.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

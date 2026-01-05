@@ -7,15 +7,21 @@ import {
   ArrowLeft, 
   Building2, 
   Calendar, 
+  Download,
   FileText, 
+  FolderArchive,
   Info,
   KeyRound, 
+  Loader2,
   Mail, 
   MapPin, 
+  MoreHorizontal,
   Pencil, 
   Phone, 
+  Plus,
   RefreshCw, 
   Trash2, 
+  Upload,
   User,
   Briefcase,
   Shield,
@@ -39,6 +45,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Protected } from "@/components/primitives/protected"
+import { FileUpload } from "@/components/primitives/file-upload"
+import {
+  useEntityFiles,
+  useDeleteFile,
+  downloadFile,
+  type FileRecord,
+} from "@/lib/api/files"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -909,21 +936,7 @@ export default function PersonDetailPage() {
             </TabsContent>
 
             <TabsContent value="documents" className="mt-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Documents</CardTitle>
-                  <CardDescription>Employee documents and records</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <FileText className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                    <p className="font-medium">No Documents</p>
-                    <p className="text-sm text-muted-foreground max-w-xs">
-                      Document management will be available in a future update.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <PersonFilesTab personId={person.id} personName={person.name} />
             </TabsContent>
 
             <TabsContent value="activity" className="mt-4">
@@ -1139,5 +1152,199 @@ export default function PersonDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+// ============================================================================
+// Person Files Tab Component
+// ============================================================================
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "Unknown"
+  if (bytes === 0) return "0 B"
+  const k = 1024
+  const sizes = ["B", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+interface PersonFilesTabProps {
+  personId: string
+  personName: string
+}
+
+function PersonFilesTab({ personId, personName }: PersonFilesTabProps) {
+  const [showUploadDialog, setShowUploadDialog] = useState(false)
+  const [deletingFile, setDeletingFile] = useState<FileRecord | null>(null)
+  
+  const { data: filesData, isLoading } = useEntityFiles("person", personId)
+  const deleteMutation = useDeleteFile()
+  
+  const files = filesData?.data ?? []
+  
+  const handleDownload = async (file: FileRecord) => {
+    try {
+      await downloadFile(file.id, file.name)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to download file")
+    }
+  }
+  
+  const handleDelete = async () => {
+    if (!deletingFile) return
+    try {
+      await deleteMutation.mutateAsync(deletingFile.id)
+      toast.success("File deleted successfully")
+      setDeletingFile(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete file")
+    }
+  }
+  
+  const handleUploadComplete = () => {
+    setShowUploadDialog(false)
+    toast.success("Files uploaded successfully")
+  }
+  
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Files</CardTitle>
+              <CardDescription>Documents and records for {personName}</CardDescription>
+            </div>
+            <Protected module="filing.files" action="create">
+              <Button onClick={() => setShowUploadDialog(true)} size="sm">
+                <Upload className="h-4 w-4 mr-2" />
+                Upload
+              </Button>
+            </Protected>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : files.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FolderArchive className="h-10 w-10 text-muted-foreground/50 mb-3" />
+              <p className="font-medium">No Files</p>
+              <p className="text-sm text-muted-foreground max-w-xs mb-4">
+                Upload documents such as CVs, contracts, and certifications.
+              </p>
+              <Protected module="filing.files" action="create">
+                <Button onClick={() => setShowUploadDialog(true)} variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Upload First File
+                </Button>
+              </Protected>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {files.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                >
+                  <div className="h-10 w-10 rounded bg-muted flex items-center justify-center shrink-0">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{file.name}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {file.category && (
+                        <Badge variant="outline" className="text-xs">
+                          {file.category.name}
+                        </Badge>
+                      )}
+                      <span>{formatFileSize(file.size)}</span>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleDownload(file)}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </DropdownMenuItem>
+                      <Protected module="filing.files" action="delete">
+                        <DropdownMenuItem
+                          onClick={() => setDeletingFile(file)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </Protected>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              ))}
+              
+              <div className="pt-2 text-center">
+                <Button variant="link" size="sm" asChild>
+                  <Link href={`/people/filing?entityId=${personId}`}>
+                    View All Files →
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Upload Dialog */}
+      <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Upload Files</DialogTitle>
+            <DialogDescription>
+              Upload documents for {personName}
+            </DialogDescription>
+          </DialogHeader>
+          <FileUpload
+            moduleScope="people"
+            entityType="person"
+            entityId={personId}
+            multiple
+            maxFiles={5}
+            onUpload={handleUploadComplete}
+          />
+        </DialogContent>
+      </Dialog>
+      
+      {/* Delete Confirmation */}
+      <Dialog open={!!deletingFile} onOpenChange={(open) => !open && setDeletingFile(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete File</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{deletingFile?.name}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingFile(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
