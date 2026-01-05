@@ -4,19 +4,27 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { 
   AlertCircle,
-  ArrowUpDown,
   Check,
-  ChevronRight,
+  FileArchive,
+  FileBadge,
+  FileCheck,
+  FileImage,
+  FileSignature,
+  FileSpreadsheet,
   FileText,
+  FileUser,
   FolderTree,
-  GripVertical,
   HardDrive,
+  Key,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
+  Receipt,
   Search,
+  Shield,
   Trash2,
+  Wrench,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -57,6 +65,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -81,6 +97,34 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
+
+// Icon mapping for dynamic rendering
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  FileText,
+  FileCheck,
+  FileSignature,
+  FileBadge,
+  FileUser,
+  FileImage,
+  FileSpreadsheet,
+  FileArchive,
+  Receipt,
+  Shield,
+  Key,
+  Wrench,
+}
+
+// Color hex values for swatches
+const COLOR_HEX_MAP: Record<string, string> = {
+  blue: "#3b82f6",
+  green: "#22c55e",
+  purple: "#a855f7",
+  amber: "#f59e0b",
+  red: "#ef4444",
+  cyan: "#06b6d4",
+  pink: "#ec4899",
+  slate: "#64748b",
+}
 
 // Default form state
 const defaultFormState: CreateFileCategoryInput = {
@@ -445,8 +489,8 @@ export default function FilingCategoriesPage() {
         </Card>
       </div>
       
-      {/* Create/Edit Dialog */}
-      <Dialog 
+      {/* Create/Edit Sheet */}
+      <Sheet 
         open={showCreateDialog || !!editingCategory} 
         onOpenChange={(open) => {
           if (!open) {
@@ -456,270 +500,309 @@ export default function FilingCategoriesPage() {
           }
         }}
       >
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>
+        <SheetContent className="sm:max-w-[540px] w-full p-0 flex flex-col h-full">
+          <SheetHeader className="px-6 pt-6 pb-4 shrink-0 border-b">
+            <SheetTitle>
               {editingCategory ? "Edit Category" : "Create File Category"}
-            </DialogTitle>
-            <DialogDescription>
+            </SheetTitle>
+            <SheetDescription>
               {editingCategory 
                 ? "Update the category settings and storage configuration."
                 : "Create a new file category for organizing documents."
               }
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           
-          <Tabs defaultValue="general" className="mt-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="storage">Storage</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="general" className="space-y-4 mt-4">
-              {/* Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., CV/Resume, Employment Contract"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              
-              {/* Description */}
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Brief description of this category..."
-                  value={formData.description || ""}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={2}
-                />
-              </div>
-              
-              {/* Module Scope */}
-              <div className="space-y-2">
-                <Label>Module *</Label>
-                <Select
-                  value={formData.moduleScope}
-                  onValueChange={(value) => setFormData({ ...formData, moduleScope: value as typeof formData.moduleScope })}
-                  disabled={!!editingCategory} // Can't change module after creation
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MODULE_SCOPE_OPTIONS.map(module => (
-                      <SelectItem key={module.value} value={module.value}>
-                        {module.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {editingCategory && (
-                  <p className="text-xs text-muted-foreground">
-                    Module cannot be changed after creation
-                  </p>
-                )}
-              </div>
-              
-              {/* Icon and Color */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Icon</Label>
-                  <Select
-                    value={formData.icon || "FileText"}
-                    onValueChange={(value) => setFormData({ ...formData, icon: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORY_ICON_OPTIONS.map(icon => (
-                        <SelectItem key={icon.value} value={icon.value}>
-                          {icon.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Color</Label>
-                  <Select
-                    value={formData.color || "blue"}
-                    onValueChange={(value) => setFormData({ ...formData, color: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CATEGORY_COLOR_OPTIONS.map(color => (
-                        <SelectItem key={color.value} value={color.value}>
-                          <div className="flex items-center gap-2">
-                            <div className={`h-3 w-3 rounded-full bg-${color.value}-500`} />
-                            {color.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              {/* Required toggle */}
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <Label>Required</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Mark this category as required for entities
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.isRequired}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isRequired: checked })}
-                />
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="storage" className="space-y-4 mt-4">
-              {/* Storage Integration */}
-              <div className="space-y-2">
-                <Label>Storage Provider</Label>
-                <Select
-                  value={formData.storageIntegrationId || "__none__"}
-                  onValueChange={(value) => setFormData({ 
-                    ...formData, 
-                    storageIntegrationId: value === "__none__" ? null : value 
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select storage..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No storage (metadata only)</SelectItem>
-                    {connectedStorageIntegrations.length === 0 ? (
-                      <SelectItem value="__no_storage__" disabled>
-                        No connected storage providers
-                      </SelectItem>
-                    ) : (
-                      connectedStorageIntegrations.map(storage => (
-                        <SelectItem key={storage.id} value={storage.id}>
-                          <div className="flex items-center gap-2">
-                            <HardDrive className="h-4 w-4" />
-                            {storage.name}
-                            <Badge variant="outline" className="text-xs ml-2">
-                              {storage.provider === "sharepoint" ? "SharePoint" : "Blob"}
-                            </Badge>
-                          </div>
-                        </SelectItem>
-                      ))
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="px-6 py-4">
+                <Tabs defaultValue="general">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="general">General</TabsTrigger>
+                    <TabsTrigger value="storage">Storage</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="general" className="space-y-4 mt-4">
+                    {/* Name */}
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="name"
+                        placeholder="e.g., CV/Resume, Employment Contract"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                    
+                    {/* Description */}
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Brief description of this category..."
+                        value={formData.description || ""}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+                    
+                    {/* Module Scope */}
+                    <div className="space-y-2">
+                      <Label>Module <span className="text-destructive">*</span></Label>
+                      <Select
+                        value={formData.moduleScope}
+                        onValueChange={(value) => setFormData({ ...formData, moduleScope: value as typeof formData.moduleScope })}
+                        disabled={!!editingCategory}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MODULE_SCOPE_OPTIONS.map(module => (
+                            <SelectItem key={module.value} value={module.value}>
+                              {module.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {editingCategory && (
+                        <p className="text-xs text-muted-foreground">
+                          Module cannot be changed after creation
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Icon */}
+                    <div className="space-y-2">
+                      <Label>Icon</Label>
+                      <Select
+                        value={formData.icon || "FileText"}
+                        onValueChange={(value) => setFormData({ ...formData, icon: value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          {(() => {
+                            const IconComponent = ICON_MAP[formData.icon || "FileText"] || FileText
+                            const selectedOption = CATEGORY_ICON_OPTIONS.find(i => i.value === formData.icon)
+                            return (
+                              <span className="flex items-center gap-2">
+                                <IconComponent className="h-4 w-4 text-muted-foreground" />
+                                {selectedOption?.label || "Document"}
+                              </span>
+                            )
+                          })()}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORY_ICON_OPTIONS.map(icon => {
+                            const IconComponent = ICON_MAP[icon.value] || FileText
+                            return (
+                              <SelectItem key={icon.value} value={icon.value}>
+                                <span className="flex items-center gap-2">
+                                  <IconComponent className="h-4 w-4 text-muted-foreground" />
+                                  {icon.label}
+                                </span>
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Color */}
+                    <div className="space-y-2">
+                      <Label>Color</Label>
+                      <Select
+                        value={formData.color || "blue"}
+                        onValueChange={(value) => setFormData({ ...formData, color: value })}
+                      >
+                        <SelectTrigger className="w-full">
+                          {(() => {
+                            const selectedColor = formData.color || "blue"
+                            const selectedOption = CATEGORY_COLOR_OPTIONS.find(c => c.value === selectedColor)
+                            return (
+                              <span className="flex items-center gap-2">
+                                <span 
+                                  className="h-3 w-3 rounded-full shrink-0 border border-border"
+                                  style={{ backgroundColor: COLOR_HEX_MAP[selectedColor] || COLOR_HEX_MAP.blue }}
+                                />
+                                {selectedOption?.label || "Blue"}
+                              </span>
+                            )
+                          })()}
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORY_COLOR_OPTIONS.map(color => (
+                            <SelectItem key={color.value} value={color.value}>
+                              <span className="flex items-center gap-2">
+                                <span 
+                                  className="h-3 w-3 rounded-full shrink-0 border border-border"
+                                  style={{ backgroundColor: COLOR_HEX_MAP[color.value] || COLOR_HEX_MAP.blue }}
+                                />
+                                {color.label}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    {/* Required toggle */}
+                    <div className="flex items-center justify-between py-2">
+                      <div>
+                        <Label>Required</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Mark this category as required for entities
+                        </p>
+                      </div>
+                      <Switch
+                        checked={formData.isRequired}
+                        onCheckedChange={(checked) => setFormData({ ...formData, isRequired: checked })}
+                      />
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="storage" className="space-y-4 mt-4">
+                    {/* Storage Integration */}
+                    <div className="space-y-2">
+                      <Label>Storage Provider</Label>
+                      <Select
+                        value={formData.storageIntegrationId || "__none__"}
+                        onValueChange={(value) => setFormData({ 
+                          ...formData, 
+                          storageIntegrationId: value === "__none__" ? null : value 
+                        })}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select storage..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">No storage (metadata only)</SelectItem>
+                          {connectedStorageIntegrations.length === 0 ? (
+                            <SelectItem value="__no_storage__" disabled>
+                              No connected storage providers
+                            </SelectItem>
+                          ) : (
+                            connectedStorageIntegrations.map(storage => (
+                              <SelectItem key={storage.id} value={storage.id}>
+                                <span className="flex items-center gap-2">
+                                  <HardDrive className="h-4 w-4" />
+                                  {storage.name}
+                                  <Badge variant="outline" className="text-xs ml-2">
+                                    {storage.provider === "sharepoint" ? "SharePoint" : "Blob"}
+                                  </Badge>
+                                </span>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      {connectedStorageIntegrations.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          <Link href="/settings/integrations" className="underline">
+                            Connect a storage provider
+                          </Link>{" "}
+                          to enable file uploads
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Folder Path */}
+                    {formData.storageIntegrationId && (
+                      <div className="space-y-2">
+                        <Label htmlFor="folderPath">Folder Path</Label>
+                        <Input
+                          id="folderPath"
+                          placeholder="/HR/Employee Documents"
+                          value={formData.folderPath || ""}
+                          onChange={(e) => setFormData({ ...formData, folderPath: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Sub-folder within the storage integration (optional)
+                        </p>
+                      </div>
                     )}
-                  </SelectContent>
-                </Select>
-                {connectedStorageIntegrations.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    <Link href="/settings/integrations" className="underline">
-                      Connect a storage provider
-                    </Link>{" "}
-                    to enable file uploads
-                  </p>
-                )}
+                    
+                    <Separator />
+                    
+                    {/* File Restrictions */}
+                    <div className="space-y-4">
+                      <Label className="text-base">File Restrictions</Label>
+                      
+                      {/* Max File Size */}
+                      <div className="space-y-2">
+                        <Label htmlFor="maxFileSize">Max File Size (MB)</Label>
+                        <Input
+                          id="maxFileSize"
+                          type="number"
+                          placeholder="e.g., 25"
+                          value={formData.maxFileSize ? (formData.maxFileSize / 1024 / 1024).toString() : ""}
+                          onChange={(e) => {
+                            const mb = parseFloat(e.target.value)
+                            setFormData({ 
+                              ...formData, 
+                              maxFileSize: isNaN(mb) ? null : Math.round(mb * 1024 * 1024)
+                            })
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Leave empty for no limit
+                        </p>
+                      </div>
+                      
+                      {/* Allowed MIME Types */}
+                      <div className="space-y-2">
+                        <Label htmlFor="allowedTypes">Allowed File Types</Label>
+                        <Input
+                          id="allowedTypes"
+                          placeholder="e.g., application/pdf, image/*"
+                          value={formData.allowedMimeTypes?.join(", ") || ""}
+                          onChange={(e) => {
+                            const types = e.target.value
+                              .split(",")
+                              .map(t => t.trim())
+                              .filter(Boolean)
+                            setFormData({ 
+                              ...formData, 
+                              allowedMimeTypes: types.length > 0 ? types : null 
+                            })
+                          }}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Comma-separated MIME types. Leave empty to allow all types.
+                        </p>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </div>
-              
-              {/* Folder Path */}
-              {formData.storageIntegrationId && (
-                <div className="space-y-2">
-                  <Label htmlFor="folderPath">Folder Path</Label>
-                  <Input
-                    id="folderPath"
-                    placeholder="/HR/Employee Documents"
-                    value={formData.folderPath || ""}
-                    onChange={(e) => setFormData({ ...formData, folderPath: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Sub-folder within the storage integration (optional)
-                  </p>
-                </div>
-              )}
-              
-              <Separator />
-              
-              {/* File Restrictions */}
-              <div className="space-y-4">
-                <Label className="text-base">File Restrictions</Label>
-                
-                {/* Max File Size */}
-                <div className="space-y-2">
-                  <Label htmlFor="maxFileSize">Max File Size (MB)</Label>
-                  <Input
-                    id="maxFileSize"
-                    type="number"
-                    placeholder="e.g., 25"
-                    value={formData.maxFileSize ? (formData.maxFileSize / 1024 / 1024).toString() : ""}
-                    onChange={(e) => {
-                      const mb = parseFloat(e.target.value)
-                      setFormData({ 
-                        ...formData, 
-                        maxFileSize: isNaN(mb) ? null : Math.round(mb * 1024 * 1024)
-                      })
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Leave empty for no limit
-                  </p>
-                </div>
-                
-                {/* Allowed MIME Types */}
-                <div className="space-y-2">
-                  <Label htmlFor="allowedTypes">Allowed File Types</Label>
-                  <Input
-                    id="allowedTypes"
-                    placeholder="e.g., application/pdf, image/*"
-                    value={formData.allowedMimeTypes?.join(", ") || ""}
-                    onChange={(e) => {
-                      const types = e.target.value
-                        .split(",")
-                        .map(t => t.trim())
-                        .filter(Boolean)
-                      setFormData({ 
-                        ...formData, 
-                        allowedMimeTypes: types.length > 0 ? types : null 
-                      })
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Comma-separated MIME types. Leave empty to allow all types.
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+            </ScrollArea>
+          </div>
           
-          <DialogFooter className="mt-6">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowCreateDialog(false)
-                setEditingCategory(null)
-                resetForm()
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={editingCategory ? handleUpdate : handleCreate}
-              disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
-            >
-              {(createMutation.isPending || updateMutation.isPending) && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              {editingCategory ? "Save Changes" : "Create Category"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* Sticky footer */}
+          <div className="shrink-0 border-t bg-background px-6 py-4">
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={editingCategory ? handleUpdate : handleCreate}
+                disabled={!formData.name || createMutation.isPending || updateMutation.isPending}
+              >
+                {(createMutation.isPending || updateMutation.isPending) && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
+                {editingCategory ? "Save Changes" : "Create Category"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCreateDialog(false)
+                  setEditingCategory(null)
+                  resetForm()
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
       
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deletingCategory} onOpenChange={(open) => !open && setDeletingCategory(null)}>
