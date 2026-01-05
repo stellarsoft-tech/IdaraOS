@@ -28,6 +28,7 @@ import {
   type FileCategory,
 } from "@/lib/api/file-categories"
 import { cn } from "@/lib/utils"
+import { useQueryClient } from "@tanstack/react-query"
 
 // ============================================================================
 // Types
@@ -167,6 +168,7 @@ export function FileUpload({
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(fixedCategoryId ?? null)
   const [isDragging, setIsDragging] = useState(false)
   
+  const queryClient = useQueryClient()
   const { data: categories = [], isLoading: categoriesLoading } = useModuleFileCategories(moduleScope)
   
   // Get the effective category ID
@@ -334,6 +336,9 @@ export function FileUpload({
     }
     
     if (uploadedFiles.length > 0) {
+      // Invalidate files queries to refresh file lists
+      queryClient.invalidateQueries({ queryKey: ["files"] })
+      
       onUpload?.(uploadedFiles)
       toast.success(`${uploadedFiles.length} file(s) uploaded successfully`)
     }
