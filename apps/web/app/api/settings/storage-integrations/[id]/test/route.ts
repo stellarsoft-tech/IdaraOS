@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { storageIntegrations } from "@/lib/db/schema"
+import { storageIntegrations, integrations } from "@/lib/db/schema"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
 
 interface RouteParams {
@@ -51,20 +51,37 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       switch (integration.provider) {
         case "sharepoint":
           // Test SharePoint connection
-          // In a real implementation, this would use Microsoft Graph API
           if (!integration.siteUrl) {
             throw new Error("SharePoint site URL is required")
           }
           
-          // TODO: Implement actual SharePoint connection test
-          // For now, validate the configuration
           if (integration.useEntraAuth) {
-            // Would use the existing Entra integration to get a token
-            // and call Microsoft Graph to list the site
+            // Check if Entra integration is connected first
+            const entraIntegration = await db
+              .select()
+              .from(integrations)
+              .where(
+                and(
+                  eq(integrations.orgId, session.orgId),
+                  eq(integrations.provider, "entra")
+                )
+              )
+              .limit(1)
+            
+            if (entraIntegration.length === 0 || entraIntegration[0].status !== "connected") {
+              throw new Error(
+                "Microsoft 365 integration is not connected. Please configure the Microsoft 365 integration first in the Integrations settings."
+              )
+            }
+            
+            // TODO: Implement actual SharePoint connection test using Microsoft Graph
+            // For now, we validate config + Entra connection exists
+            // In production, would call: GET https://graph.microsoft.com/v1.0/sites/{siteUrl}
             testDetails = {
-              message: "SharePoint configuration validated",
+              message: "SharePoint configuration validated. Entra ID connection verified.",
               siteUrl: integration.siteUrl,
-              requiresEntraConnection: true,
+              entraConnected: true,
+              note: "Full SharePoint API validation will be performed on first file upload.",
             }
             testSuccess = true
           } else {
@@ -78,12 +95,37 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             throw new Error("Storage account name and container name are required")
           }
           
+          // Check authentication method
+          const hasConnectionString = integration.connectionStringEncrypted && integration.connectionStringEncrypted.length > 0
+          
+          if (!hasConnectionString && integration.useEntraAuth) {
+            // Using managed identity - check if Entra is connected
+            const entraIntegration = await db
+              .select()
+              .from(integrations)
+              .where(
+                and(
+                  eq(integrations.orgId, session.orgId),
+                  eq(integrations.provider, "entra")
+                )
+              )
+              .limit(1)
+            
+            if (entraIntegration.length === 0 || entraIntegration[0].status !== "connected") {
+              throw new Error(
+                "Using Entra authentication but Microsoft 365 integration is not connected. Either provide a connection string or configure the Microsoft 365 integration first."
+              )
+            }
+          }
+          
           // TODO: Implement actual Blob Storage connection test
-          // Would use @azure/storage-blob to list blobs
+          // Would use @azure/storage-blob to list containers
           testDetails = {
             message: "Azure Blob Storage configuration validated",
             accountName: integration.accountName,
             containerName: integration.containerName,
+            authMethod: hasConnectionString ? "connection_string" : "managed_identity",
+            note: "Full storage API validation will be performed on first file upload.",
           }
           testSuccess = true
           break
