@@ -95,14 +95,20 @@ const protectedRoutes = [
 const authRoutes = ["/login", "/register"]
 
 // Public routes that don't require authentication
+// NOTE: These routes either:
+// - Are authentication endpoints themselves
+// - Have their own authentication mechanism (SCIM uses bearer tokens)
+// - Return only public, non-sensitive data
 const publicRoutes = [
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/sso-config",
   "/api/auth/login/azure-ad",
   "/api/auth/callback/azure-ad",
-  "/api/scim", // SCIM endpoints have their own token auth
+  "/api/auth/set-password", // Protected by invitation token, not session
+  "/api/scim", // SCIM endpoints have their own bearer token auth
   "/api/health",
+  "/api/public", // Public branding endpoints (app name, logo only)
   "/registration-incomplete",
   "/set-password",
 ]

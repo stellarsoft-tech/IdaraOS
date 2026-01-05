@@ -38,7 +38,7 @@ export function PageShell({
   icon: Icon,
 }: PageShellProps) {
   return (
-    <div className={cn(compact ? "space-y-4" : "space-y-6", className)}>
+    <div className={cn("space-y-4", className)}>
       {/* Page Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
@@ -59,7 +59,7 @@ export function PageShell({
       </div>
       
       {/* Content - children manage their own spacing */}
-      <div className={cn(compact ? "space-y-4" : "space-y-6")}>{children}</div>
+      <div className="space-y-4">{children}</div>
     </div>
   )
 }

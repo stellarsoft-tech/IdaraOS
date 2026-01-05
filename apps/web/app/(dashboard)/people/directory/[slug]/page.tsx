@@ -1190,6 +1190,23 @@ function PersonFilesTab({ personId, personName }: PersonFilesTabProps) {
     }
   }
   
+  const handleViewInStorage = (file: FileRecord) => {
+    if (file.webUrl) {
+      window.open(file.webUrl, "_blank", "noopener,noreferrer")
+    } else {
+      toast.error("Storage URL not available for this file")
+    }
+  }
+  
+  const getStorageProviderLabel = (provider?: string): string => {
+    switch (provider) {
+      case "sharepoint": return "SharePoint"
+      case "azure_blob": return "Azure Blob"
+      case "local": return "Local Storage"
+      default: return "Storage"
+    }
+  }
+  
   const handleDelete = async () => {
     if (!deletingFile) return
     try {
@@ -1275,6 +1292,12 @@ function PersonFilesTab({ personId, personName }: PersonFilesTabProps) {
                         <Download className="h-4 w-4 mr-2" />
                         Download
                       </DropdownMenuItem>
+                      {file.webUrl && (
+                        <DropdownMenuItem onClick={() => handleViewInStorage(file)}>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          View in {getStorageProviderLabel(file.storageProvider)}
+                        </DropdownMenuItem>
+                      )}
                       <Protected module="filing.files" action="delete">
                         <DropdownMenuItem
                           onClick={() => setDeletingFile(file)}

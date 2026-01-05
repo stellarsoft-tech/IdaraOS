@@ -9,12 +9,14 @@ import { db } from "@/lib/db"
 import { files, fileCategories, storageIntegrations } from "@/lib/db/schema"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
 import { randomUUID } from "crypto"
+import { uploadFile as uploadToSharePoint } from "@/lib/graph/client"
 
 // Response transformer
 function toApiResponse(
   file: typeof files.$inferSelect,
   category?: typeof fileCategories.$inferSelect | null
 ) {
+  const metadata = file.metadata as Record<string, unknown> | null
   return {
     id: file.id,
     name: file.name,
@@ -29,6 +31,9 @@ function toApiResponse(
     entityId: file.entityId,
     moduleScope: file.moduleScope,
     metadata: file.metadata,
+    // Expose webUrl for "View in Storage" feature
+    webUrl: metadata?.webUrl as string | undefined,
+    storageProvider: metadata?.storageProvider as string | undefined,
     createdAt: file.createdAt.toISOString(),
     updatedAt: file.updatedAt.toISOString(),
   }
@@ -150,42 +155,62 @@ export async function POST(request: NextRequest) {
     }
     
     let externalId: string | null = null
+    let webUrl: string | null = null
     
     // Upload to storage provider
     if (storageIntegration && storageIntegration.status === "connected") {
       try {
         switch (storageIntegration.provider) {
           case "sharepoint":
-            // TODO: Implement SharePoint upload using Microsoft Graph
-            // const graphClient = await getGraphClient()
-            // const result = await graphClient.api(`/sites/${storageIntegration.siteId}/drive/root:/${fullPath}:/content`)
-            //   .put(await file.arrayBuffer())
-            // externalId = result.id
-            console.log(`[Storage] Would upload to SharePoint: ${fullPath}`)
-            externalId = `sp_${randomUUID()}`
+            if (!storageIntegration.siteId) {
+              console.error("[Storage] SharePoint site ID not configured")
+              return NextResponse.json(
+                { error: "SharePoint integration not fully configured (missing site ID)" },
+                { status: 400 }
+              )
+            }
+            
+            // Get file content as ArrayBuffer
+            const fileBuffer = await file.arrayBuffer()
+            
+            // Upload to SharePoint using Microsoft Graph
+            console.log(`[Storage] Uploading to SharePoint: ${fullPath}`)
+            const driveItem = await uploadToSharePoint(
+              storageIntegration.siteId,
+              storageIntegration.driveId,
+              fullPath.includes("/") ? fullPath.substring(0, fullPath.lastIndexOf("/")) : "",
+              fullPath.includes("/") ? fullPath.substring(fullPath.lastIndexOf("/") + 1) : fullPath,
+              fileBuffer,
+              file.type || "application/octet-stream"
+            )
+            
+            if (!driveItem) {
+              throw new Error("Failed to upload file to SharePoint")
+            }
+            
+            externalId = driveItem.id
+            webUrl = driveItem.webUrl
+            console.log(`[Storage] SharePoint upload successful: ${driveItem.id}, webUrl: ${webUrl}`)
             break
             
           case "azure_blob":
-            // TODO: Implement Azure Blob upload using @azure/storage-blob
-            // const blobServiceClient = BlobServiceClient.fromConnectionString(...)
-            // const containerClient = blobServiceClient.getContainerClient(storageIntegration.containerName)
-            // const blockBlobClient = containerClient.getBlockBlobClient(fullPath)
-            // await blockBlobClient.uploadData(await file.arrayBuffer())
-            console.log(`[Storage] Would upload to Azure Blob: ${fullPath}`)
-            externalId = `blob_${randomUUID()}`
+            // TODO: Implement Azure Blob upload using @azure/storage-blob SDK
+            // For now, store metadata with a reference that can be updated later
+            console.log(`[Storage] Azure Blob storage not yet implemented, storing metadata: ${fullPath}`)
+            externalId = `blob_pending_${randomUUID()}`
             break
             
           case "local":
-            // TODO: Implement local file storage
-            // For local development, we could store in ./uploads
-            console.log(`[Storage] Would upload to local storage: ${fullPath}`)
+            // Local file storage - store metadata only for now
+            // In production, would write to local filesystem
+            console.log(`[Storage] Local storage - metadata only: ${fullPath}`)
             externalId = `local_${randomUUID()}`
             break
         }
       } catch (storageError) {
         console.error("Storage upload error:", storageError)
         return NextResponse.json(
-          { error: "Failed to upload file to storage provider" },
+          { error: storageError instanceof Error ? storageError.message : "Failed to upload file to storage provider" },
           { status: 500 }
         )
       }
@@ -215,6 +240,8 @@ export async function POST(request: NextRequest) {
         metadata: {
           uploadedAt: new Date().toISOString(),
           originalMimeType: file.type,
+          webUrl: webUrl ?? undefined, // SharePoint web URL for "View in SharePoint" feature
+          storageProvider: storageIntegration?.provider ?? "metadata",
         },
       })
       .returning()

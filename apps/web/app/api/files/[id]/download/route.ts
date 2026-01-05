@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { files, storageIntegrations } from "@/lib/db/schema"
 import { requireSession } from "@/lib/api/context"
+import { getDownloadUrl as getSharePointDownloadUrl } from "@/lib/graph/client"
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -48,43 +49,61 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     const file = result[0].file
     const storage = result[0].storage
+    const metadata = file.metadata as Record<string, unknown> | null
     
     let downloadUrl: string | null = null
     let expiresAt: string | null = null
+    const webUrl: string | null = (metadata?.webUrl as string) ?? null
     
     if (storage && storage.status === "connected") {
       switch (storage.provider) {
         case "sharepoint":
-          // TODO: Generate SharePoint download URL using Microsoft Graph
-          // const graphClient = await getGraphClient()
-          // const driveItem = await graphClient.api(`/sites/${storage.siteId}/drive/items/${file.externalId}`)
-          //   .select('@microsoft.graph.downloadUrl')
-          //   .get()
-          // downloadUrl = driveItem['@microsoft.graph.downloadUrl']
+          // Get download URL from SharePoint using Microsoft Graph
+          if (storage.siteId && file.externalId) {
+            try {
+              console.log(`[Download] Getting SharePoint download URL for item: ${file.externalId}`)
+              const downloadResult = await getSharePointDownloadUrl(
+                storage.siteId,
+                storage.driveId,
+                file.externalId
+              )
+              
+              if (downloadResult) {
+                downloadUrl = downloadResult.downloadUrl
+                expiresAt = downloadResult.expiresAt.toISOString()
+                console.log(`[Download] Got SharePoint download URL, expires: ${expiresAt}`)
+              } else {
+                console.error("[Download] Failed to get download URL from SharePoint")
+              }
+            } catch (graphError) {
+              console.error("[Download] SharePoint download error:", graphError)
+            }
+          }
           
-          // Placeholder URL for development
-          downloadUrl = `https://placeholder.sharepoint.com/download/${file.externalId}`
-          expiresAt = new Date(Date.now() + 3600000).toISOString() // 1 hour
+          // If we couldn't get a fresh download URL, file might not exist in SharePoint
+          if (!downloadUrl) {
+            return NextResponse.json(
+              { error: "Could not generate download URL. The file may have been deleted from SharePoint." },
+              { status: 404 }
+            )
+          }
           break
           
         case "azure_blob":
-          // TODO: Generate SAS URL using @azure/storage-blob
-          // const blobServiceClient = BlobServiceClient.fromConnectionString(...)
-          // const containerClient = blobServiceClient.getContainerClient(storage.containerName)
-          // const blobClient = containerClient.getBlobClient(file.storagePath)
-          // const sasUrl = blobClient.generateSasUrl({
-          //   permissions: BlobSASPermissions.parse('r'),
-          //   expiresOn: new Date(Date.now() + 3600000),
-          // })
-          
-          // Placeholder URL for development
-          downloadUrl = `https://${storage.accountName}.blob.core.windows.net/${storage.containerName}/${file.storagePath}`
-          expiresAt = new Date(Date.now() + 3600000).toISOString() // 1 hour
+          // TODO: Generate SAS URL using @azure/storage-blob SDK
+          // For now, return placeholder - Azure Blob implementation pending
+          if (storage.accountName && storage.containerName && file.storagePath) {
+            // Without SAS, this URL won't work for private containers
+            // Full implementation needs @azure/storage-blob SDK
+            downloadUrl = `https://${storage.accountName}.blob.core.windows.net/${storage.containerName}/${file.storagePath}`
+            expiresAt = new Date(Date.now() + 3600000).toISOString() // 1 hour
+            console.log("[Download] Azure Blob SAS not implemented - returning direct URL")
+          }
           break
           
         case "local":
           // For local storage, we would serve the file directly
-          // In a real implementation, this would read from the file system
+          // In a real implementation, this would stream from the file system
           downloadUrl = `/api/files/${id}/stream`
           break
       }
@@ -105,6 +124,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       size: file.size,
       downloadUrl,
       expiresAt,
+      webUrl, // Include webUrl for "View in Storage" feature
     })
   } catch (error) {
     if (error instanceof Error && error.message === "Authentication required") {

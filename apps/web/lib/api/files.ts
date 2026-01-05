@@ -23,6 +23,10 @@ export interface FileRecord {
   createdAt: string
   updatedAt: string
   
+  // Storage URLs for "View in Storage" feature
+  webUrl?: string
+  storageProvider?: "sharepoint" | "azure_blob" | "local" | "metadata"
+  
   category: {
     id: string
     name: string
@@ -64,6 +68,7 @@ export interface FileDownloadInfo {
   size: number | null
   downloadUrl: string
   expiresAt: string | null
+  webUrl?: string // URL to view the file in the storage provider (e.g., SharePoint)
 }
 
 export interface FilesListOptions {

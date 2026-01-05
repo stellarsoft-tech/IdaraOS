@@ -121,7 +121,7 @@ export default function DashboardLayout({
           <div className="flex h-full flex-col">
             <TopBar onChatsyToggle={() => setChatsyOpen(!chatsyOpen)} onCommandOpen={() => setCommandOpen(true)} />
             <div className="flex min-h-0 flex-1 overflow-hidden">
-              <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6">{children}</main>
+              <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-3 pb-4 md:px-6 md:pt-4 md:pb-6">{children}</main>
               <ChatsyDrawer open={chatsyOpen} onClose={() => setChatsyOpen(false)} />
             </div>
           </div>

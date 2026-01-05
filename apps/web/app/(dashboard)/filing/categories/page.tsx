@@ -304,7 +304,7 @@ export default function FilingCategoriesPage() {
         )
       }
     >
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Info Alert */}
         {connectedStorageIntegrations.length === 0 && (
           <Alert>

@@ -2,19 +2,41 @@
  * Debug endpoint to check Entra integration status
  * GET /api/debug/entra-status
  * 
- * This is a diagnostic endpoint - remove in production or add auth
+ * SECURITY: This endpoint requires authentication and admin role.
+ * Only accessible in development or by authenticated admins.
  */
 
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { integrations, organizations } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
+import { getSession } from "@/lib/auth/session"
 
 // Demo org ID
 const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 export async function GET() {
   try {
+    // SECURITY: Require authentication
+    const session = await getSession()
+    
+    // In production, require admin role. In development, allow if authenticated.
+    const isProduction = process.env.NODE_ENV === "production"
+    
+    if (!session) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      )
+    }
+    
+    // In production, only allow Admin or Owner roles
+    if (isProduction && !["Admin", "Owner"].includes(session.role)) {
+      return NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 }
+      )
+    }
     // Check if org exists
     const [org] = await db
       .select({ id: organizations.id, name: organizations.name })

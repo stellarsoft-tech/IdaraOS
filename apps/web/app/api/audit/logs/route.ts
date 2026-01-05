@@ -33,7 +33,19 @@ function toApiResponse(record: typeof auditLogs.$inferSelect): AuditLogEntry {
 
 export async function GET(request: NextRequest) {
   try {
-    const orgId = await requireOrgId()
+    // SECURITY: Require authentication via session
+    let orgId: string
+    try {
+      orgId = await requireOrgId()
+    } catch (error) {
+      if (error instanceof Error && error.message === "Authentication required") {
+        return NextResponse.json(
+          { error: "Not authenticated" },
+          { status: 401 }
+        )
+      }
+      throw error
+    }
     const searchParams = request.nextUrl.searchParams
     
     // Parse query parameters

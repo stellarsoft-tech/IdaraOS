@@ -16,6 +16,7 @@ function toApiResponse(
   uploader?: { id: string; name: string | null; email: string } | null,
   storage?: typeof storageIntegrations.$inferSelect | null
 ) {
+  const metadata = file.metadata as Record<string, unknown> | null
   return {
     id: file.id,
     name: file.name,
@@ -31,6 +32,10 @@ function toApiResponse(
     isDeleted: file.isDeleted,
     createdAt: file.createdAt.toISOString(),
     updatedAt: file.updatedAt.toISOString(),
+    
+    // Storage URLs for "View in Storage" feature
+    webUrl: metadata?.webUrl as string | undefined,
+    storageProvider: storage?.provider ?? (metadata?.storageProvider as string | undefined),
     
     // Relations
     category: category ? {

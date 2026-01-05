@@ -1,15 +1,27 @@
 /**
  * RBAC Permissions API
  * GET - List all permissions with their module and action details
+ * 
+ * SECURITY: Requires authentication. Permissions list is needed by RBAC UI
+ * but should not be exposed to unauthenticated users.
  */
 
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { permissions, modules, actions } from "@/lib/db/schema"
 import { eq, asc } from "drizzle-orm"
+import { getSession } from "@/lib/auth/session"
 
 export async function GET() {
   try {
+    // SECURITY: Require authentication
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      )
+    }
     const allPermissions = await db
       .select({
         id: permissions.id,

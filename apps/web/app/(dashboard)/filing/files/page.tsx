@@ -5,10 +5,12 @@ import Link from "next/link"
 import { 
   AlertCircle,
   Download,
+  ExternalLink,
   Eye,
   FileText,
   Filter,
   FolderArchive,
+  HardDrive,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -144,6 +146,23 @@ export default function FilingFilesPage() {
       await downloadFile(file.id, file.name)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to download file")
+    }
+  }
+  
+  const handleViewInStorage = (file: FileRecord) => {
+    if (file.webUrl) {
+      window.open(file.webUrl, "_blank", "noopener,noreferrer")
+    } else {
+      toast.error("Storage URL not available for this file")
+    }
+  }
+  
+  const getStorageProviderLabel = (provider?: string): string => {
+    switch (provider) {
+      case "sharepoint": return "SharePoint"
+      case "azure_blob": return "Azure Blob"
+      case "local": return "Local Storage"
+      default: return "Storage"
     }
   }
   
@@ -353,6 +372,12 @@ export default function FilingFilesPage() {
                                 <Download className="h-4 w-4 mr-2" />
                                 Download
                               </DropdownMenuItem>
+                              {file.webUrl && (
+                                <DropdownMenuItem onClick={() => handleViewInStorage(file)}>
+                                  <ExternalLink className="h-4 w-4 mr-2" />
+                                  View in {getStorageProviderLabel(file.storageProvider)}
+                                </DropdownMenuItem>
+                              )}
                               {file.entityType && file.entityId && (
                                 <DropdownMenuItem asChild>
                                   <Link href={`/${file.moduleScope}/directory/${file.entityId}`}>
