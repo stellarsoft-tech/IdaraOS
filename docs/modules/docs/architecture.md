@@ -120,7 +120,7 @@ erDiagram
     
     docs_settings {
         uuid id PK
-        uuid org_id FK UK
+        uuid org_id FK "unique"
         integer default_review_frequency_days
         text default_requirement
         boolean enable_email_notifications
