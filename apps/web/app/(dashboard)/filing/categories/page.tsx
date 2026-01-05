@@ -347,7 +347,7 @@ export default function FilingCategoriesPage() {
         </div>
         
         {/* Categories Table */}
-        <Card>
+        <Card className="py-0 gap-0">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-6 space-y-4">
