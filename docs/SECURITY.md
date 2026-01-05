@@ -17,10 +17,13 @@ IdaraOS is built with security as a core principle. This document outlines the s
 - **Just-In-Time Provisioning**: Users are provisioned on first access, reducing attack surface
 
 #### Role-Based Access Control (RBAC)
+- **Database-Driven Permissions**: All permissions are dynamically stored and queried from the database
+- **Custom Roles**: Administrators can create custom roles with granular permissions
 - **Granular Permissions**: Fine-grained permission model with module + action combinations
-- **Permission Checking**: Both client-side and server-side enforcement
-- **Protected Components**: UI elements are hidden based on user permissions
-- **Role Hierarchy**: Owner > Admin > HR/Manager > User cascading permissions
+- **Real-time Authorization**: Permission changes take effect immediately (no caching delays)
+- **Server-Side Enforcement**: All API routes validate permissions against the database
+- **Client-Side UI Protection**: UI elements hidden based on user permissions via React context
+- **Multi-Role Support**: Users can have multiple roles; permissions are combined (union)
 
 ### Data Protection
 
@@ -69,6 +72,10 @@ IdaraOS is built with security as a core principle. This document outlines the s
 - **JWT Tokens**: Stateless authentication with short-lived JWTs
 - **CSRF Protection**: NextAuth.js provides built-in CSRF protection
 - **Rate Limiting**: API endpoints protected against abuse (planned)
+- **Authorization Helpers**: Centralized `requirePermission()` function for consistent enforcement
+- **Error Handling**: Standardized 401/403 responses via `handleApiError()` utility
+
+See [Settings Module Architecture](./modules/settings/architecture.md#authorization-architecture) for detailed RBAC implementation.
 
 ---
 

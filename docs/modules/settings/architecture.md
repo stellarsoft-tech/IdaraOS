@@ -251,6 +251,192 @@ Customize logos, colors, and themes.
 
 ---
 
+## Authorization Architecture
+
+IdaraOS uses a **database-driven RBAC (Role-Based Access Control)** system where all permissions are dynamically defined and queried from the database. This enables administrators to create custom roles and assign granular permissions without code changes.
+
+### RBAC Data Model
+
+```mermaid
+erDiagram
+    users ||--o{ rbac_user_roles : has
+    rbac_roles ||--o{ rbac_user_roles : assigned_to
+    rbac_roles ||--o{ rbac_role_permissions : has
+    rbac_permissions ||--o{ rbac_role_permissions : granted_by
+    rbac_modules ||--o{ rbac_permissions : defines
+    rbac_actions ||--o{ rbac_permissions : defines
+    
+    rbac_modules {
+        uuid id PK
+        text slug "e.g. people.person"
+        text name
+        text category
+        boolean is_active
+    }
+    
+    rbac_actions {
+        uuid id PK
+        text slug "e.g. view, create, edit, delete"
+        text name
+    }
+    
+    rbac_permissions {
+        uuid id PK
+        uuid module_id FK
+        uuid action_id FK
+    }
+    
+    rbac_roles {
+        uuid id PK
+        uuid org_id FK
+        text slug
+        text name
+        boolean is_system
+        boolean is_default
+    }
+    
+    rbac_role_permissions {
+        uuid role_id FK
+        uuid permission_id FK
+    }
+    
+    rbac_user_roles {
+        uuid user_id FK
+        uuid role_id FK
+        text source "manual or sync"
+    }
+```
+
+### Authorization Flow
+
+All API routes use the `requirePermission()` helper which queries the database in real-time:
+
+```mermaid
+flowchart TD
+    Request[API Request] --> GetSession["getSession()"]
+    GetSession --> HasSession{Session exists?}
+    HasSession -->|No| Return401[401 Unauthorized]
+    HasSession -->|Yes| CheckPerm["checkUserPermission(userId, module, action)"]
+    
+    subgraph DatabaseQuery["Database Query"]
+        CheckPerm --> JoinTables["JOIN: userRoles → rolePermissions → permissions → modules + actions"]
+        JoinTables --> QueryResult{Permission found?}
+    end
+    
+    QueryResult -->|No| Return403[403 Forbidden]
+    QueryResult -->|Yes| Handler[Execute Route Handler]
+```
+
+### Server-Side Permission Check
+
+The `checkUserPermission()` function in `lib/rbac/server.ts` performs a single optimized query:
+
+```typescript
+// Checks if user has permission via their assigned roles
+async function checkUserPermission(
+  userId: string,
+  moduleSlug: string,  // e.g., "people.person"
+  actionSlug: string   // e.g., "edit"
+): Promise<boolean>
+```
+
+**Query Flow:**
+1. Find all roles assigned to the user (`rbac_user_roles`)
+2. Find all permissions for those roles (`rbac_role_permissions`)
+3. Check if any permission matches the module + action (`rbac_permissions` → `rbac_modules` + `rbac_actions`)
+
+### API Route Authorization Pattern
+
+All protected API routes follow this pattern:
+
+```typescript
+export async function GET(request: NextRequest) {
+  try {
+    // Authorization check - throws if not authorized
+    const session = await requirePermission("settings.users", "view")
+    const orgId = session.orgId
+    
+    // Route logic...
+  } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    // Handle other errors...
+  }
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized` - No valid session (not authenticated)
+- `403 Forbidden` - Session valid but lacks required permission
+
+### Client-Side Permission Check
+
+The frontend uses React context (`lib/rbac/context.tsx`) to cache permissions:
+
+```typescript
+// In components
+const { hasPermission } = useUser()
+
+if (hasPermission("settings.users", "create")) {
+  // Show create button
+}
+
+// Or use the Protected wrapper
+<Protected module="settings.users" action="delete">
+  <DeleteButton />
+</Protected>
+```
+
+Client permissions are fetched from `/api/rbac/user-permissions` on login and cached in React state.
+
+### Permission Naming Convention
+
+Permissions follow a hierarchical naming pattern:
+
+| Module Slug | Description |
+|-------------|-------------|
+| `settings.organization` | Organization settings |
+| `settings.users` | User management |
+| `settings.integrations` | Integration configuration |
+| `people.person` | People directory |
+| `people.roles` | Organizational roles |
+| `people.teams` | Team management |
+| `assets.inventory` | Asset inventory |
+| `security.risk` | Risk management |
+
+**Actions:**
+- `view` - Read access
+- `create` - Create new records
+- `edit` - Modify existing records
+- `delete` - Remove records
+
+### Multi-Role Permission Resolution
+
+Users can have multiple roles. Permissions are resolved using **union** (OR logic):
+
+```
+User has roles: [HR Manager, IT Support]
+
+HR Manager permissions: people.*, settings.users:view
+IT Support permissions: assets.*, security.controls:view
+
+User's effective permissions: people.*, settings.users:view, assets.*, security.controls:view
+```
+
+### Why Database Queries (Not Caching)?
+
+IdaraOS uses **direct database queries** for authorization rather than caching because:
+
+1. **Immediate Effect**: Permission changes are reflected instantly
+2. **Simplicity**: No cache invalidation logic needed
+3. **Accuracy**: No risk of stale permissions granting unauthorized access
+4. **Performance**: With proper indexes, queries take ~1-5ms
+5. **Security**: For an internal ops platform, accuracy > micro-optimization
+
+If needed, in-memory caching with TTL can be added later without changing the API.
+
+---
+
 ## Permissions
 
 ### Permission Matrix
