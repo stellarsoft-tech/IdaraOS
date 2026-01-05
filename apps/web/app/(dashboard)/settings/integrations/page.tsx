@@ -1595,8 +1595,9 @@ function StorageIntegrationsSection({ canEdit }: StorageIntegrationsSectionProps
           
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
-              <ScrollArea className="flex-1">
-                <div className="px-6 py-4 space-y-6">
+              <div className="flex-1 overflow-hidden">
+                <ScrollArea className="h-full">
+                  <div className="px-6 py-4 space-y-6">
                   {/* Provider Selection */}
                   {!editingIntegration && (
                     <FormField
@@ -1824,8 +1825,9 @@ function StorageIntegrationsSection({ canEdit }: StorageIntegrationsSectionProps
                       </FormItem>
                     )}
                   />
-                </div>
-              </ScrollArea>
+                  </div>
+                </ScrollArea>
+              </div>
               
               {/* Sticky footer */}
               <div className="shrink-0 border-t bg-background px-6 py-4">
