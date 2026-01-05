@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations, integrations } from "@/lib/db/schema"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { testSharePointConnection } from "@/lib/graph/client"
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -46,6 +47,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let testSuccess = false
     let testError: string | null = null
     let testDetails: Record<string, unknown> = {}
+    let sharepointSiteId: string | null = null
+    let sharepointDriveId: string | null = null
+    let sharepointDriveName: string | null = null
     
     try {
       switch (integration.provider) {
@@ -74,14 +78,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
               )
             }
             
-            // TODO: Implement actual SharePoint connection test using Microsoft Graph
-            // For now, we validate config + Entra connection exists
-            // In production, would call: GET https://graph.microsoft.com/v1.0/sites/{siteUrl}
+            // Actually test the SharePoint connection using Microsoft Graph
+            const spResult = await testSharePointConnection(integration.siteUrl)
+            
+            if (!spResult.success) {
+              throw new Error(spResult.error || "Failed to connect to SharePoint site")
+            }
+            
+            // Store the site ID and drive ID for future uploads
+            if (spResult.site) {
+              sharepointSiteId = spResult.site.id
+            }
+            if (spResult.drive) {
+              sharepointDriveId = spResult.drive.id
+              sharepointDriveName = spResult.drive.name
+            }
+            
             testDetails = {
-              message: "SharePoint configuration validated. Entra ID connection verified.",
+              message: spResult.warning 
+                ? "SharePoint site accessible but document library access limited" 
+                : "SharePoint connection verified successfully",
+              warning: spResult.warning,
               siteUrl: integration.siteUrl,
-              entraConnected: true,
-              note: "Full SharePoint API validation will be performed on first file upload.",
+              siteName: spResult.site?.displayName,
+              siteId: spResult.site?.id,
+              driveName: spResult.drive?.name,
+              driveId: spResult.drive?.id,
             }
             testSuccess = true
           } else {
@@ -157,6 +179,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       updateData.status = "connected"
       updateData.lastError = null
       updateData.lastErrorAt = null
+      
+      // Store SharePoint site/drive IDs if available
+      if (sharepointSiteId) {
+        updateData.siteId = sharepointSiteId
+      }
+      if (sharepointDriveId) {
+        updateData.driveId = sharepointDriveId
+      }
+      if (sharepointDriveName) {
+        updateData.driveName = sharepointDriveName
+      }
     } else {
       updateData.status = "error"
       updateData.lastError = testError

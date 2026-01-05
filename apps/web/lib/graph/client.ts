@@ -484,6 +484,7 @@ export async function testSharePointConnection(siteUrl: string): Promise<{
   site?: SharePointSite
   drive?: SharePointDrive
   error?: string
+  warning?: string
 }> {
   try {
     const token = await getGraphAccessToken()
@@ -498,16 +499,30 @@ export async function testSharePointConnection(siteUrl: string): Promise<{
     if (!site) {
       return {
         success: false,
-        error: "Could not access SharePoint site. Please check the site URL and permissions.",
+        error: "Could not access SharePoint site. Please check the site URL and ensure the Entra app has Sites.ReadWrite.All APPLICATION permission (not Delegated) with admin consent.",
       }
     }
 
-    const drive = await getSiteDrive(site.id)
+    // Try to get the default drive
+    let drive = await getSiteDrive(site.id)
+    
+    // If default drive fails, try listing all drives
     if (!drive) {
+      console.log("[Graph] Default drive access denied, trying to list all drives...")
+      const drives = await getSiteDrives(site.id)
+      if (drives.length > 0) {
+        // Use the first available drive (usually "Documents")
+        drive = drives.find(d => d.name === "Documents") || drives[0]
+        console.log(`[Graph] Found ${drives.length} drives, using: ${drive?.name}`)
+      }
+    }
+    
+    if (!drive) {
+      // Still return success for the site, but warn about drive access
       return {
-        success: false,
-        error: "Could not access document library. Please check permissions.",
+        success: true,
         site,
+        warning: "Site accessible but could not access document library. Ensure the Entra app has Sites.ReadWrite.All APPLICATION permission with admin consent. File uploads may fail.",
       }
     }
 

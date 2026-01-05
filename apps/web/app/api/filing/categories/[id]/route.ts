@@ -303,11 +303,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       )
     }
     
-    // Check if any files are using this category
+    // Check if any non-deleted files are using this category
     const filesUsingCategory = await db
       .select({ id: files.id })
       .from(files)
-      .where(eq(files.categoryId, id))
+      .where(
+        and(
+          eq(files.categoryId, id),
+          eq(files.isDeleted, false)
+        )
+      )
       .limit(1)
     
     if (filesUsingCategory.length > 0) {
