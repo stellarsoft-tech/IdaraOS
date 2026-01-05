@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations, integrations } from "@/lib/db/schema"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { testSharePointConnection } from "@/lib/graph/client"
 
 interface RouteParams {
@@ -20,8 +20,9 @@ interface RouteParams {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "edit")
     const { id } = await params
-    const session = await requireSession()
     
     // Get the integration
     const result = await db
@@ -222,9 +223,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       testedAt: new Date().toISOString(),
     })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error testing storage integration:", error)
     return NextResponse.json(

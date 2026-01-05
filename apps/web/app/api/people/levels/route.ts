@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizationalLevels } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { z } from "zod"
 
 // Create level schema
@@ -49,8 +49,9 @@ function toApiResponse(record: typeof organizationalLevels.$inferSelect) {
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission("people.roles", "read")
+    const orgId = session.orgId
     
     // Fetch all levels ordered by sortOrder
     const levels = await db
@@ -61,10 +62,10 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(levels.map(toApiResponse))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Levels API] Error listing levels:", error)
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
     return NextResponse.json(
       { error: "Failed to fetch levels" },
       { status: 500 }
@@ -77,8 +78,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const orgId = await requireOrgId(request)
-    await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
     
     const body = await request.json()
@@ -140,6 +142,9 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(record), { status: 201 })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Levels API] Error creating level:", error)
     
     if (error instanceof z.ZodError) {
@@ -147,10 +152,6 @@ export async function POST(request: NextRequest) {
         { error: "Validation failed", details: error.errors },
         { status: 400 }
       )
-    }
-    
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     return NextResponse.json(
@@ -165,8 +166,9 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const orgId = await requireOrgId(request)
-    await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
     
     const body = await request.json()
@@ -227,6 +229,9 @@ export async function PUT(request: NextRequest) {
     
     return NextResponse.json(results)
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Levels API] Error bulk updating levels:", error)
     
     if (error instanceof z.ZodError) {
@@ -234,10 +239,6 @@ export async function PUT(request: NextRequest) {
         { error: "Validation failed", details: error.errors },
         { status: 400 }
       )
-    }
-    
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     return NextResponse.json(

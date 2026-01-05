@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations, fileCategories } from "@/lib/db/schema"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { z } from "zod"
 
 interface RouteParams {
@@ -80,8 +80,9 @@ function toApiResponse(integration: typeof storageIntegrations.$inferSelect) {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "view")
     const { id } = await params
-    const session = await requireSession()
     
     const result = await db
       .select()
@@ -103,9 +104,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(toApiResponse(result[0]))
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching storage integration:", error)
     return NextResponse.json(
@@ -120,8 +120,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "edit")
     const { id } = await params
-    const session = await requireSession()
     const body = await request.json()
     
     // Validate
@@ -208,9 +209,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(toApiResponse(integration))
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error updating storage integration:", error)
     return NextResponse.json(
@@ -225,8 +225,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "delete")
     const { id } = await params
-    const session = await requireSession()
     
     // Check exists
     const existing = await db
@@ -278,9 +279,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json({ success: true })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error deleting storage integration:", error)
     return NextResponse.json(

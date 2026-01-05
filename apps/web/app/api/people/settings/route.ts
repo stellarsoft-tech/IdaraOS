@@ -8,9 +8,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { peopleSettings, integrations, DEFAULT_PROPERTY_MAPPING } from "@/lib/db/schema"
-
-// Demo org ID
-const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
+import { requirePermission, handleApiError } from "@/lib/api/context"
 
 /**
  * GET /api/people/settings
@@ -18,7 +16,9 @@ const DEMO_ORG_ID = "00000000-0000-0000-0000-000000000001"
  */
 export async function GET() {
   try {
-    const orgId = DEMO_ORG_ID
+    // Authorization check
+    const session = await requirePermission("people.roles", "read")
+    const orgId = session.orgId
 
     // Get people settings
     const [settings] = await db
@@ -108,6 +108,9 @@ export async function GET() {
       deletePeopleOnUserDeleteInCore: isDeletePeopleOnUserDeleteInCore,
     })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[People Settings] GET error:", error)
     return NextResponse.json(
       { error: "Failed to fetch people settings" },
@@ -122,7 +125,10 @@ export async function GET() {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const orgId = DEMO_ORG_ID
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
+    
     const body = await request.json()
 
     console.log("[People Settings] PUT request body:", JSON.stringify(body, null, 2))
@@ -288,6 +294,9 @@ export async function PUT(request: NextRequest) {
         : "People settings updated successfully.",
     })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[People Settings] PUT error:", error)
     return NextResponse.json(
       { error: "Failed to update people settings" },

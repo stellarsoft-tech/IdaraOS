@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { teams, persons } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { z } from "zod"
 
 // Update team schema
@@ -68,8 +68,11 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authorization check
+    const session = await requirePermission("people.roles", "read")
+    const orgId = session.orgId
+    
     const { id } = await params
-    const orgId = await requireOrgId(request)
     
     // Fetch the team
     const [team] = await db
@@ -148,10 +151,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(toApiResponse(team, lead, parentTeam, memberCount, childCount))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Teams API] Error fetching team:", error)
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
     return NextResponse.json(
       { error: "Failed to fetch team" },
       { status: 500 }
@@ -164,10 +167,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params
-    const orgId = await requireOrgId(request)
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
+    
+    const { id } = await params
     
     const body = await request.json()
     const data = UpdateTeamSchema.parse(body)
@@ -309,6 +314,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(toApiResponse(record, lead, parentTeam))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Teams API] Error updating team:", error)
     
     if (error instanceof z.ZodError) {
@@ -316,10 +324,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { error: "Validation failed", details: error.errors },
         { status: 400 }
       )
-    }
-    
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     return NextResponse.json(
@@ -334,10 +338,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params
-    const orgId = await requireOrgId(request)
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
+    
+    const { id } = await params
     
     // Fetch existing team
     const [existing] = await db
@@ -384,10 +390,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json({ success: true })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Teams API] Error deleting team:", error)
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
     return NextResponse.json(
       { error: "Failed to delete team" },
       { status: 500 }

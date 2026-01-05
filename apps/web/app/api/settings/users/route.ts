@@ -9,7 +9,7 @@ import { and, asc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { users, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
 import { z } from "zod"
-import { requireOrgId, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 
 // Create user schema
 const CreateUserSchema = z.object({
@@ -66,8 +66,9 @@ function toApiResponse(
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission("settings.users", "view")
+    const orgId = session.orgId
     
     // Get all users for this organization
     const usersData = await db
@@ -140,13 +141,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching users:", error)
     return NextResponse.json(
@@ -161,6 +157,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.users", "create")
+    const orgId = session.orgId
+    
     const body = await request.json()
 
     // Validate
@@ -173,9 +173,6 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parseResult.data
-
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
 
     // Check if email already exists in this organization
     const existing = await db
@@ -223,13 +220,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(toApiResponse(record, []), { status: 201 })
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error creating user:", error)
     return NextResponse.json(

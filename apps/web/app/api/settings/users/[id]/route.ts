@@ -11,7 +11,7 @@ import { db } from "@/lib/db"
 import { users, userRoleValues, userStatusValues, persons, integrations } from "@/lib/db/schema"
 import { z } from "zod"
 import { syncUserToEntra, isEntraSyncEnabled } from "@/lib/auth/entra-sync"
-import { requireOrgId, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 
 // Update user schema
 const UpdateUserSchema = z.object({
@@ -62,8 +62,11 @@ async function isBidirectionalSyncEnabled(orgId: string): Promise<boolean> {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.users", "view")
+    const orgId = session.orgId
+    
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
 
     const [record] = await db
       .select()
@@ -77,13 +80,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(toApiResponse(record))
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching user:", error)
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })
@@ -95,8 +93,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.users", "edit")
+    const orgId = session.orgId
+    
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
     const body = await request.json()
 
     // Validate
@@ -215,6 +216,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       entraSync: entraSync || undefined,
     })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("Error updating user:", error)
     return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
   }
@@ -225,8 +229,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.users", "delete")
+    const orgId = session.orgId
+    
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
 
     // Get user details before deleting (for validation and Entra sync)
     const [userToDelete] = await db
@@ -290,13 +297,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error deleting user:", error)
     return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })

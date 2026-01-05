@@ -12,7 +12,7 @@ import { persons, users, organizationalRoles, teams } from "@/lib/db/schema"
 import { UpdatePersonSchema } from "@/lib/generated/people/person/types"
 import { getEntraConfig } from "@/lib/auth/entra-config"
 import { syncPersonToEntra } from "@/lib/auth/entra-sync"
-import { getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
 
 // UUID regex
@@ -208,6 +208,9 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
+    // Authorization check
+    await requirePermission("people.person", "read")
+    
     const { id } = await context.params
     
     const [record] = await db
@@ -306,6 +309,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     
     return NextResponse.json(toApiResponse(record, linkedUser, manager, entraRealTimeInfo, orgRole, teamInfo))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("Error fetching person:", error)
     return NextResponse.json({ error: "Failed to fetch person" }, { status: 500 })
   }
@@ -316,6 +322,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
+    // Authorization check
+    const session = await requirePermission("people.person", "write")
+    
     const { id } = await context.params
     const body = await request.json()
     
@@ -611,14 +620,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     // Trigger workflow via central processor if status changed
     if (data.status && data.status !== existing.status) {
       try {
-        // Get session for the user who made the change
-        let triggeredByUserId: string | undefined
-        try {
-          const session = await requireSession()
-          triggeredByUserId = session.userId
-        } catch {
-          // If no session, workflow will be created without a startedBy
-        }
+        // Use session from the authorization check
+        const triggeredByUserId = session.userId
         
         const workflowResult = await processWorkflowEvent({
           type: "person.status_changed",
@@ -641,6 +644,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     
     return NextResponse.json(toApiResponse(record, linkedUser, manager, null, orgRole, teamInfoResult))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("Error updating person:", error)
     return NextResponse.json({ error: "Failed to update person" }, { status: 500 })
   }
@@ -651,6 +657,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
+    // Authorization check
+    await requirePermission("people.person", "write")
+    
     const { id } = await context.params
     
     // Find the person first to get their details for the audit log
@@ -684,6 +693,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     
     return new NextResponse(null, { status: 204 })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("Error deleting person:", error)
     return NextResponse.json({ error: "Failed to delete person" }, { status: 500 })
   }

@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizationalRoles, persons, teams } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { z } from "zod"
 
 // Update role schema
@@ -73,8 +73,11 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    // Authorization check
+    const session = await requirePermission("people.roles", "read")
+    const orgId = session.orgId
+    
     const { id } = await params
-    const orgId = await requireOrgId(request)
     
     // Fetch the role
     const [role] = await db
@@ -150,10 +153,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(toApiResponse(role, parentRole, team, holderCount, childCount))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Roles API] Error fetching role:", error)
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
     return NextResponse.json(
       { error: "Failed to fetch role" },
       { status: 500 }
@@ -166,10 +169,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params
-    const orgId = await requireOrgId(request)
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
+    
+    const { id } = await params
     
     const body = await request.json()
     const data = UpdateRoleSchema.parse(body)
@@ -336,6 +341,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json(toApiResponse(record, parentRole, team))
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Roles API] Error updating role:", error)
     
     if (error instanceof z.ZodError) {
@@ -343,10 +351,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { error: "Validation failed", details: error.errors },
         { status: 400 }
       )
-    }
-    
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     return NextResponse.json(
@@ -361,10 +365,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params
-    const orgId = await requireOrgId(request)
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
+    
+    const { id } = await params
     
     // Fetch existing role
     const [existing] = await db
@@ -411,10 +417,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     
     return NextResponse.json({ success: true })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Roles API] Error deleting role:", error)
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
     return NextResponse.json(
       { error: "Failed to delete role" },
       { status: 500 }

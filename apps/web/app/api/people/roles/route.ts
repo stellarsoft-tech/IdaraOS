@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, ilike, or, and, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizationalRoles, persons, teams } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { z } from "zod"
 
 // Create role schema - teamId is required
@@ -88,8 +88,9 @@ export async function GET(request: NextRequest) {
     const teamId = searchParams.get("teamId")
     const topLevelOnly = searchParams.get("topLevelOnly") === "true"
     
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission("people.roles", "read")
+    const orgId = session.orgId
     
     // Build query conditions
     const conditions = [eq(organizationalRoles.orgId, orgId)]
@@ -210,10 +211,10 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(response)
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Roles API] Error fetching roles:", error)
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
     return NextResponse.json(
       { error: "Failed to fetch roles" },
       { status: 500 }
@@ -226,8 +227,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const orgId = await requireOrgId(request)
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
     
     const body = await request.json()
@@ -331,6 +333,9 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(record, parentRole, team, 0, 0), { status: 201 })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Roles API] Error creating role:", error)
     
     if (error instanceof z.ZodError) {
@@ -338,10 +343,6 @@ export async function POST(request: NextRequest) {
         { error: "Validation failed", details: error.errors },
         { status: 400 }
       )
-    }
-    
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     return NextResponse.json(
@@ -356,8 +357,9 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
-    const orgId = await requireOrgId(request)
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("people.roles", "write")
+    const orgId = session.orgId
     const auditLog = await getAuditLogger()
     
     const body = await request.json()
@@ -431,6 +433,9 @@ export async function PUT(request: NextRequest) {
     
     return NextResponse.json({ success: true, updatedCount: data.updates.length })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
     console.error("[Roles API] Error bulk updating roles:", error)
     
     if (error instanceof z.ZodError) {
@@ -438,10 +443,6 @@ export async function PUT(request: NextRequest) {
         { error: "Validation failed", details: error.errors },
         { status: 400 }
       )
-    }
-    
-    if ((error as Error).message?.includes("Unauthorized")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
     return NextResponse.json(

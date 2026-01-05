@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, desc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations } from "@/lib/db/schema"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { z } from "zod"
 
 // Validation schema for creating storage integration
@@ -76,7 +76,8 @@ function toApiResponse(integration: typeof storageIntegrations.$inferSelect) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "view")
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get("provider")
     const status = searchParams.get("status")
@@ -102,9 +103,8 @@ export async function GET(request: NextRequest) {
       data: results.map(toApiResponse),
     })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching storage integrations:", error)
     return NextResponse.json(
@@ -120,7 +120,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSession()
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "create")
     const body = await request.json()
     
     // Validate
@@ -185,9 +186,8 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(integration), { status: 201 })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error creating storage integration:", error)
     return NextResponse.json(

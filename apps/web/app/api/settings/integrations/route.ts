@@ -9,7 +9,7 @@ import { integrations, type IntegrationProvider } from "@/lib/db/schema"
 import { eq, and } from "drizzle-orm"
 import { z } from "zod"
 import crypto from "crypto"
-import { requireOrgId } from "@/lib/api/context"
+import { requirePermission, handleApiError } from "@/lib/api/context"
 
 // Simple encryption for demo (in production, use proper key management)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "demo-key-change-in-production-32c"
@@ -112,9 +112,12 @@ const UpdateEntraConfigSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "view")
+    const orgId = session.orgId
+    
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get("provider")
-    const orgId = await requireOrgId(request)
 
     const query = db
       .select()
@@ -210,13 +213,8 @@ export async function GET(request: NextRequest) {
       }))
     )
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching integrations:", error)
     return NextResponse.json(
@@ -232,8 +230,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "create")
+    const orgId = session.orgId
+    
     const body = await request.json()
-    const orgId = await requireOrgId(request)
 
     // For now, only handle Entra
     if (body.provider === "entra") {
@@ -357,13 +358,8 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error saving integration:", error)
     return NextResponse.json(
@@ -379,8 +375,11 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "edit")
+    const orgId = session.orgId
+    
     const body = await request.json()
-    const orgId = await requireOrgId(request)
 
     if (body.provider === "entra") {
       const parseResult = UpdateEntraConfigSchema.safeParse(body)
@@ -479,13 +478,8 @@ export async function PATCH(request: NextRequest) {
       { status: 400 }
     )
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error updating integration:", error)
     return NextResponse.json(
@@ -501,9 +495,12 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.integrations", "delete")
+    const orgId = session.orgId
+    
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get("provider")
-    const orgId = await requireOrgId(request)
 
     if (!provider) {
       return NextResponse.json(
@@ -536,13 +533,8 @@ export async function DELETE(request: NextRequest) {
       message: "Integration disconnected successfully",
     })
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error deleting integration:", error)
     return NextResponse.json(

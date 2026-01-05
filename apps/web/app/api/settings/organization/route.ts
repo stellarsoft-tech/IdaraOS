@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizations } from "@/lib/db/schema"
 import { z } from "zod"
-import { requireOrgId, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 
 // Update schema
 const UpdateOrganizationSchema = z.object({
@@ -33,8 +33,9 @@ const UpdateOrganizationSchema = z.object({
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission("settings.organization", "view")
+    const orgId = session.orgId
     
     const [org] = await db
       .select()
@@ -51,13 +52,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(org)
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching organization:", error)
     return NextResponse.json(
@@ -72,6 +68,10 @@ export async function GET(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("settings.organization", "edit")
+    const orgId = session.orgId
+    
     const body = await request.json()
 
     // Validate
@@ -84,9 +84,6 @@ export async function PUT(request: NextRequest) {
     }
 
     const data = parseResult.data
-
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
 
     // Get existing organization for audit log
     const [existing] = await db
@@ -158,13 +155,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json(updated)
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error updating organization:", error)
     return NextResponse.json(

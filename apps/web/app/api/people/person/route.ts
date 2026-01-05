@@ -9,7 +9,7 @@ import { eq, ilike, or, and, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { persons, users, organizationalRoles, teams } from "@/lib/db/schema"
 import { CreatePersonSchema } from "@/lib/generated/people/person/types"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
 
 // Generate slug from name
@@ -132,8 +132,9 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status")
     const team = searchParams.get("team")
     
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission("people.person", "read")
+    const orgId = session.orgId
     
     // Build query - always filter by organization
     const conditions = [eq(persons.orgId, orgId)]
@@ -250,13 +251,8 @@ export async function GET(request: NextRequest) {
       })
     )
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching people:", error)
     return NextResponse.json(
@@ -271,6 +267,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission("people.person", "write")
+    const orgId = session.orgId
+    
     const body = await request.json()
     
     // Validate
@@ -284,9 +284,6 @@ export async function POST(request: NextRequest) {
     
     const data = parseResult.data
     const slug = slugify(data.name)
-    
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
     
     // Check duplicate email
     const existing = await db
@@ -365,14 +362,8 @@ export async function POST(request: NextRequest) {
     
     // Trigger workflow via central processor
     try {
-      // Get session for the user who created the person
-      let triggeredByUserId: string | undefined
-      try {
-        const session = await requireSession()
-        triggeredByUserId = session.userId
-      } catch {
-        // If no session, workflow will be created without a startedBy
-      }
+      // Use session from the authorization check
+      const triggeredByUserId = session.userId
       
       const workflowResult = await processWorkflowEvent({
         type: "person.created",
@@ -401,13 +392,8 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(record, null, null, orgRole, teamInfo), { status: 201 })
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error creating person:", error)
     return NextResponse.json(
