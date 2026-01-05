@@ -134,17 +134,63 @@ Define custom roles with granular permissions.
 
 ### Integrations (`/settings/integrations`)
 
-Connect third-party services for SSO and provisioning.
+Connect third-party services for SSO, provisioning, and file storage.
 
 **Features:**
-- Microsoft Entra ID (Azure AD) integration
-  - SSO configuration (tenant ID, client ID, client secret)
-  - SCIM provisioning for automatic user sync
-  - Group prefix for role mapping (e.g., `IdaraOS-*`)
-  - Group-to-role mapping
-  - Bidirectional sync support
+
+#### Microsoft Entra ID (Azure AD)
+- SSO configuration (tenant ID, client ID, client secret)
+- SCIM provisioning for automatic user sync
+- Group prefix for role mapping (e.g., `IdaraOS-*`)
+- Group-to-role mapping
+- Bidirectional sync support
 - Integration status monitoring
 - Manual sync trigger for users
+
+#### File Storage Integrations
+- **SharePoint** - Store files in SharePoint document libraries
+  - Uses Microsoft Graph API
+  - Requires `Sites.ReadWrite.All` Application permission with admin consent
+  - Auto-discovers Site ID and Drive ID on test connection
+- **Azure Blob Storage** - Store files in Azure blob containers
+  - Connection string or managed identity authentication
+- **Local Storage** - Development-only storage
+
+```mermaid
+graph TB
+    subgraph "Settings: Integrations"
+        ENTRA[Microsoft 365<br/>Identity & SSO]
+        STORAGE[File Storage<br/>SharePoint / Blob]
+    end
+    
+    subgraph "Storage Providers"
+        SP[SharePoint]
+        BLOB[Azure Blob]
+        LOCAL[Local]
+    end
+    
+    subgraph "Filing Module"
+        CATS[File Categories]
+        FILES[Files]
+    end
+    
+    ENTRA --> |auth for| SP
+    STORAGE --> SP
+    STORAGE --> BLOB
+    STORAGE --> LOCAL
+    
+    SP --> CATS
+    BLOB --> CATS
+    CATS --> FILES
+```
+
+**Storage Integration Flow:**
+
+1. Admin adds storage integration (e.g., SharePoint site URL)
+2. Admin clicks "Test" to verify connection
+3. System uses Microsoft Graph to fetch Site ID and Drive ID
+4. Admin creates file categories linked to the storage integration
+5. Files uploaded to categories are stored in the configured location
 
 **People-Agnostic Design:**
 
@@ -152,7 +198,9 @@ This module is intentionally decoupled from the People module. It handles:
 - ✅ User account provisioning
 - ✅ Role assignment via groups
 - ✅ SSO authentication
+- ✅ Storage integration configuration
 - ❌ People/Employee sync (managed in People > Settings)
+- ❌ File categories (managed in Filing > Categories)
 
 If People sync is configured independently in People > Settings (Mode B), this module shows a notice:
 
@@ -162,6 +210,7 @@ If People sync is configured independently in People > Settings (Mode B), this m
 ```
 
 See [People Module Architecture](../people/architecture.md) for People sync configuration.
+See [Filing Module Architecture](../filing/architecture.md) for file management.
 
 ### Audit Log (`/settings/audit-log`)
 
@@ -683,6 +732,33 @@ sequenceDiagram
 | POST | `/api/integrations/entra/scim-token` | Regenerate SCIM token |
 | GET | `/api/integrations/entra/users` | Search Entra users |
 
+### Storage Integrations API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/settings/storage-integrations` | List storage integrations |
+| POST | `/api/settings/storage-integrations` | Create storage integration |
+| GET | `/api/settings/storage-integrations/[id]` | Get integration details |
+| PATCH | `/api/settings/storage-integrations/[id]` | Update integration |
+| DELETE | `/api/settings/storage-integrations/[id]` | Delete integration |
+| POST | `/api/settings/storage-integrations/[id]/test` | Test connection |
+
+**Test Connection Response (SharePoint):**
+
+```json
+{
+  "success": true,
+  "details": {
+    "message": "SharePoint connection verified successfully",
+    "siteUrl": "https://contoso.sharepoint.com/sites/hr",
+    "siteName": "HR Site",
+    "siteId": "contoso.sharepoint.com,abc123,...",
+    "driveName": "Documents",
+    "driveId": "b!xyz..."
+  }
+}
+```
+
 ### SCIM API (Entra Provisioning)
 
 | Method | Path | Description |
@@ -733,7 +809,8 @@ sequenceDiagram
 - `rbac_permissions` - Module + Action combinations
 - `rbac_role_permissions` - Role to permission mappings
 - `rbac_user_roles` - User to role assignments
-- `integrations` - Integration configurations
+- `integrations` - Identity provider configurations (Entra ID)
+- `core_storage_integrations` - File storage configurations (SharePoint, Blob)
 - `audit_logs` - System activity log
 
 ### Audit Logs Table Schema
