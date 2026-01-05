@@ -10,7 +10,8 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { documents, documentRollouts, documentAcknowledgments } from "@/lib/db/schema"
 import { UpdateRolloutSchema } from "@/lib/docs/types"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -21,10 +22,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.rollouts.view())
     
     const { id } = await context.params
     
@@ -67,10 +65,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.rollouts.view())
     
     const { id } = await context.params
     const body = await request.json()
@@ -139,10 +134,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.rollouts.view())
     
     const { id } = await context.params
     

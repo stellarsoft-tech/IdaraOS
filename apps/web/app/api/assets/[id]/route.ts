@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assets, assetCategories, persons, assetLifecycleEvents, assetAssignments } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
 import { z } from "zod"
 
@@ -98,8 +99,10 @@ export async function GET(
   context: RouteContext
 ) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.inventory.view())
+    const orgId = session.orgId
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
     
     // Fetch asset
     const result = await db
@@ -161,12 +164,8 @@ export async function GET(
     
     return NextResponse.json(toApiResponse(asset, category, assignee))
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching asset:", error)
     return NextResponse.json(
@@ -184,6 +183,9 @@ export async function PATCH(
   context: RouteContext
 ) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.inventory.edit())
+    const orgId = session.orgId
     const { id } = await context.params
     const body = await request.json()
     
@@ -195,9 +197,6 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    
-    const session = await requireSession()
-    const orgId = session.orgId
     
     // Check asset exists and belongs to org
     const existing = await db
@@ -404,12 +403,8 @@ export async function PATCH(
     
     return NextResponse.json(toApiResponse(record))
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error updating asset:", error)
     return NextResponse.json(
@@ -427,8 +422,10 @@ export async function DELETE(
   context: RouteContext
 ) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.inventory.delete())
+    const orgId = session.orgId
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
     
     // Check asset exists
     const existing = await db
@@ -464,12 +461,8 @@ export async function DELETE(
     
     return NextResponse.json({ success: true })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error deleting asset:", error)
     return NextResponse.json(

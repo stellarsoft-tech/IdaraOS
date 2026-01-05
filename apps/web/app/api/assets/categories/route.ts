@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, asc, and, sql, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assetCategories, assets } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Generate slug from name
@@ -78,7 +79,9 @@ function toApiResponse(
  */
 export async function GET(request: NextRequest) {
   try {
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission(...P.assets.categories.view())
+    const orgId = session.orgId
     
     // Get all categories
     const results = await db
@@ -129,12 +132,8 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(response)
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching categories:", error)
     return NextResponse.json(
@@ -149,6 +148,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.categories.create())
+    const orgId = session.orgId
+    
     const body = await request.json()
     
     // Validate
@@ -159,9 +162,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
-    const session = await requireSession()
-    const orgId = session.orgId
     const data = parseResult.data
     const slug = slugify(data.name)
     
@@ -240,12 +240,8 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(record, { childCount: 0, assetCount: 0 }), { status: 201 })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error creating category:", error)
     return NextResponse.json(
@@ -261,6 +257,10 @@ export async function POST(request: NextRequest) {
  */
 export async function PUT(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.categories.edit())
+    const orgId = session.orgId
+    
     const body = await request.json()
     
     // Validate
@@ -271,9 +271,6 @@ export async function PUT(request: NextRequest) {
         { status: 400 }
       )
     }
-    
-    const session = await requireSession()
-    const orgId = session.orgId
     const { updates } = parseResult.data
     
     if (updates.length === 0) {
@@ -339,12 +336,8 @@ export async function PUT(request: NextRequest) {
     
     return NextResponse.json({ success: true, updatedCount })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error bulk updating categories:", error)
     return NextResponse.json(

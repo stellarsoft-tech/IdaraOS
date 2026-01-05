@@ -17,7 +17,8 @@ import {
   users,
 } from "@/lib/db/schema"
 import { UpdateDocumentSchema, CreateVersionSchema } from "@/lib/docs/types"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { readDocumentContent, writeDocumentContent, deleteDocumentFile } from "@/lib/docs/mdx"
 
 // UUID regex
@@ -39,10 +40,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.documents.view())
     
     const { id } = await context.params
     const includeContent = request.nextUrl.searchParams.get("content") !== "false"
@@ -207,10 +205,7 @@ function bumpPatchVersion(version: string): string {
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.documents.view())
     
     const { id } = await context.params
     const body = await request.json()
@@ -360,10 +355,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
  */
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.documents.view())
     
     const { id } = await context.params
     

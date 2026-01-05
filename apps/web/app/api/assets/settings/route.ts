@@ -8,14 +8,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assetsSettings } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 /**
  * GET /api/assets/settings
  */
 export async function GET(request: NextRequest) {
   try {
-    const orgId = await requireOrgId(request)
+    const session = await requirePermission(...P.assets.settings.view())
+    const orgId = session.orgId
     
     const result = await db
       .select()
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.settings.edit())
     const orgId = session.orgId
     const body = await request.json()
     

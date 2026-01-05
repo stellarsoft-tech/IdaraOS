@@ -9,7 +9,8 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { documents, documentAcknowledgments, documentRollouts } from "@/lib/db/schema"
 import { UpdateAcknowledgmentSchema } from "@/lib/docs/types"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -20,10 +21,7 @@ interface RouteContext {
  */
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.acknowledgments.view())
     
     const { id } = await context.params
     
@@ -55,10 +53,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.acknowledgments.view())
     
     const { id } = await context.params
     const body = await request.json()

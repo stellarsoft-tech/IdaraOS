@@ -17,7 +17,8 @@ import {
   persons,
 } from "@/lib/db/schema"
 import { CreateRolloutSchema } from "@/lib/docs/types"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { readDocumentContent } from "@/lib/docs/mdx"
 
 /**
@@ -25,10 +26,7 @@ import { readDocumentContent } from "@/lib/docs/mdx"
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.rollouts.view())
     
     const searchParams = request.nextUrl.searchParams
     const documentId = searchParams.get("documentId")
@@ -154,10 +152,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.rollouts.view())
     
     const body = await request.json()
     

@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assetMaintenanceRecords, assets, users, persons, assetLifecycleEvents } from "@/lib/db/schema"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
 import { z } from "zod"
 
@@ -39,7 +40,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.maintenance.edit())
     const orgId = session.orgId
     
     // Fetch record
@@ -143,7 +144,7 @@ export async function PATCH(
       )
     }
     
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.maintenance.edit())
     const orgId = session.orgId
     const data = parseResult.data
     
@@ -357,7 +358,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await context.params
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.maintenance.edit())
     const orgId = session.orgId
     
     // Check record exists and belongs to org

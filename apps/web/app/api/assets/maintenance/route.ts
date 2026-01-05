@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, desc, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assetMaintenanceRecords, assets, users, persons, assetLifecycleEvents } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Create maintenance schema
@@ -67,7 +68,8 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type")
     const assetId = searchParams.get("assetId")
     
-    const orgId = await requireOrgId(request)
+    const session = await requirePermission(...P.assets.maintenance.view())
+    const orgId = session.orgId
     
     // Build conditions
     const conditions = [eq(assetMaintenanceRecords.orgId, orgId)]
@@ -191,7 +193,7 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.maintenance.create())
     const orgId = session.orgId
     const data = parseResult.data
     

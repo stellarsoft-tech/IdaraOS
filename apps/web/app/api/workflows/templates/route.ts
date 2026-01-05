@@ -13,7 +13,8 @@ import {
   users,
   persons,
 } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Create template schema
@@ -85,7 +86,8 @@ export async function GET(request: NextRequest) {
     const activeOnly = searchParams.get("activeOnly") === "true"
     
     // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    const session = await requirePermission(...P.workflows.templates.view())
+    const orgId = session.orgId
     
     // Build query - always filter by organization
     const conditions = [eq(workflowTemplates.orgId, orgId)]
@@ -227,7 +229,7 @@ export async function POST(request: NextRequest) {
     const data = parseResult.data
     
     // Get session for user ID
-    const session = await requireSession()
+    const session = await requirePermission(...P.workflows.templates.create())
     const orgId = session.orgId
     
     // Insert template

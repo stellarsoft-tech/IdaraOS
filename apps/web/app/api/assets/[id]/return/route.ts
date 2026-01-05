@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, isNull } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assets, assetAssignments, assetLifecycleEvents, persons } from "@/lib/db/schema"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 const ReturnSchema = z.object({
@@ -38,7 +39,7 @@ export async function POST(
       )
     }
     
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.assignments.edit())
     const orgId = session.orgId
     const { notes } = parseResult.data
     

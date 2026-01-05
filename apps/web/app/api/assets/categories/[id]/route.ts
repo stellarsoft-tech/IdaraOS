@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assetCategories, assets } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Generate slug from name
@@ -60,8 +61,10 @@ export async function GET(
   context: RouteContext
 ) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.categories.view())
+    const orgId = session.orgId
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
     
     const result = await db
       .select()
@@ -81,12 +84,8 @@ export async function GET(
     
     return NextResponse.json(toApiResponse(result[0]))
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching category:", error)
     return NextResponse.json(
@@ -104,6 +103,9 @@ export async function PATCH(
   context: RouteContext
 ) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.categories.edit())
+    const orgId = session.orgId
     const { id } = await context.params
     const body = await request.json()
     
@@ -115,9 +117,6 @@ export async function PATCH(
         { status: 400 }
       )
     }
-    
-    const session = await requireSession()
-    const orgId = session.orgId
     const data = parseResult.data
     
     // Check exists
@@ -182,12 +181,8 @@ export async function PATCH(
     
     return NextResponse.json(toApiResponse(record))
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error updating category:", error)
     return NextResponse.json(
@@ -205,8 +200,10 @@ export async function DELETE(
   context: RouteContext
 ) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.categories.delete())
+    const orgId = session.orgId
     const { id } = await context.params
-    const orgId = await requireOrgId(request)
     
     // Check exists
     const existing = await db
@@ -253,12 +250,8 @@ export async function DELETE(
     
     return NextResponse.json({ success: true })
   } catch (error) {
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error deleting category:", error)
     return NextResponse.json(

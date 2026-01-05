@@ -9,7 +9,8 @@ import { eq, and, or, ilike, inArray, desc, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { documents, documentRollouts, documentAcknowledgments, persons, users } from "@/lib/db/schema"
 import { CreateDocumentSchema } from "@/lib/docs/types"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { writeDocumentContent } from "@/lib/docs/mdx"
 
 /**
@@ -18,10 +19,7 @@ import { writeDocumentContent } from "@/lib/docs/mdx"
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.documents.view())
     
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get("search")
@@ -146,10 +144,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.documents.view())
     
     const body = await request.json()
     

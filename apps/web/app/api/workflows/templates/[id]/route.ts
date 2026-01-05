@@ -16,7 +16,8 @@ import {
   users,
   persons,
 } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Update template schema (TODO: use for simple updates without steps/edges)
@@ -85,8 +86,9 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const session = await requirePermission(...P.workflows.templates.view())
+    const orgId = session.orgId
     const { id } = await params
-    const orgId = await requireOrgId(request)
     
     // Get template
     const templates = await db
@@ -255,6 +257,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const session = await requirePermission(...P.workflows.templates.edit())
+    const orgId = session.orgId
     const { id } = await params
     const body = await request.json()
     
@@ -268,8 +272,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     
     const data = parseResult.data
-    const session = await requireSession()
-    const orgId = session.orgId
     
     // Check template exists and belongs to org
     const existing = await db
@@ -419,9 +421,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params
-    const session = await requireSession()
+    const session = await requirePermission(...P.workflows.templates.delete())
     const orgId = session.orgId
+    const { id } = await params
     
     // Check template exists and belongs to org
     const existing = await db

@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, and, or, sql, inArray, lt } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { documents, documentRollouts, documentAcknowledgments } from "@/lib/db/schema"
-import { requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 /**
  * GET /api/docs/my-documents
@@ -15,10 +16,7 @@ import { requireSession } from "@/lib/api/context"
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireSession()
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const session = await requirePermission(...P.docs.documents.view())
     
     const searchParams = request.nextUrl.searchParams
     const status = searchParams.get("status") // pending, completed, all

@@ -14,7 +14,8 @@ import {
   integrations,
   assetsSettings,
 } from "@/lib/db/schema"
-import { requireSession, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { decrypt } from "@/lib/encryption"
 
 // Microsoft Graph API types
@@ -175,7 +176,7 @@ function mapDeviceToAsset(
  */
 export async function POST(_request: NextRequest) {
   try {
-    const session = await requireSession()
+    const session = await requirePermission(...P.assets.settings.edit())
     const orgId = session.orgId
     
     // Get Entra integration configuration

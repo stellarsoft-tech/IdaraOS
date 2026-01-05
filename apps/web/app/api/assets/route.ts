@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq, ilike, or, and, inArray, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { assets, assetCategories, persons, assetLifecycleEvents } from "@/lib/db/schema"
-import { requireOrgId, getAuditLogger, requireSession } from "@/lib/api/context"
+import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Create asset schema
@@ -95,8 +96,9 @@ export async function GET(request: NextRequest) {
     const assignedToId = searchParams.get("assignedToId")
     const source = searchParams.get("source")
     
-    // Get orgId from authenticated session
-    const orgId = await requireOrgId(request)
+    // Authorization check
+    const session = await requirePermission(...P.assets.inventory.view())
+    const orgId = session.orgId
     
     // Build query - always filter by organization
     const conditions = [eq(assets.orgId, orgId)]
@@ -199,13 +201,8 @@ export async function GET(request: NextRequest) {
       )
     )
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error fetching assets:", error)
     return NextResponse.json(
@@ -220,6 +217,10 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Authorization check
+    const session = await requirePermission(...P.assets.inventory.create())
+    const orgId = session.orgId
+    
     const body = await request.json()
     
     // Validate
@@ -232,10 +233,6 @@ export async function POST(request: NextRequest) {
     }
     
     const data = parseResult.data
-    
-    // Get session for user ID
-    const session = await requireSession()
-    const orgId = session.orgId
     
     // Check duplicate asset tag
     const existing = await db
@@ -313,13 +310,8 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(toApiResponse(record), { status: 201 })
   } catch (error) {
-    // Handle authentication errors
-    if (error instanceof Error && error.message === "Authentication required") {
-      return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
-      )
-    }
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     
     console.error("Error creating asset:", error)
     return NextResponse.json(
