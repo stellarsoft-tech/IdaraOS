@@ -10,6 +10,7 @@ import { db } from "@/lib/db"
 import { users, userRoleValues, userRoles, roles, persons } from "@/lib/db/schema"
 import { z } from "zod"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 // Create user schema
 const CreateUserSchema = z.object({
@@ -67,7 +68,7 @@ function toApiResponse(
 export async function GET(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.users", "view")
+    const session = await requirePermission(...P.settings.users.view())
     const orgId = session.orgId
     
     // Get all users for this organization
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.users", "create")
+    const session = await requirePermission(...P.settings.users.create())
     const orgId = session.orgId
     
     const body = await request.json()

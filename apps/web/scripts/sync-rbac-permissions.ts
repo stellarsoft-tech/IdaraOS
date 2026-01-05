@@ -5,17 +5,21 @@
  * automatically receives all permissions for those modules.
  * 
  * Run this script:
- * - After adding new modules to DEFAULT_MODULES
+ * - After adding new modules to MODULE_REGISTRY
  * - As part of deployment/migration process
  * - Manually when needed: pnpm db:sync-rbac
  * 
  * This is idempotent and safe to run multiple times.
+ * 
+ * IMPORTANT: Module and action slugs are defined in lib/rbac/resources.ts
+ * which is the single source of truth. This script uses those constants.
  */
 
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
 import { eq, and } from "drizzle-orm"
 import * as schema from "../lib/db/schema"
+import { MODULES, ACTIONS, type ModuleSlug, type ActionSlug } from "../lib/rbac/resources"
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/idaraos",
@@ -25,82 +29,100 @@ const db = drizzle(pool, { schema })
 
 // ============ Module Registry ============
 // All available modules in the system
-// When adding new modules, add them here first
+// When adding new modules, add them to lib/rbac/resources.ts FIRST,
+// then add the entry here using the MODULES.* constant.
 
-export const MODULE_REGISTRY = [
+type ModuleRegistryEntry = {
+  slug: ModuleSlug
+  name: string
+  description: string
+  category: string
+  icon: string
+  sortOrder: string
+  actions: readonly ActionSlug[]
+}
+
+export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   // People & HR
-  { slug: "people.overview", name: "Overview", description: "View People & HR dashboard", category: "People & HR", icon: "LayoutDashboard", sortOrder: "100", actions: ["view"] },
-  { slug: "people.directory", name: "Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "101", actions: ["view", "create", "edit", "delete"] },
-  { slug: "people.teams", name: "Teams", description: "Manage organizational teams", category: "People & HR", icon: "UsersRound", sortOrder: "102", actions: ["view", "create", "edit", "delete"] },
-  { slug: "people.roles", name: "Roles", description: "Manage organizational roles and hierarchy", category: "People & HR", icon: "Building2", sortOrder: "103", actions: ["view", "create", "edit", "delete"] },
-  { slug: "people.workflows", name: "Workflows", description: "View people-related workflows", category: "People & HR", icon: "Workflow", sortOrder: "104", actions: ["view"] },
-  { slug: "people.settings", name: "Settings", description: "Configure People & HR module settings", category: "People & HR", icon: "Settings", sortOrder: "105", actions: ["view", "edit"] },
-  { slug: "people.auditlog", name: "Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "106", actions: ["view"] },
+  { slug: MODULES.PEOPLE_OVERVIEW, name: "Overview", description: "View People & HR dashboard", category: "People & HR", icon: "LayoutDashboard", sortOrder: "100", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.PEOPLE_DIRECTORY, name: "Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "101", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.PEOPLE_TEAMS, name: "Teams", description: "Manage organizational teams", category: "People & HR", icon: "UsersRound", sortOrder: "102", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.PEOPLE_ROLES, name: "Roles", description: "Manage organizational roles and hierarchy", category: "People & HR", icon: "Building2", sortOrder: "103", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.PEOPLE_WORKFLOWS, name: "Workflows", description: "View people-related workflows", category: "People & HR", icon: "Workflow", sortOrder: "104", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.PEOPLE_SETTINGS, name: "Settings", description: "Configure People & HR module settings", category: "People & HR", icon: "Settings", sortOrder: "105", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.PEOPLE_AUDITLOG, name: "Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "106", actions: [ACTIONS.VIEW] },
   
   // Assets
-  { slug: "assets.overview", name: "Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200", actions: ["view"] },
-  { slug: "assets.inventory", name: "Inventory", description: "Manage company assets and equipment", category: "Assets", icon: "Package", sortOrder: "201", actions: ["view", "create", "edit", "delete"] },
-  { slug: "assets.categories", name: "Categories", description: "Manage asset categories and classification", category: "Assets", icon: "FolderTree", sortOrder: "202", actions: ["view", "create", "edit", "delete"] },
-  { slug: "assets.assignments", name: "Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "203", actions: ["view", "create", "edit", "delete"] },
-  { slug: "assets.maintenance", name: "Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "204", actions: ["view", "create", "edit", "delete"] },
-  { slug: "assets.lifecycle", name: "Lifecycle", description: "Manage asset lifecycle and disposal", category: "Assets", icon: "RotateCcw", sortOrder: "205", actions: ["view", "create", "edit", "delete"] },
-  { slug: "assets.settings", name: "Settings", description: "Configure asset module settings and sync", category: "Assets", icon: "Settings", sortOrder: "206", actions: ["view", "edit"] },
-  { slug: "assets.auditlog", name: "Audit Log", description: "View audit trail for Assets module", category: "Assets", icon: "ScrollText", sortOrder: "207", actions: ["view"] },
+  { slug: MODULES.ASSETS_OVERVIEW, name: "Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.ASSETS_INVENTORY, name: "Inventory", description: "Manage company assets and equipment", category: "Assets", icon: "Package", sortOrder: "201", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.ASSETS_CATEGORIES, name: "Categories", description: "Manage asset categories and classification", category: "Assets", icon: "FolderTree", sortOrder: "202", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.ASSETS_ASSIGNMENTS, name: "Assignments", description: "Assign assets to employees", category: "Assets", icon: "PackageCheck", sortOrder: "203", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.ASSETS_MAINTENANCE, name: "Maintenance", description: "Track asset maintenance schedules", category: "Assets", icon: "Wrench", sortOrder: "204", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.ASSETS_LIFECYCLE, name: "Lifecycle", description: "Manage asset lifecycle and disposal", category: "Assets", icon: "RotateCcw", sortOrder: "205", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.ASSETS_SETTINGS, name: "Settings", description: "Configure asset module settings and sync", category: "Assets", icon: "Settings", sortOrder: "206", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.ASSETS_AUDITLOG, name: "Audit Log", description: "View audit trail for Assets module", category: "Assets", icon: "ScrollText", sortOrder: "207", actions: [ACTIONS.VIEW] },
   
   // Security
-  { slug: "security.overview", name: "Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300", actions: ["view"] },
-  { slug: "security.risks", name: "Risk Register", description: "Manage security risks", category: "Security", icon: "AlertTriangle", sortOrder: "301", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.controls", name: "Controls Library", description: "Manage security controls", category: "Security", icon: "CheckSquare", sortOrder: "302", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.evidence", name: "Evidence Store", description: "Manage compliance evidence", category: "Security", icon: "FileText", sortOrder: "303", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.audits", name: "Audits", description: "Manage security audits", category: "Security", icon: "ClipboardList", sortOrder: "304", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.objectives", name: "Objectives", description: "Manage security objectives", category: "Security", icon: "Target", sortOrder: "305", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.frameworks", name: "Frameworks", description: "Manage compliance frameworks", category: "Security", icon: "Shield", sortOrder: "306", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.soa", name: "Statement of Applicability", description: "Manage SoA for frameworks", category: "Security", icon: "FileCheck", sortOrder: "307", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.clauses", name: "ISMS Clauses", description: "Manage ISMS clause compliance tracking", category: "Security", icon: "FileCheck2", sortOrder: "308", actions: ["view", "create", "edit", "delete"] },
-  { slug: "security.auditlog", name: "Audit Log", description: "View audit trail for Security module", category: "Security", icon: "ScrollText", sortOrder: "309", actions: ["view"] },
+  { slug: MODULES.SECURITY_OVERVIEW, name: "Overview", description: "View security dashboard", category: "Security", icon: "Shield", sortOrder: "300", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.SECURITY_RISKS, name: "Risk Register", description: "Manage security risks", category: "Security", icon: "AlertTriangle", sortOrder: "301", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_CONTROLS, name: "Controls Library", description: "Manage security controls", category: "Security", icon: "CheckSquare", sortOrder: "302", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_EVIDENCE, name: "Evidence Store", description: "Manage compliance evidence", category: "Security", icon: "FileText", sortOrder: "303", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_AUDITS, name: "Audits", description: "Manage security audits", category: "Security", icon: "ClipboardList", sortOrder: "304", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_OBJECTIVES, name: "Objectives", description: "Manage security objectives", category: "Security", icon: "Target", sortOrder: "305", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_FRAMEWORKS, name: "Frameworks", description: "Manage compliance frameworks", category: "Security", icon: "Shield", sortOrder: "306", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_SOA, name: "Statement of Applicability", description: "Manage SoA for frameworks", category: "Security", icon: "FileCheck", sortOrder: "307", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_CLAUSES, name: "ISMS Clauses", description: "Manage ISMS clause compliance tracking", category: "Security", icon: "FileCheck2", sortOrder: "308", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_AUDITLOG, name: "Audit Log", description: "View audit trail for Security module", category: "Security", icon: "ScrollText", sortOrder: "309", actions: [ACTIONS.VIEW] },
   
   // Documentation
-  { slug: "docs.overview", name: "Overview", description: "View documentation dashboard", category: "Documentation", icon: "FileText", sortOrder: "500", actions: ["view"] },
-  { slug: "docs.documents", name: "Document Library", description: "Manage documents and policies", category: "Documentation", icon: "Files", sortOrder: "501", actions: ["view", "create", "edit", "delete", "print", "read_all"] },
-  { slug: "docs.rollouts", name: "Rollouts", description: "Manage document rollouts", category: "Documentation", icon: "Users", sortOrder: "502", actions: ["view", "create", "edit", "delete"] },
-  { slug: "docs.acknowledgments", name: "Acknowledgments", description: "View document acknowledgments", category: "Documentation", icon: "CheckSquare", sortOrder: "503", actions: ["view"] },
-  { slug: "docs.settings", name: "Settings", description: "Configure documentation settings", category: "Documentation", icon: "Settings", sortOrder: "504", actions: ["view", "edit"] },
-  { slug: "docs.auditlog", name: "Audit Log", description: "View audit trail for Documentation module", category: "Documentation", icon: "ScrollText", sortOrder: "505", actions: ["view"] },
+  { slug: MODULES.DOCS_OVERVIEW, name: "Overview", description: "View documentation dashboard", category: "Documentation", icon: "FileText", sortOrder: "500", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.DOCS_DOCUMENTS, name: "Document Library", description: "Manage documents and policies", category: "Documentation", icon: "Files", sortOrder: "501", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE, ACTIONS.PRINT, ACTIONS.READ_ALL] },
+  { slug: MODULES.DOCS_ROLLOUTS, name: "Rollouts", description: "Manage document rollouts", category: "Documentation", icon: "Users", sortOrder: "502", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.DOCS_ACKNOWLEDGMENTS, name: "Acknowledgments", description: "View document acknowledgments", category: "Documentation", icon: "CheckSquare", sortOrder: "503", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.DOCS_SETTINGS, name: "Settings", description: "Configure documentation settings", category: "Documentation", icon: "Settings", sortOrder: "504", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.DOCS_AUDITLOG, name: "Audit Log", description: "View audit trail for Documentation module", category: "Documentation", icon: "ScrollText", sortOrder: "505", actions: [ACTIONS.VIEW] },
   
   // Workflows
-  { slug: "workflows.overview", name: "Overview", description: "View workflows dashboard", category: "Workflows", icon: "Workflow", sortOrder: "400", actions: ["view"] },
-  { slug: "workflows.templates", name: "Templates", description: "Manage workflow templates", category: "Workflows", icon: "FileCode2", sortOrder: "401", actions: ["view", "create", "edit", "delete"] },
-  { slug: "workflows.instances", name: "Active Workflows", description: "View and manage running workflows", category: "Workflows", icon: "Play", sortOrder: "402", actions: ["view", "create", "edit", "delete"] },
-  { slug: "workflows.tasks", name: "My Tasks", description: "View and complete assigned tasks", category: "Workflows", icon: "CheckSquare", sortOrder: "403", actions: ["view", "edit"] },
-  { slug: "workflows.board", name: "Board View", description: "Kanban board view of workflows", category: "Workflows", icon: "Kanban", sortOrder: "404", actions: ["view"] },
-  { slug: "workflows.settings", name: "Settings", description: "Configure workflow module settings", category: "Workflows", icon: "Settings", sortOrder: "405", actions: ["view", "edit"] },
-  { slug: "workflows.auditlog", name: "Audit Log", description: "View audit trail for Workflows module", category: "Workflows", icon: "ScrollText", sortOrder: "406", actions: ["view"] },
+  { slug: MODULES.WORKFLOWS_OVERVIEW, name: "Overview", description: "View workflows dashboard", category: "Workflows", icon: "Workflow", sortOrder: "400", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.WORKFLOWS_TEMPLATES, name: "Templates", description: "Manage workflow templates", category: "Workflows", icon: "FileCode2", sortOrder: "401", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.WORKFLOWS_INSTANCES, name: "Active Workflows", description: "View and manage running workflows", category: "Workflows", icon: "Play", sortOrder: "402", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.WORKFLOWS_TASKS, name: "My Tasks", description: "View and complete assigned tasks", category: "Workflows", icon: "CheckSquare", sortOrder: "403", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.WORKFLOWS_BOARD, name: "Board View", description: "Kanban board view of workflows", category: "Workflows", icon: "Kanban", sortOrder: "404", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.WORKFLOWS_SETTINGS, name: "Settings", description: "Configure workflow module settings", category: "Workflows", icon: "Settings", sortOrder: "405", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.WORKFLOWS_AUDITLOG, name: "Audit Log", description: "View audit trail for Workflows module", category: "Workflows", icon: "ScrollText", sortOrder: "406", actions: [ACTIONS.VIEW] },
   
   // Filing
-  { slug: "filing.overview", name: "Overview", description: "View filing dashboard and storage stats", category: "Filing", icon: "FolderArchive", sortOrder: "450", actions: ["view"] },
-  { slug: "filing.files", name: "Files", description: "Browse and manage all files", category: "Filing", icon: "Files", sortOrder: "451", actions: ["view", "create", "edit", "delete"] },
-  { slug: "filing.categories", name: "Categories", description: "Manage file categories and storage configuration", category: "Filing", icon: "FolderTree", sortOrder: "452", actions: ["view", "create", "edit", "delete"] },
-  { slug: "filing.auditlog", name: "Audit Log", description: "View audit trail for Filing module", category: "Filing", icon: "ScrollText", sortOrder: "453", actions: ["view"] },
+  { slug: MODULES.FILING_OVERVIEW, name: "Overview", description: "View filing dashboard and storage stats", category: "Filing", icon: "FolderArchive", sortOrder: "450", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.FILING_FILES, name: "Files", description: "Browse and manage all files", category: "Filing", icon: "Files", sortOrder: "451", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.FILING_CATEGORIES, name: "Categories", description: "Manage file categories and storage configuration", category: "Filing", icon: "FolderTree", sortOrder: "452", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.FILING_AUDITLOG, name: "Audit Log", description: "View audit trail for Filing module", category: "Filing", icon: "ScrollText", sortOrder: "453", actions: [ACTIONS.VIEW] },
   
   // Settings
-  { slug: "settings.organization", name: "Organization", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900", actions: ["view", "edit"] },
-  { slug: "settings.users", name: "Users & Access", description: "Manage system users and invitations", category: "Settings", icon: "Users", sortOrder: "901", actions: ["view", "create", "edit", "delete"] },
-  { slug: "settings.roles", name: "Roles & Permissions", description: "Configure custom roles and permissions", category: "Settings", icon: "Shield", sortOrder: "902", actions: ["view", "create", "edit", "delete"] },
-  { slug: "settings.integrations", name: "Integrations", description: "Configure third-party integrations", category: "Settings", icon: "Plug", sortOrder: "903", actions: ["view", "create", "edit", "delete"] },
-  { slug: "settings.auditlog", name: "Audit Log", description: "View system activity and audit trail", category: "Settings", icon: "FileText", sortOrder: "904", actions: ["view"] },
-  { slug: "settings.branding", name: "Branding", description: "Customize application appearance", category: "Settings", icon: "Palette", sortOrder: "905", actions: ["view", "edit"] },
-  { slug: "settings.apikeys", name: "API Keys", description: "Manage API access tokens", category: "Settings", icon: "Key", sortOrder: "906", actions: ["view", "create", "edit", "delete"] },
-] as const
+  { slug: MODULES.SETTINGS_ORGANIZATION, name: "Organization", description: "Configure organization profile and preferences", category: "Settings", icon: "Building2", sortOrder: "900", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.SETTINGS_USERS, name: "Users & Access", description: "Manage system users and invitations", category: "Settings", icon: "Users", sortOrder: "901", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SETTINGS_ROLES, name: "Roles & Permissions", description: "Configure custom roles and permissions", category: "Settings", icon: "Shield", sortOrder: "902", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SETTINGS_INTEGRATIONS, name: "Integrations", description: "Configure third-party integrations", category: "Settings", icon: "Plug", sortOrder: "903", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SETTINGS_AUDITLOG, name: "Audit Log", description: "View system activity and audit trail", category: "Settings", icon: "FileText", sortOrder: "904", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.SETTINGS_BRANDING, name: "Branding", description: "Customize application appearance", category: "Settings", icon: "Palette", sortOrder: "905", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.SETTINGS_APIKEYS, name: "API Keys", description: "Manage API access tokens", category: "Settings", icon: "Key", sortOrder: "906", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+]
 
-export const ACTION_REGISTRY = [
-  { slug: "view", name: "View", description: "View and list records", sortOrder: "1" },
-  { slug: "write", name: "Write", description: "Create and edit records", sortOrder: "2" },
-  { slug: "create", name: "Create", description: "Create new records", sortOrder: "3" },
-  { slug: "edit", name: "Edit", description: "Edit existing records", sortOrder: "4" },
-  { slug: "delete", name: "Delete", description: "Delete records", sortOrder: "5" },
-  { slug: "print", name: "Print", description: "Print or export documents", sortOrder: "6" },
-  { slug: "read_all", name: "Read All", description: "View all records regardless of assignment", sortOrder: "7" },
-] as const
+type ActionRegistryEntry = {
+  slug: ActionSlug | "write" // Keep "write" for legacy support
+  name: string
+  description: string
+  sortOrder: string
+}
+
+export const ACTION_REGISTRY: readonly ActionRegistryEntry[] = [
+  { slug: ACTIONS.VIEW, name: "View", description: "View and list records", sortOrder: "1" },
+  { slug: "write", name: "Write", description: "Create and edit records (legacy)", sortOrder: "2" },
+  { slug: ACTIONS.CREATE, name: "Create", description: "Create new records", sortOrder: "3" },
+  { slug: ACTIONS.EDIT, name: "Edit", description: "Edit existing records", sortOrder: "4" },
+  { slug: ACTIONS.DELETE, name: "Delete", description: "Delete records", sortOrder: "5" },
+  { slug: ACTIONS.PRINT, name: "Print", description: "Print or export documents", sortOrder: "6" },
+  { slug: ACTIONS.READ_ALL, name: "Read All", description: "View all records regardless of assignment", sortOrder: "7" },
+]
 
 /**
  * Syncs RBAC permissions for all organizations.

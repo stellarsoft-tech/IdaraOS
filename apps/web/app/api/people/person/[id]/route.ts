@@ -14,6 +14,7 @@ import { getEntraConfig } from "@/lib/auth/entra-config"
 import { syncPersonToEntra } from "@/lib/auth/entra-sync"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
+import { P } from "@/lib/rbac/resources"
 
 // UUID regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -209,7 +210,7 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     // Authorization check
-    await requirePermission("people.person", "read")
+    await requirePermission(...P.people.directory.view())
     
     const { id } = await context.params
     
@@ -323,7 +324,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     // Authorization check
-    const session = await requirePermission("people.person", "write")
+    const session = await requirePermission(...P.people.directory.edit())
     
     const { id } = await context.params
     const body = await request.json()
@@ -658,7 +659,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     // Authorization check
-    await requirePermission("people.person", "write")
+    await requirePermission(...P.people.directory.delete())
     
     const { id } = await context.params
     

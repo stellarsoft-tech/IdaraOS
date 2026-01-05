@@ -10,6 +10,7 @@ import { eq, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { organizationalLevels } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Create level schema
@@ -50,7 +51,7 @@ function toApiResponse(record: typeof organizationalLevels.$inferSelect) {
 export async function GET(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "read")
+    const session = await requirePermission(...P.people.roles.view())
     const orgId = session.orgId
     
     // Fetch all levels ordered by sortOrder
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "write")
+    const session = await requirePermission(...P.people.roles.edit())
     const orgId = session.orgId
     const auditLog = await getAuditLogger()
     
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "write")
+    const session = await requirePermission(...P.people.roles.edit())
     const orgId = session.orgId
     const auditLog = await getAuditLogger()
     

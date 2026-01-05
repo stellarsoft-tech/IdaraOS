@@ -10,6 +10,7 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations, fileCategories } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 interface RouteParams {
@@ -81,7 +82,7 @@ function toApiResponse(integration: typeof storageIntegrations.$inferSelect) {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "view")
+    const session = await requirePermission(...P.settings.integrations.view())
     const { id } = await params
     
     const result = await db
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "edit")
+    const session = await requirePermission(...P.settings.integrations.edit())
     const { id } = await params
     const body = await request.json()
     
@@ -226,7 +227,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "delete")
+    const session = await requirePermission(...P.settings.integrations.delete())
     const { id } = await params
     
     // Check exists

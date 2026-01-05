@@ -10,6 +10,7 @@ import { db } from "@/lib/db"
 import { organizations } from "@/lib/db/schema"
 import { z } from "zod"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 // Update schema
 const UpdateOrganizationSchema = z.object({
@@ -34,7 +35,7 @@ const UpdateOrganizationSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.organization", "view")
+    const session = await requirePermission(...P.settings.organization.view())
     const orgId = session.orgId
     
     const [org] = await db
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.organization", "edit")
+    const session = await requirePermission(...P.settings.organization.edit())
     const orgId = session.orgId
     
     const body = await request.json()

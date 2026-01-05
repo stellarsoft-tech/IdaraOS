@@ -12,6 +12,7 @@ import { users, userRoleValues, userStatusValues, persons, integrations } from "
 import { z } from "zod"
 import { syncUserToEntra, isEntraSyncEnabled } from "@/lib/auth/entra-sync"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 // Update user schema
 const UpdateUserSchema = z.object({
@@ -63,7 +64,7 @@ async function isBidirectionalSyncEnabled(orgId: string): Promise<boolean> {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.users", "view")
+    const session = await requirePermission(...P.settings.users.view())
     const orgId = session.orgId
     
     const { id } = await context.params
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.users", "edit")
+    const session = await requirePermission(...P.settings.users.edit())
     const orgId = session.orgId
     
     const { id } = await context.params
@@ -230,7 +231,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.users", "delete")
+    const session = await requirePermission(...P.settings.users.delete())
     const orgId = session.orgId
     
     const { id } = await context.params

@@ -12,6 +12,7 @@ import { getSession, type SessionPayload } from "@/lib/auth/session"
 import { eq, and, type SQL } from "drizzle-orm"
 import { createAuditLogger, extractActor, type AuditLogger } from "@/lib/audit"
 import { checkUserPermission } from "@/lib/rbac/server"
+import { type ModuleSlug, type ActionSlug, ACTIONS } from "@/lib/rbac/resources"
 import { NextResponse } from "next/server"
 
 // =============================================================================
@@ -177,20 +178,25 @@ export async function requireAuditLogger(): Promise<AuditLogger> {
  * Uses database-driven RBAC: queries the user's roles and their associated
  * permissions to check authorization dynamically.
  * 
- * @param resource - The module slug to check permission for (e.g., "people.person", "assets.inventory")
- * @param action - The action slug to check (e.g., "view", "create", "edit", "delete")
+ * @param resource - The module slug to check permission for (use MODULES.* constants)
+ * @param action - The action slug to check (use ACTIONS.* constants)
  * @returns Session payload if authorized
  * @throws AuthenticationError if not authenticated
  * @throws AuthorizationError if not authorized
  * 
  * @example
- * // In a route handler:
- * const session = await requirePermission("people.person", "edit")
- * // Now you can use session.orgId, session.userId, etc.
+ * // Using constants directly:
+ * import { MODULES, ACTIONS } from "@/lib/rbac/resources"
+ * const session = await requirePermission(MODULES.PEOPLE_DIRECTORY, ACTIONS.EDIT)
+ * 
+ * @example
+ * // Using autocomplete helper (P):
+ * import { P } from "@/lib/rbac/resources"
+ * const session = await requirePermission(...P.people.directory.edit())
  */
 export async function requirePermission(
-  resource: string,
-  action: string = "view"
+  resource: ModuleSlug,
+  action: ActionSlug = ACTIONS.VIEW
 ): Promise<SessionPayload> {
   const session = await getSession()
   

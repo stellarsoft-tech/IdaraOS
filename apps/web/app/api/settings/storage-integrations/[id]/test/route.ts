@@ -8,6 +8,7 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations, integrations } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { testSharePointConnection } from "@/lib/graph/client"
 
 interface RouteParams {
@@ -21,7 +22,7 @@ interface RouteParams {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "edit")
+    const session = await requirePermission(...P.settings.integrations.edit())
     const { id } = await params
     
     // Get the integration

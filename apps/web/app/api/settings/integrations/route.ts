@@ -10,6 +10,7 @@ import { eq, and } from "drizzle-orm"
 import { z } from "zod"
 import crypto from "crypto"
 import { requirePermission, handleApiError } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 // Simple encryption for demo (in production, use proper key management)
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "demo-key-change-in-production-32c"
@@ -113,7 +114,7 @@ const UpdateEntraConfigSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "view")
+    const session = await requirePermission(...P.settings.integrations.view())
     const orgId = session.orgId
     
     const { searchParams } = new URL(request.url)
@@ -231,7 +232,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "create")
+    const session = await requirePermission(...P.settings.integrations.create())
     const orgId = session.orgId
     
     const body = await request.json()
@@ -376,7 +377,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "edit")
+    const session = await requirePermission(...P.settings.integrations.edit())
     const orgId = session.orgId
     
     const body = await request.json()
@@ -496,7 +497,7 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "delete")
+    const session = await requirePermission(...P.settings.integrations.delete())
     const orgId = session.orgId
     
     const { searchParams } = new URL(request.url)

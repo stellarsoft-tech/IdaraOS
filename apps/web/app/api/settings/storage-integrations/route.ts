@@ -9,6 +9,7 @@ import { eq, and, desc } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { storageIntegrations } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Validation schema for creating storage integration
@@ -77,7 +78,7 @@ function toApiResponse(integration: typeof storageIntegrations.$inferSelect) {
 export async function GET(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "view")
+    const session = await requirePermission(...P.settings.integrations.view())
     const { searchParams } = new URL(request.url)
     const provider = searchParams.get("provider")
     const status = searchParams.get("status")
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("settings.integrations", "create")
+    const session = await requirePermission(...P.settings.integrations.create())
     const body = await request.json()
     
     // Validate

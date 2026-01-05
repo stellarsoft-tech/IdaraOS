@@ -9,6 +9,7 @@ import { eq, and } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { peopleSettings, integrations, DEFAULT_PROPERTY_MAPPING } from "@/lib/db/schema"
 import { requirePermission, handleApiError } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 
 /**
  * GET /api/people/settings
@@ -17,7 +18,7 @@ import { requirePermission, handleApiError } from "@/lib/api/context"
 export async function GET() {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "read")
+    const session = await requirePermission(...P.people.settings.view())
     const orgId = session.orgId
 
     // Get people settings
@@ -126,7 +127,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "write")
+    const session = await requirePermission(...P.people.settings.edit())
     const orgId = session.orgId
     
     const body = await request.json()

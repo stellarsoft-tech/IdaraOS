@@ -9,6 +9,7 @@ import { eq, ilike, or, and, asc, sql, isNull, isNotNull, inArray } from "drizzl
 import { db } from "@/lib/db"
 import { teams, persons } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Create team schema
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     const topLevelOnly = searchParams.get("topLevelOnly") === "true"
     
     // Authorization check
-    const session = await requirePermission("people.roles", "read")
+    const session = await requirePermission(...P.people.teams.view())
     const orgId = session.orgId
     
     // Build query conditions
@@ -208,7 +209,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "write")
+    const session = await requirePermission(...P.people.teams.create())
     const orgId = session.orgId
     const auditLog = await getAuditLogger()
     

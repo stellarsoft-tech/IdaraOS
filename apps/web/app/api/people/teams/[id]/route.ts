@@ -10,6 +10,7 @@ import { eq, and, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { teams, persons } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
 // Update team schema
@@ -69,7 +70,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "read")
+    const session = await requirePermission(...P.people.teams.view())
     const orgId = session.orgId
     
     const { id } = await params
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "write")
+    const session = await requirePermission(...P.people.teams.edit())
     const orgId = session.orgId
     const auditLog = await getAuditLogger()
     
@@ -339,7 +340,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     // Authorization check
-    const session = await requirePermission("people.roles", "write")
+    const session = await requirePermission(...P.people.teams.delete())
     const orgId = session.orgId
     const auditLog = await getAuditLogger()
     

@@ -11,6 +11,7 @@ import { persons, users, organizationalRoles, teams } from "@/lib/db/schema"
 import { CreatePersonSchema } from "@/lib/generated/people/person/types"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
+import { P } from "@/lib/rbac/resources"
 
 // Generate slug from name
 function slugify(name: string): string {
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
     const team = searchParams.get("team")
     
     // Authorization check
-    const session = await requirePermission("people.person", "read")
+    const session = await requirePermission(...P.people.directory.view())
     const orgId = session.orgId
     
     // Build query - always filter by organization
@@ -268,7 +269,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authorization check
-    const session = await requirePermission("people.person", "write")
+    const session = await requirePermission(...P.people.directory.create())
     const orgId = session.orgId
     
     const body = await request.json()
