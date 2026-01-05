@@ -10,26 +10,6 @@ import { files, fileCategories, storageIntegrations } from "@/lib/db/schema"
 import { requireSession, getAuditLogger } from "@/lib/api/context"
 import { randomUUID } from "crypto"
 
-// Utility to generate a unique file path
-function generateStoragePath(
-  orgId: string,
-  moduleScope: string,
-  categorySlug: string,
-  originalName: string
-): string {
-  const timestamp = Date.now()
-  const uuid = randomUUID().split("-")[0]
-  const ext = originalName.includes(".") 
-    ? originalName.substring(originalName.lastIndexOf(".")) 
-    : ""
-  const sanitizedName = originalName
-    .replace(ext, "")
-    .replace(/[^a-zA-Z0-9]/g, "_")
-    .substring(0, 50)
-  
-  return `${orgId}/${moduleScope}/${categorySlug}/${timestamp}_${uuid}_${sanitizedName}${ext}`
-}
-
 // Response transformer
 function toApiResponse(
   file: typeof files.$inferSelect,
@@ -140,21 +120,33 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Generate storage path
-    const storagePath = generateStoragePath(
-      session.orgId,
-      category.moduleScope,
-      category.slug,
-      file.name
-    )
+    // Generate unique filename
+    const timestamp = Date.now()
+    const uuid = randomUUID().split("-")[0]
+    const ext = file.name.includes(".") 
+      ? file.name.substring(file.name.lastIndexOf(".")) 
+      : ""
+    const sanitizedName = file.name
+      .replace(ext, "")
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .substring(0, 50)
+    const uniqueFilename = `${timestamp}_${uuid}_${sanitizedName}${ext}`
     
-    // Prepend base path and folder path if configured
-    let fullPath = storagePath
+    // Build storage path
+    // Priority: category.folderPath > auto-generated path
+    let fullPath: string
+    
+    if (category.folderPath) {
+      // Use the configured folder path directly + unique filename
+      fullPath = `${category.folderPath.replace(/^\/|\/$/g, "")}/${uniqueFilename}`
+    } else {
+      // Auto-generate path: orgId/moduleScope/categorySlug/filename
+      fullPath = `${session.orgId}/${category.moduleScope}/${category.slug}/${uniqueFilename}`
+    }
+    
+    // Prepend storage integration's base path if configured
     if (storageIntegration?.basePath) {
       fullPath = `${storageIntegration.basePath.replace(/^\/|\/$/g, "")}/${fullPath}`
-    }
-    if (category.folderPath) {
-      fullPath = `${category.folderPath.replace(/^\/|\/$/g, "")}/${fullPath}`
     }
     
     let externalId: string | null = null
