@@ -66,9 +66,13 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get("file") as File | null
     const categoryId = formData.get("categoryId") as string | null
-    const entityType = formData.get("entityType") as string | null
-    const entityId = formData.get("entityId") as string | null
+    const entityTypeRaw = formData.get("entityType") as string | null
+    const entityIdRaw = formData.get("entityId") as string | null
     const customName = formData.get("name") as string | null
+    
+    // Convert empty strings and "none" to null for optional fields
+    const entityType = entityTypeRaw && entityTypeRaw !== "none" && entityTypeRaw !== "" ? entityTypeRaw : null
+    const entityId = entityIdRaw && entityIdRaw !== "none" && entityIdRaw !== "" ? entityIdRaw : null
     
     if (!file) {
       return NextResponse.json(
