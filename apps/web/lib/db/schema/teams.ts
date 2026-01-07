@@ -27,6 +27,10 @@ export const teams = pgTable(
     // Sort order for display
     sortOrder: integer("sort_order").notNull().default(0),
     
+    // Position for chart designer
+    positionX: integer("position_x").notNull().default(0),
+    positionY: integer("position_y").notNull().default(0),
+    
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

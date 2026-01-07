@@ -12,6 +12,9 @@ import {
   GitFork,
   Building2,
   ChevronRight,
+  TreeDeciduous,
+  LayoutGrid,
+  List,
 } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -23,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,11 +51,14 @@ import {
   useCreateTeam, 
   useUpdateTeam, 
   useDeleteTeam,
+  useBulkUpdateTeams,
   type Team,
   type CreateTeam,
   type UpdateTeam,
 } from "@/lib/api/teams"
 import { usePeopleList, type Person } from "@/lib/api/people"
+import { TeamTreeView } from "@/components/people/team-tree-view"
+import { TeamChartDesigner, type DraftTeam } from "@/components/people/team-chart-designer"
 import { z } from "zod"
 
 // Helper to transform __none__ to null for optional UUID fields
@@ -112,6 +119,14 @@ function StatsCard({ title, value, subtitle, icon, color, loading }: StatsCardPr
   )
 }
 
+type ViewMode = "tree" | "chart" | "table"
+
+// Extended team type with position
+interface TeamWithPosition extends Team {
+  positionX: number
+  positionY: number
+}
+
 export default function TeamsPage() {
   const canAccess = useCanAccess("people.teams")
   const canCreate = usePermission("people.teams", "create")
@@ -119,12 +134,15 @@ export default function TeamsPage() {
   const canDelete = usePermission("people.teams", "delete")
   const router = useRouter()
   
+  const [viewMode, setViewMode] = useState<ViewMode>("chart")
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+  const [parentTeamIdForCreate, setParentTeamIdForCreate] = useState<string | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   
-  // Fetch teams
+  // Fetch teams and people
   const { data: teams = [], isLoading } = useTeamsList()
   const { data: people = [] } = usePeopleList()
   
@@ -132,6 +150,7 @@ export default function TeamsPage() {
   const createMutation = useCreateTeam()
   const updateMutation = useUpdateTeam()
   const deleteMutation = useDeleteTeam()
+  const bulkUpdateMutation = useBulkUpdateTeams()
   
   // Calculate stats
   const stats = useMemo(() => {
@@ -196,38 +215,52 @@ export default function TeamsPage() {
   }
   
   // Handlers
+  const handleAdd = (parentTeamId?: string | null) => {
+    setParentTeamIdForCreate(parentTeamId ?? null)
+    setCreateOpen(true)
+  }
+  
   const handleCreate = async (data: CreateTeam) => {
+    // Guard against double submission
+    if (createMutation.isPending) return
+    
+    const payload: CreateTeam = {
+      name: data.name,
+      description: data.description || undefined,
+      leadId: toNullable(data.leadId),
+      parentTeamId: toNullable(data.parentTeamId) || parentTeamIdForCreate || null,
+    }
+    
+    // Close drawer immediately to prevent re-submission
+    setCreateOpen(false)
+    setParentTeamIdForCreate(null)
+    
     try {
-      const payload: CreateTeam = {
-        name: data.name,
-        description: data.description || undefined,
-        leadId: toNullable(data.leadId),
-        parentTeamId: toNullable(data.parentTeamId),
-      }
-      
       await createMutation.mutateAsync(payload)
       toast.success("Team created successfully")
-      setCreateOpen(false)
     } catch (error) {
       toast.error((error as Error).message || "Failed to create team")
     }
   }
   
   const handleEdit = async (data: UpdateTeam) => {
-    if (!selectedTeam) return
+    if (!selectedTeam || updateMutation.isPending) return
+    
+    const teamId = selectedTeam.id
+    const payload: UpdateTeam = {
+      name: data.name,
+      description: data.description ?? null,
+      leadId: toNullable(data.leadId),
+      parentTeamId: toNullable(data.parentTeamId),
+    }
+    
+    // Close drawer immediately to prevent re-submission
+    setEditOpen(false)
+    setSelectedTeam(null)
     
     try {
-      const payload: UpdateTeam = {
-        name: data.name,
-        description: data.description ?? null,
-        leadId: toNullable(data.leadId),
-        parentTeamId: toNullable(data.parentTeamId),
-      }
-      
-      await updateMutation.mutateAsync({ id: selectedTeam.id, data: payload })
+      await updateMutation.mutateAsync({ id: teamId, data: payload })
       toast.success("Team updated successfully")
-      setEditOpen(false)
-      setSelectedTeam(null)
     } catch (error) {
       toast.error((error as Error).message || "Failed to update team")
     }
@@ -243,6 +276,36 @@ export default function TeamsPage() {
       setSelectedTeam(null)
     } catch (error) {
       toast.error((error as Error).message || "Failed to delete team")
+    }
+  }
+  
+  const handleSaveLayout = async (updates: Array<{ id: string; positionX: number; positionY: number }>) => {
+    try {
+      await bulkUpdateMutation.mutateAsync({ updates })
+      toast.success("Layout saved successfully")
+    } catch (error) {
+      toast.error((error as Error).message || "Failed to save layout")
+    }
+  }
+  
+  // Handle updating parent team (from drag-connecting in chart)
+  const handleUpdateParent = async (teamId: string, newParentId: string | null) => {
+    // Prevent circular reference
+    if (teamId === newParentId) {
+      toast.error("A team cannot be its own parent")
+      return
+    }
+    
+    try {
+      await updateMutation.mutateAsync({
+        id: teamId,
+        data: {
+          parentTeamId: newParentId,
+        },
+      })
+      toast.success("Team hierarchy updated")
+    } catch (error) {
+      toast.error((error as Error).message || "Failed to update team hierarchy")
     }
   }
   
@@ -361,6 +424,12 @@ export default function TeamsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <Protected module="people.teams" action="create" fallback={null}>
+                <DropdownMenuItem onClick={() => handleAdd(team.id)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Sub-Team
+                </DropdownMenuItem>
+              </Protected>
               <Protected module="people.teams" action="update" fallback={null}>
                 <DropdownMenuItem
                   onClick={() => {
@@ -394,6 +463,23 @@ export default function TeamsPage() {
     },
   ], [router])
   
+  // Convert teams to teams with position (use existing position or default)
+  const teamsWithPosition: TeamWithPosition[] = useMemo(() => {
+    return teams.map(team => ({
+      ...team,
+      positionX: (team as TeamWithPosition).positionX ?? 0,
+      positionY: (team as TeamWithPosition).positionY ?? 0,
+    }))
+  }, [teams])
+  
+  // People options for chart designer
+  const peopleOptions = useMemo(() => {
+    return people.map(p => ({
+      id: p.id,
+      name: p.name,
+    }))
+  }, [people])
+  
   if (!canAccess) {
     return (
       <PageShell title="Teams">
@@ -411,67 +497,177 @@ export default function TeamsPage() {
       description="Manage organizational teams and their structure."
       action={
         <Protected module="people.teams" action="create" fallback={null}>
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={() => handleAdd(null)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Team
           </Button>
         </Protected>
       }
     >
-      <div className="space-y-6">
-        {/* Stats Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatsCard
-            title="Total Teams"
-            value={stats.total}
-            subtitle="All teams"
-            icon={<Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
-            color="bg-blue-500/10"
-            loading={isLoading}
-          />
-          <StatsCard
-            title="With Leads"
-            value={stats.withLeads}
-            subtitle="Teams with assigned leads"
-            icon={<UserCheck className="h-4 w-4 text-green-600 dark:text-green-400" />}
-            color="bg-green-500/10"
-            loading={isLoading}
-          />
-          <StatsCard
-            title="Nested Teams"
-            value={stats.nested}
-            subtitle="Sub-teams"
-            icon={<GitFork className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
-            color="bg-amber-500/10"
-            loading={isLoading}
-          />
-          <StatsCard
-            title="Empty Teams"
-            value={stats.empty}
-            subtitle="No members assigned"
-            icon={<Building2 className="h-4 w-4 text-slate-600 dark:text-slate-400" />}
-            color="bg-slate-500/10"
-            loading={isLoading}
-          />
-        </div>
+      <div className={isFullscreen ? "" : "space-y-6"}>
+        {/* Stats Cards - hidden in fullscreen */}
+        {!isFullscreen && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatsCard
+              title="Total Teams"
+              value={stats.total}
+              subtitle="All teams"
+              icon={<Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
+              color="bg-blue-500/10"
+              loading={isLoading}
+            />
+            <StatsCard
+              title="With Leads"
+              value={stats.withLeads}
+              subtitle="Teams with assigned leads"
+              icon={<UserCheck className="h-4 w-4 text-green-600 dark:text-green-400" />}
+              color="bg-green-500/10"
+              loading={isLoading}
+            />
+            <StatsCard
+              title="Nested Teams"
+              value={stats.nested}
+              subtitle="Sub-teams"
+              icon={<GitFork className="h-4 w-4 text-amber-600 dark:text-amber-400" />}
+              color="bg-amber-500/10"
+              loading={isLoading}
+            />
+            <StatsCard
+              title="Empty Teams"
+              value={stats.empty}
+              subtitle="No members assigned"
+              icon={<Building2 className="h-4 w-4 text-slate-600 dark:text-slate-400" />}
+              color="bg-slate-500/10"
+              loading={isLoading}
+            />
+          </div>
+        )}
         
-        {/* Teams Table */}
-        <DataTable
-          columns={columns}
-          data={teams}
-          loading={isLoading}
-          searchPlaceholder="Search teams..."
-          enableSorting
-          enableColumnFilters
-          enableColumnVisibility
-          enableExport
-        />
+        {/* View Tabs */}
+        <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+          {/* Tabs list - hidden in fullscreen */}
+          {!isFullscreen && (
+            <TabsList>
+              <TabsTrigger value="tree" className="flex items-center gap-2">
+                <TreeDeciduous className="h-4 w-4" />
+                Tree View
+              </TabsTrigger>
+              <TabsTrigger value="chart" className="flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Team Chart
+              </TabsTrigger>
+              <TabsTrigger value="table" className="flex items-center gap-2">
+                <List className="h-4 w-4" />
+                Table View
+              </TabsTrigger>
+            </TabsList>
+          )}
+          
+          <TabsContent value="tree" className="mt-0">
+            <Card className="py-0">
+              <CardContent className="p-0 py-0">
+                <TeamTreeView
+                  teams={teams}
+                  selectedTeamId={selectedTeam?.id}
+                  onSelect={(team) => setSelectedTeam(team)}
+                  onAdd={canCreate ? handleAdd : undefined}
+                  onEdit={canEdit ? (team) => {
+                    setSelectedTeam(team)
+                    setEditOpen(true)
+                  } : undefined}
+                  onDelete={canDelete ? (team) => {
+                    setSelectedTeam(team)
+                    setDeleteOpen(true)
+                  } : undefined}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  isLoading={isLoading}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="chart" className={isFullscreen ? "mt-0 h-screen" : "mt-0"}>
+            <Card className={isFullscreen ? "border-0 shadow-none h-full py-0" : "overflow-hidden py-0"}>
+              <CardContent className={isFullscreen ? "p-0 h-full" : "p-0"}>
+                <div className={isFullscreen ? "h-full" : "h-[600px]"}>
+                  <TeamChartDesigner
+                    teams={teamsWithPosition}
+                    people={peopleOptions}
+                    selectedTeamId={selectedTeam?.id}
+                    onSelect={(team) => setSelectedTeam(team)}
+                    onEdit={canEdit ? (team) => {
+                      setSelectedTeam(team)
+                      setEditOpen(true)
+                    } : undefined}
+                    onDelete={canDelete ? (team) => {
+                      setSelectedTeam(team)
+                      setDeleteOpen(true)
+                    } : undefined}
+                    onSave={canEdit ? handleSaveLayout : undefined}
+                    onUpdateParent={canEdit ? handleUpdateParent : undefined}
+                    onInlineUpdate={canEdit ? async (teamId, data) => {
+                      try {
+                        await updateMutation.mutateAsync({ id: teamId, data })
+                        toast.success("Team updated")
+                      } catch (error) {
+                        toast.error((error as Error).message || "Failed to update team")
+                      }
+                    } : undefined}
+                    onCreate={canCreate ? async (drafts) => {
+                      // Create all draft teams
+                      try {
+                        for (const draft of drafts) {
+                          await createMutation.mutateAsync({
+                            name: draft.name,
+                            description: draft.description || undefined,
+                            leadId: draft.leadId,
+                            parentTeamId: draft.parentTeamId,
+                            positionX: draft.positionX,
+                            positionY: draft.positionY,
+                          })
+                        }
+                        toast.success(`${drafts.length} team${drafts.length > 1 ? "s" : ""} created`)
+                      } catch (error) {
+                        toast.error((error as Error).message || "Failed to create teams")
+                        throw error // Re-throw to prevent clearing drafts
+                      }
+                    } : undefined}
+                    canEdit={canEdit}
+                    canDelete={canDelete}
+                    canCreate={canCreate}
+                    isLoading={isLoading}
+                    isSaving={bulkUpdateMutation.isPending || createMutation.isPending}
+                    isFullscreen={isFullscreen}
+                    onFullscreenChange={setIsFullscreen}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="table" className="mt-0">
+            <DataTable
+              columns={columns}
+              data={teams}
+              loading={isLoading}
+              searchPlaceholder="Search teams..."
+              enableSorting
+              enableColumnFilters
+              enableColumnVisibility
+              enableExport
+            />
+          </TabsContent>
+        </Tabs>
       </div>
       
       {/* Create Team Drawer */}
       <FormDrawer
         open={createOpen}
-        onOpenChange={setCreateOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open)
+          if (!open) setParentTeamIdForCreate(null)
+        }}
         title="Add Team"
         description="Create a new team in your organization."
         config={formConfig}
@@ -479,7 +675,7 @@ export default function TeamsPage() {
         fields={["name", "description", "leadId", "parentTeamId"]}
         defaultValues={{
           leadId: NONE_VALUE,
-          parentTeamId: NONE_VALUE,
+          parentTeamId: parentTeamIdForCreate || NONE_VALUE,
         }}
         onSubmit={handleCreate}
         isSubmitting={createMutation.isPending}
@@ -494,6 +690,7 @@ export default function TeamsPage() {
         }}
         title="Edit Team"
         description="Update team details."
+        mode="edit"
         config={formConfig}
         schema={editTeamSchema}
         fields={["name", "description", "leadId", "parentTeamId"]}
@@ -532,4 +729,3 @@ export default function TeamsPage() {
     </PageShell>
   )
 }
-

@@ -29,6 +29,8 @@ export interface Team {
   parentTeamId: string | null
   parentTeam: ParentTeam | null
   sortOrder: number
+  positionX: number
+  positionY: number
   memberCount: number
   childCount: number
   createdAt: string
@@ -42,6 +44,8 @@ export interface CreateTeam {
   leadId?: string | null
   parentTeamId?: string | null
   sortOrder?: number
+  positionX?: number
+  positionY?: number
 }
 
 // Update team payload
@@ -51,6 +55,19 @@ export interface UpdateTeam {
   leadId?: string | null
   parentTeamId?: string | null
   sortOrder?: number
+  positionX?: number
+  positionY?: number
+}
+
+// Bulk update payload for designer
+export interface BulkUpdateTeams {
+  updates: Array<{
+    id: string
+    positionX?: number
+    positionY?: number
+    parentTeamId?: string | null
+    sortOrder?: number
+  }>
 }
 
 // Filter options
@@ -164,6 +181,24 @@ async function deleteTeam(id: string): Promise<void> {
   }
 }
 
+/**
+ * Bulk update teams (for designer)
+ */
+async function bulkUpdateTeams(data: BulkUpdateTeams): Promise<{ success: boolean; updatedCount: number }> {
+  const res = await fetch(API_BASE, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}))
+    throw new Error(error.error || "Failed to bulk update teams")
+  }
+  
+  return res.json()
+}
+
 // ============ React Query Hooks ============
 
 /**
@@ -239,3 +274,17 @@ export function useDeleteTeam() {
   })
 }
 
+/**
+ * Hook to bulk update teams (from designer)
+ */
+export function useBulkUpdateTeams() {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: bulkUpdateTeams,
+    onSuccess: () => {
+      // Invalidate all team queries
+      queryClient.invalidateQueries({ queryKey: teamsKeys.all })
+    },
+  })
+}

@@ -2,6 +2,7 @@
  * Teams API Routes
  * GET /api/people/teams - List all teams
  * POST /api/people/teams - Create a team
+ * PUT /api/people/teams - Bulk update teams (positions)
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -19,6 +20,19 @@ const CreateTeamSchema = z.object({
   leadId: z.string().uuid().nullable().optional(),
   parentTeamId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int().optional(),
+  positionX: z.number().int().optional(),
+  positionY: z.number().int().optional(),
+})
+
+// Bulk update schema for designer
+const BulkUpdateTeamsSchema = z.object({
+  updates: z.array(z.object({
+    id: z.string().uuid(),
+    positionX: z.number().int().optional(),
+    positionY: z.number().int().optional(),
+    parentTeamId: z.string().uuid().nullable().optional(),
+    sortOrder: z.number().int().optional(),
+  })),
 })
 
 // Lead info type
@@ -52,6 +66,8 @@ function toApiResponse(
     parentTeamId: record.parentTeamId,
     parentTeam: parentTeam || null,
     sortOrder: record.sortOrder,
+    positionX: record.positionX,
+    positionY: record.positionY,
     memberCount: memberCount ?? 0,
     childCount: childCount ?? 0,
     createdAt: record.createdAt.toISOString(),
@@ -245,6 +261,8 @@ export async function POST(request: NextRequest) {
         leadId: data.leadId ?? null,
         parentTeamId: data.parentTeamId ?? null,
         sortOrder: data.sortOrder ?? 0,
+        positionX: data.positionX ?? 0,
+        positionY: data.positionY ?? 0,
       })
       .returning()
     
@@ -314,3 +332,86 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * PUT /api/people/teams
+ * Bulk update teams (for chart designer)
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    // Authorization check
+    const session = await requirePermission(...P.people.teams.edit())
+    const orgId = session.orgId
+    
+    const body = await request.json()
+    const data = BulkUpdateTeamsSchema.parse(body)
+    
+    if (data.updates.length === 0) {
+      return NextResponse.json({ success: true, updatedCount: 0 })
+    }
+    
+    // Update each team
+    let updatedCount = 0
+    for (const update of data.updates) {
+      // Verify team belongs to org
+      const [existing] = await db
+        .select({ id: teams.id })
+        .from(teams)
+        .where(
+          and(
+            eq(teams.id, update.id),
+            eq(teams.orgId, orgId)
+          )
+        )
+        .limit(1)
+      
+      if (!existing) {
+        continue // Skip teams that don't exist or don't belong to org
+      }
+      
+      // Build update data
+      const updateData: Partial<typeof teams.$inferInsert> = {
+        updatedAt: new Date(),
+      }
+      
+      if (update.positionX !== undefined) {
+        updateData.positionX = update.positionX
+      }
+      if (update.positionY !== undefined) {
+        updateData.positionY = update.positionY
+      }
+      if (update.parentTeamId !== undefined) {
+        updateData.parentTeamId = update.parentTeamId
+      }
+      if (update.sortOrder !== undefined) {
+        updateData.sortOrder = update.sortOrder
+      }
+      
+      // Update the team
+      await db
+        .update(teams)
+        .set(updateData)
+        .where(eq(teams.id, update.id))
+      
+      updatedCount++
+    }
+    
+    return NextResponse.json({ success: true, updatedCount })
+  } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
+    
+    console.error("[Teams API] Error bulk updating teams:", error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation failed", details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { error: "Failed to bulk update teams" },
+      { status: 500 }
+    )
+  }
+}

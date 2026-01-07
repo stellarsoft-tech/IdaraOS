@@ -20,6 +20,8 @@ const UpdateTeamSchema = z.object({
   leadId: z.string().uuid().nullable().optional(),
   parentTeamId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int().optional(),
+  positionX: z.number().int().optional(),
+  positionY: z.number().int().optional(),
 })
 
 // Lead info type
@@ -53,6 +55,8 @@ function toApiResponse(
     parentTeamId: record.parentTeamId,
     parentTeam: parentTeam || null,
     sortOrder: record.sortOrder,
+    positionX: record.positionX,
+    positionY: record.positionY,
     memberCount: memberCount ?? 0,
     childCount: childCount ?? 0,
     createdAt: record.createdAt.toISOString(),
@@ -245,6 +249,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     if (data.sortOrder !== undefined) {
       updateData.sortOrder = data.sortOrder
+    }
+    if (data.positionX !== undefined) {
+      updateData.positionX = data.positionX
+    }
+    if (data.positionY !== undefined) {
+      updateData.positionY = data.positionY
     }
     
     // Update the team
