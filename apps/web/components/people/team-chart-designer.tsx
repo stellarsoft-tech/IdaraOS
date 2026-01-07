@@ -1042,19 +1042,24 @@ export function TeamChartDesigner({
               >
                 {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
               </Button>
+              {/* Save button inside toolbar */}
+              {(onSave || onCreate) && (
+                <>
+                  <span className="h-6 w-px bg-border mx-1 self-center" />
+                  <Button
+                    variant={hasChanges ? "default" : "ghost"}
+                    size="sm"
+                    onClick={handleSave}
+                    disabled={isSaving || !hasChanges}
+                    className="h-8 px-3"
+                    title="Save Changes"
+                  >
+                    <Save className="h-4 w-4 mr-1" />
+                    {isSaving ? "Saving..." : "Save"}
+                  </Button>
+                </>
+              )}
             </div>
-            
-            {(onSave || onCreate) && (
-              <Button
-                onClick={handleSave}
-                disabled={isSaving || !hasChanges}
-                size="sm"
-                className="h-8 shadow-sm"
-              >
-                <Save className="h-4 w-4 mr-1" />
-                {isSaving ? "Saving..." : "Save"}
-              </Button>
-            )}
           </Panel>
         )}
         
