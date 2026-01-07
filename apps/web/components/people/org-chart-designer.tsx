@@ -50,6 +50,8 @@ import {
 } from "lucide-react"
 import { type OrganizationalRole } from "@/lib/api/org-roles"
 import { type OrganizationalLevel } from "@/lib/api/org-levels"
+import { useTeamsList } from "@/lib/api/teams"
+import { TeamTreeSelect } from "@/components/people/team-tree-select"
 
 // Team type for inline editing
 interface TeamOption {
@@ -368,6 +370,9 @@ export function OrgChartDesigner({
   isFullscreen: controlledFullscreen,
   onFullscreenChange,
 }: OrgChartDesignerProps) {
+  // Fetch full teams for hierarchical select
+  const { data: fullTeams = [] } = useTeamsList()
+  
   // Fullscreen state - can be controlled or uncontrolled
   const [internalFullscreen, setInternalFullscreen] = useState(false)
   const isFullscreen = controlledFullscreen ?? internalFullscreen
@@ -1237,39 +1242,46 @@ export function OrgChartDesigner({
               />
             </div>
             
-            {/* Team */}
+            {/* Team - Hierarchical selector */}
             <div className="space-y-2">
               <Label>
                 Team <span className="text-destructive">*</span>
               </Label>
-              {teams.length > 0 ? (
-                <>
-                  <Select
-                    key={`team-${editingRoleId}`}
-                    value={editingRole.teamId ? editingRole.teamId : undefined}
-                    onValueChange={(value) => handleInlineUpdate("teamId", value)}
-                    disabled={!canEdit}
-                  >
-                    <SelectTrigger className={cn("w-full", !editingRole.teamId && editingRole.isDraft && "border-destructive")}>
-                      <SelectValue placeholder="Select team..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {!editingRole.teamId && editingRole.isDraft && (
-                    <p className="text-xs text-destructive">Team is required</p>
-                  )}
-                </>
+              {fullTeams.length > 0 ? (
+                <TeamTreeSelect
+                  teams={fullTeams}
+                  value={editingRole.teamId || null}
+                  onChange={(value) => handleInlineUpdate("teamId", value || "")}
+                  disabled={!canEdit}
+                  placeholder="Select team..."
+                  className={cn(!editingRole.teamId && editingRole.isDraft && "border-destructive")}
+                />
+              ) : teams.length > 0 ? (
+                <Select
+                  key={`team-${editingRoleId}`}
+                  value={editingRole.teamId ? editingRole.teamId : undefined}
+                  onValueChange={(value) => handleInlineUpdate("teamId", value)}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className={cn("w-full", !editingRole.teamId && editingRole.isDraft && "border-destructive")}>
+                    <SelectValue placeholder="Select team..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
                 <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
                   <Users className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm">{selectedRole?.team?.name ?? "No team available"}</span>
                 </div>
+              )}
+              {!editingRole.teamId && editingRole.isDraft && (
+                <p className="text-xs text-destructive">Team is required</p>
               )}
             </div>
             

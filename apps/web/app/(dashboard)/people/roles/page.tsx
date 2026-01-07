@@ -60,6 +60,7 @@ import { useOrganizationalLevelsList } from "@/lib/api/org-levels"
 import { OrgTreeView } from "@/components/people/org-tree-view"
 import { OrgChartDesigner } from "@/components/people/org-chart-designer"
 import { LevelsManager } from "@/components/people/levels-manager"
+import { TeamTreeSelect } from "@/components/people/team-tree-select"
 import { z } from "zod"
 
 // Helper to transform __none__ to null for optional UUID fields
@@ -161,12 +162,6 @@ export default function RolesPage() {
   
   // Form config for role
   const formConfig = useMemo(() => {
-    // Convert teams to select options
-    const teamOptions = teams.map(t => ({
-      value: t.id,
-      label: t.name,
-    }))
-    
     // Convert roles to select options (excluding current role for edit)
     const roleOptions = roles
       .filter(r => !selectedRole || r.id !== selectedRole.id)
@@ -189,11 +184,24 @@ export default function RolesPage() {
         placeholder: "Describe the role's responsibilities",
       },
       teamId: {
-        component: "select" as const,
+        component: "custom" as const,
         label: "Team",
         placeholder: "Select team",
         required: true,
-        options: teamOptions,
+        render: ({ value, onChange, disabled }) => (
+          <TeamTreeSelect
+            teams={teams}
+            value={value || null}
+            onChange={(newValue) => onChange(newValue ?? "")}
+            disabled={disabled}
+            placeholder="Select team..."
+          />
+        ),
+        renderReadonly: (value: string | null) => {
+          if (!value) return "—"
+          const team = teams.find(t => t.id === value)
+          return team?.name ?? "Unknown"
+        },
       },
       parentRoleId: {
         component: "select" as const,
