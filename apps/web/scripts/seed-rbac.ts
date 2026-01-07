@@ -324,22 +324,20 @@ async function seedRBAC() {
       console.log(`  ✓ Role exists: ${roleData.name}`)
     }
 
-    // Clear existing role permissions for this role (to handle updates)
-    await db.delete(schema.rolePermissions).where(
-      eq(schema.rolePermissions.roleId, role.id)
-    )
+    // Get existing permissions for this role (DON'T delete - merge instead)
+    const existingRolePerms = await db.query.rolePermissions.findMany({
+      where: eq(schema.rolePermissions.roleId, role.id),
+    })
+    const existingPermIds = new Set(existingRolePerms.map(p => p.permissionId))
 
-    // Add role permissions
-    const rolePermsToInsert: { roleId: string; permissionId: string }[] = []
+    // Build list of permissions this role should have
+    const targetPermIds: Set<string> = new Set()
 
     // Handle wildcard (*) - gives all permissions that exist for each module
     if (roleData.permissions["*"]) {
       // For wildcard, give all permissions that actually exist in permissionMap
-      for (const key of Object.keys(permissionMap)) {
-        rolePermsToInsert.push({
-          roleId: role.id,
-          permissionId: permissionMap[key],
-        })
+      for (const permId of Object.values(permissionMap)) {
+        targetPermIds.add(permId)
       }
     } else {
       // Handle specific module permissions
@@ -348,19 +346,25 @@ async function seedRBAC() {
           if (hasPermission) {
             const key = `${modSlug}:${actSlug}`
             if (permissionMap[key]) {
-              rolePermsToInsert.push({
-                roleId: role.id,
-                permissionId: permissionMap[key],
-              })
+              targetPermIds.add(permissionMap[key])
             }
           }
         }
       }
     }
 
-    if (rolePermsToInsert.length > 0) {
+    // Find missing permissions (in target but not in existing)
+    const missingPermIds = Array.from(targetPermIds).filter(id => !existingPermIds.has(id))
+
+    if (missingPermIds.length > 0) {
+      const rolePermsToInsert = missingPermIds.map(permissionId => ({
+        roleId: role.id,
+        permissionId,
+      }))
       await db.insert(schema.rolePermissions).values(rolePermsToInsert)
-      console.log(`    → Assigned ${rolePermsToInsert.length} permissions`)
+      console.log(`    → Added ${missingPermIds.length} missing permissions (total: ${targetPermIds.size})`)
+    } else {
+      console.log(`    ✓ All ${targetPermIds.size} permissions already assigned`)
     }
   }
 
