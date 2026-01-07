@@ -232,25 +232,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = CreateTeamSchema.parse(body)
     
-    // Check for duplicate name within org
-    const existing = await db
-      .select({ id: teams.id })
-      .from(teams)
-      .where(
-        and(
-          eq(teams.orgId, orgId),
-          eq(teams.name, data.name)
-        )
-      )
-      .limit(1)
-    
-    if (existing.length > 0) {
-      return NextResponse.json(
-        { error: "A team with this name already exists" },
-        { status: 409 }
-      )
-    }
-    
     // Create the team
     const result = await db
       .insert(teams)

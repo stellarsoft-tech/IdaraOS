@@ -130,7 +130,7 @@ interface TeamWithPosition extends Team {
 export default function TeamsPage() {
   const canAccess = useCanAccess("people.teams")
   const canCreate = usePermission("people.teams", "create")
-  const canEdit = usePermission("people.teams", "update")
+  const canEdit = usePermission("people.teams", "edit")
   const canDelete = usePermission("people.teams", "delete")
   const router = useRouter()
   

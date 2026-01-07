@@ -209,27 +209,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       )
     }
     
-    // Check for duplicate name if changing
-    if (data.name && data.name !== existing.name) {
-      const duplicate = await db
-        .select({ id: teams.id })
-        .from(teams)
-        .where(
-          and(
-            eq(teams.orgId, orgId),
-            eq(teams.name, data.name)
-          )
-        )
-        .limit(1)
-      
-      if (duplicate.length > 0) {
-        return NextResponse.json(
-          { error: "A team with this name already exists" },
-          { status: 409 }
-        )
-      }
-    }
-    
     // Build update data
     const updateData: Partial<typeof teams.$inferInsert> = {
       updatedAt: new Date(),
