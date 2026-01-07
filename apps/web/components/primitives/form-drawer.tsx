@@ -33,7 +33,7 @@ export type SyncIndicatorType = "intune" | "entra" | "readonly" | "bidirectional
 export interface FormFieldDef {
   name: string
   label: string
-  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date" | "date-picker" | "datetime-picker"
+  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date" | "date-picker" | "datetime-picker" | "custom"
   placeholder?: string
   required?: boolean
   helpText?: string
@@ -45,13 +45,17 @@ export interface FormFieldDef {
   syncIndicator?: SyncIndicatorType
   // For bidirectional sync, the Entra field name this maps to (e.g., "officeLocation", "mobilePhone")
   entraFieldName?: string
+  /** Custom render function for "custom" component type */
+  render?: (props: { value: any; onChange: (value: any) => void; disabled?: boolean }) => React.ReactNode
+  /** Custom readonly display function */
+  renderReadonly?: (value: any) => React.ReactNode
 }
 
 /**
  * Field configuration (for config-based format)
  */
 export interface FieldConfig {
-  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date-picker" | "datetime-picker"
+  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date-picker" | "datetime-picker" | "custom"
   label: string
   placeholder?: string
   required?: boolean
@@ -66,6 +70,10 @@ export interface FieldConfig {
   syncIndicator?: SyncIndicatorType
   // For bidirectional sync, the Entra field name this maps to (e.g., "officeLocation", "mobilePhone")
   entraFieldName?: string
+  /** Custom render function for "custom" component type */
+  render?: (props: { value: any; onChange: (value: any) => void; disabled?: boolean }) => React.ReactNode
+  /** Custom readonly display function */
+  renderReadonly?: (value: any) => React.ReactNode
 }
 
 export type FormConfig = Record<string, FieldConfig>
@@ -543,6 +551,16 @@ function renderFormControl(
           fieldProps={fieldProps}
         />
       )
+
+    case "custom":
+      if (fieldDef.render) {
+        return fieldDef.render({
+          value: fieldProps.value,
+          onChange: fieldProps.onChange,
+          disabled: fieldDef.disabled,
+        })
+      }
+      return null
 
     default:
       return (
