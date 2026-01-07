@@ -196,7 +196,7 @@ export default function TeamsPage() {
         component: "custom" as const,
         label: "Parent Team",
         placeholder: "Select parent team",
-        render: ({ value, onChange, disabled }) => (
+        render: ({ value, onChange, disabled }: { value: string | null; onChange: (v: string | null) => void; disabled?: boolean }) => (
           <TeamTreeSelect
             teams={teams.filter(t => !selectedTeam || t.id !== selectedTeam.id)}
             value={value === NONE_VALUE ? null : value}

@@ -188,7 +188,7 @@ export default function RolesPage() {
         label: "Team",
         placeholder: "Select team",
         required: true,
-        render: ({ value, onChange, disabled }) => (
+        render: ({ value, onChange, disabled }: { value: string | null; onChange: (v: string | null) => void; disabled?: boolean }) => (
           <TeamTreeSelect
             teams={teams}
             value={value || null}
