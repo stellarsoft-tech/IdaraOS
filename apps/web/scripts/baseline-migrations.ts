@@ -81,9 +81,24 @@ const migrationChecks: MigrationCheck[] = [
     tag: "0000_right_flatman",
     verify: async (pool) => tableExists(pool, "core_organizations"),
   },
+  {
+    // Assets categories level/sortOrder/position columns
+    tag: "0001_first_golden_guardian",
+    verify: async (pool) => columnExists(pool, "assets_categories", "position_x"),
+  },
+  {
+    // Files system tables (core_files, core_file_categories, core_storage_integrations)
+    tag: "0002_tranquil_miracleman",
+    verify: async (pool) => tableExists(pool, "core_files"),
+  },
+  {
+    // Teams position columns (position_x, position_y)
+    tag: "0003_dizzy_fixer",
+    verify: async (pool) => columnExists(pool, "people_teams", "position_x"),
+  },
   // Add new migration checks here as you create migrations:
   // {
-  //   tag: "0001_<migration_name>",
+  //   tag: "XXXX_migration_name",
   //   verify: async (pool) => tableExists(pool, "new_table") || columnExists(pool, "table", "new_column"),
   // },
 ]
