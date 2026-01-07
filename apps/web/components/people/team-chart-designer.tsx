@@ -1045,12 +1045,13 @@ export function TeamChartDesigner({
             </div>
             
             {/* Save button - outside toolbar group like Roles */}
-            {(onSave || onCreate) && (
+            {(onSave || onCreate || onInlineUpdate) && (
               <Button
                 onClick={handleSave}
                 disabled={isSaving || !hasChanges}
                 size="sm"
                 className="h-8 shadow-sm"
+                variant={hasChanges ? "default" : "outline"}
               >
                 <Save className="h-4 w-4 mr-1" />
                 {isSaving ? "Saving..." : "Save"}

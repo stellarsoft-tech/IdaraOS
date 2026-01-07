@@ -638,7 +638,7 @@ export default function TeamsPage() {
                     canDelete={canDelete}
                     canCreate={canCreate}
                     isLoading={isLoading}
-                    isSaving={bulkUpdateMutation.isPending || createMutation.isPending}
+                    isSaving={bulkUpdateMutation.isPending || createMutation.isPending || updateMutation.isPending}
                     isFullscreen={isFullscreen}
                     onFullscreenChange={setIsFullscreen}
                   />
