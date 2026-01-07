@@ -59,6 +59,7 @@ import {
 import { usePeopleList, type Person } from "@/lib/api/people"
 import { TeamTreeView } from "@/components/people/team-tree-view"
 import { TeamChartDesigner, type DraftTeam } from "@/components/people/team-chart-designer"
+import { TeamTreeSelect } from "@/components/people/team-tree-select"
 import { z } from "zod"
 
 // Helper to transform __none__ to null for optional UUID fields
@@ -172,14 +173,6 @@ export default function TeamsPage() {
       label: p.name,
     }))
     
-    // Convert teams to select options (excluding current team for edit)
-    const teamOptions = teams
-      .filter(t => !selectedTeam || t.id !== selectedTeam.id)
-      .map(t => ({
-        value: t.id,
-        label: t.name,
-      }))
-    
     return {
       name: {
         component: "input" as const,
@@ -200,13 +193,27 @@ export default function TeamsPage() {
         options: [{ value: NONE_VALUE, label: "No lead assigned" }, ...peopleOptions],
       },
       parentTeamId: {
-        component: "select" as const,
+        component: "custom" as const,
         label: "Parent Team",
         placeholder: "Select parent team",
-        options: [{ value: NONE_VALUE, label: "No parent (top-level)" }, ...teamOptions],
+        render: ({ value, onChange, disabled }) => (
+          <TeamTreeSelect
+            teams={teams.filter(t => !selectedTeam || t.id !== selectedTeam.id)}
+            value={value === NONE_VALUE ? null : value}
+            onChange={(newValue) => onChange(newValue ?? NONE_VALUE)}
+            excludeId={selectedTeam?.id}
+            disabled={disabled}
+            placeholder="Select parent team..."
+          />
+        ),
+        renderReadonly: (value: string | null) => {
+          if (!value || value === NONE_VALUE) return "None (top-level)"
+          const team = teams.find(t => t.id === value)
+          return team?.name ?? "Unknown"
+        },
       },
     }
-  }, [people, teams, selectedTeam])
+  }, [people, teams, selectedTeam, NONE_VALUE])
   
   // Helper to convert NONE_VALUE to null
   const toNullable = (value: string | null | undefined): string | null => {

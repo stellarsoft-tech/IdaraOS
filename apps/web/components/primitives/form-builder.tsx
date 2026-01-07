@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
  * Field configuration for form rendering
  */
 export interface FieldConfig {
-  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date-picker" | "datetime-picker"
+  component: "input" | "textarea" | "select" | "async-select" | "switch" | "date-picker" | "datetime-picker" | "custom"
   label: string
   placeholder?: string
   required?: boolean
@@ -25,6 +25,10 @@ export interface FieldConfig {
   ref?: string
   disabled?: boolean
   hidden?: boolean
+  /** Custom render function for "custom" component type */
+  render?: (props: { value: any; onChange: (value: any) => void; disabled?: boolean }) => React.ReactNode
+  /** Custom readonly display function */
+  renderReadonly?: (value: any) => React.ReactNode
 }
 
 /**
@@ -133,6 +137,10 @@ function renderField(
   
   // Readonly mode - display value as text
   if (readonly) {
+    // Custom readonly renderer
+    if (config.renderReadonly) {
+      return <div className="text-sm py-2">{config.renderReadonly(field.value)}</div>
+    }
     return <div className="text-sm py-2">{formatValue(field.value, config)}</div>
   }
   
@@ -217,6 +225,16 @@ function renderField(
           {...commonProps}
         />
       )
+    
+    case "custom":
+      if (config.render) {
+        return config.render({
+          value: field.value,
+          onChange: field.onChange,
+          disabled: commonProps.disabled,
+        })
+      }
+      return null
     
     default:
       return (

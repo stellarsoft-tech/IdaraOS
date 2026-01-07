@@ -47,6 +47,7 @@ import {
   Minimize2,
 } from "lucide-react"
 import { type Team, type TeamLead } from "@/lib/api/teams"
+import { TeamTreeSelect } from "@/components/people/team-tree-select"
 
 // Person option for lead selection
 interface PersonOption {
@@ -1178,31 +1179,18 @@ export function TeamChartDesigner({
               )}
             </div>
             
-            {/* Parent Team */}
+            {/* Parent Team - Hierarchical selector */}
             <div className="space-y-2">
               <Label>Parent Team</Label>
-              <Select
+              <TeamTreeSelect
                 key={`parent-${editingTeamId}`}
-                value={editingTeam.parentTeamId ?? "__none__"}
-                onValueChange={(value) => handleInlineUpdate("parentTeamId", value === "__none__" ? null : value)}
+                teams={teams}
+                value={editingTeam.parentTeamId}
+                onChange={(value) => handleInlineUpdate("parentTeamId", value)}
+                excludeId={editingTeamId?.startsWith("draft-") ? undefined : editingTeamId}
                 disabled={!canEdit}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select parent team..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">
-                    <span className="text-muted-foreground">None (Top-level)</span>
-                  </SelectItem>
-                  {teams
-                    .filter(t => !editingTeamId || t.id !== editingTeamId) // Exclude self
-                    .map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select parent team..."
+              />
             </div>
             
             {/* Info badges - only for existing teams */}
