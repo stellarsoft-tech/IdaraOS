@@ -50,11 +50,24 @@ import type {
   SaveTemplateStep,
   SaveTemplateEdge,
 } from "@/lib/api/workflows"
+import { RoleTreeSelect } from "@/components/people/role-tree-select"
 
 interface PersonOption {
   id: string
   name: string
   email: string
+  roleId?: string | null
+}
+
+interface RoleOption {
+  id: string
+  name: string
+  parentRoleId: string | null
+  level: number
+  holderCount: number
+  childCount: number
+  description?: string
+  team?: { id: string; name: string } | null
 }
 
 interface WorkflowDesignerProps {
@@ -67,6 +80,8 @@ interface WorkflowDesignerProps {
   className?: string
   /** List of people that can be selected as default assignees */
   people?: PersonOption[]
+  /** List of organizational roles for role-based assignment */
+  roles?: RoleOption[]
 }
 
 type WorkflowNode = Node<StepNodeData>
@@ -169,6 +184,7 @@ export function WorkflowDesigner({
   readOnly = false,
   className,
   people = [],
+  roles = [],
 }: WorkflowDesignerProps) {
   // Convert initial data
   const initialNodes = useMemo(
@@ -473,9 +489,26 @@ export function WorkflowDesigner({
               <Label>Assignee Type</Label>
               <Select
                 value={selectedNode.data.assigneeType}
-                onValueChange={(value) =>
-                  updateNodeData({ assigneeType: value as StepNodeData["assigneeType"] })
-                }
+                onValueChange={(value) => {
+                  // Clear role config when changing away from role assignment
+                  const newAssigneeType = value as StepNodeData["assigneeType"]
+                  if (newAssigneeType !== "role") {
+                    updateNodeData({ 
+                      assigneeType: newAssigneeType,
+                      assigneeConfig: undefined,
+                      // Clear default assignee when changing type
+                      defaultAssigneeId: null,
+                      defaultAssignee: null,
+                    })
+                  } else {
+                    updateNodeData({ 
+                      assigneeType: newAssigneeType,
+                      // Clear default assignee when switching to role
+                      defaultAssigneeId: null,
+                      defaultAssignee: null,
+                    })
+                  }
+                }}
                 disabled={readOnly}
               >
                 <SelectTrigger className="w-full">
@@ -491,59 +524,142 @@ export function WorkflowDesigner({
               </Select>
             </div>
             
-            {/* Default Assignee (Person) */}
+            {/* Role Selector - only shown when assigneeType is "role" */}
+            {selectedNode.data.assigneeType === "role" && (
+              <div className="space-y-2">
+                <Label>
+                  Select Role <span className="text-destructive">*</span>
+                </Label>
+                {readOnly ? (
+                  <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">
+                      {(selectedNode.data.assigneeConfig as { roleName?: string } | undefined)?.roleName ?? "No role selected"}
+                    </span>
+                  </div>
+                ) : roles.length > 0 ? (
+                  <RoleTreeSelect
+                    roles={roles}
+                    value={(selectedNode.data.assigneeConfig as { roleId?: string } | undefined)?.roleId ?? null}
+                    onChange={(roleId) => {
+                      if (roleId) {
+                        const role = roles.find(r => r.id === roleId)
+                        updateNodeData({
+                          assigneeConfig: {
+                            roleId,
+                            roleName: role?.name ?? "Unknown Role",
+                          },
+                          // Clear default assignee when role changes
+                          defaultAssigneeId: null,
+                          defaultAssignee: null,
+                        })
+                      } else {
+                        updateNodeData({
+                          assigneeConfig: undefined,
+                          defaultAssigneeId: null,
+                          defaultAssignee: null,
+                        })
+                      }
+                    }}
+                    placeholder="Select role..."
+                    allowNone={false}
+                  />
+                ) : (
+                  <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">No roles available</span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Tasks will be assigned to someone holding this role.
+                </p>
+              </div>
+            )}
+            
+            {/* Default Assignee (Person) - filtered by role when role is selected */}
             <div className="space-y-2">
               <Label>Default Assignee</Label>
-              {readOnly ? (
-                // Read-only: show assignee info
-                <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {selectedNode.data.defaultAssignee?.name ?? "Unassigned"}
-                  </span>
-                </div>
-              ) : people && people.length > 0 ? (
-                // Editable: show dropdown
-                <Select
-                  value={selectedNode.data.defaultAssigneeId ?? "__none__"}
-                  onValueChange={(value) => {
-                    if (value === "__none__") {
-                      updateNodeData({ defaultAssigneeId: null, defaultAssignee: null })
-                    } else {
-                      const person = people.find(p => p.id === value)
-                      updateNodeData({ 
-                        defaultAssigneeId: value,
-                        defaultAssignee: person ? { id: person.id, name: person.name, email: person.email } : null
-                      })
-                    }
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select person..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">
-                      <span className="text-muted-foreground">Unassigned</span>
-                    </SelectItem>
-                    {people.map((person) => (
-                      <SelectItem key={person.id} value={person.id}>
-                        {person.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                // No people list available
-                <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {selectedNode.data.defaultAssignee?.name ?? "No people available"}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                // Filter people by selected role if assigneeType is "role"
+                const assigneeConfig = selectedNode.data.assigneeConfig as { roleId?: string } | undefined
+                const selectedRoleId = selectedNode.data.assigneeType === "role" 
+                  ? assigneeConfig?.roleId ?? null
+                  : null
+                const filteredPeople = selectedRoleId
+                  ? people.filter(p => p.roleId === selectedRoleId)
+                  : people
+                
+                if (readOnly) {
+                  return (
+                    <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">
+                        {selectedNode.data.defaultAssignee?.name ?? "Unassigned"}
+                      </span>
+                    </div>
+                  )
+                }
+                
+                // Show message if role is selected but no people have that role
+                if (selectedNode.data.assigneeType === "role" && selectedRoleId && filteredPeople.length === 0) {
+                  return (
+                    <div className="flex items-center gap-2 py-2 px-3 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                      <User className="h-4 w-4 text-amber-600" />
+                      <span className="text-sm text-amber-600">
+                        No one holds this role yet
+                      </span>
+                    </div>
+                  )
+                }
+                
+                if (filteredPeople.length > 0) {
+                  return (
+                    <Select
+                      value={selectedNode.data.defaultAssigneeId ?? "__none__"}
+                      onValueChange={(value) => {
+                        if (value === "__none__") {
+                          updateNodeData({ defaultAssigneeId: null, defaultAssignee: null })
+                        } else {
+                          const person = filteredPeople.find(p => p.id === value)
+                          updateNodeData({ 
+                            defaultAssigneeId: value,
+                            defaultAssignee: person ? { id: person.id, name: person.name, email: person.email } : null
+                          })
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select person..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="text-muted-foreground">Unassigned</span>
+                        </SelectItem>
+                        {filteredPeople.map((person) => (
+                          <SelectItem key={person.id} value={person.id}>
+                            {person.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                }
+                
+                return (
+                  <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {selectedNode.data.defaultAssignee?.name ?? "No people available"}
+                    </span>
+                  </div>
+                )
+              })()}
               {!readOnly && (
                 <p className="text-xs text-muted-foreground">
-                  This person will be assigned by default when the workflow runs.
+                  {selectedNode.data.assigneeType === "role" && selectedNode.data.assigneeConfig?.roleId
+                    ? "Select a default assignee from people holding this role."
+                    : "This person will be assigned by default when the workflow runs."
+                  }
                 </p>
               )}
             </div>
