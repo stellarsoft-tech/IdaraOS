@@ -924,7 +924,7 @@ export function TeamChartDesigner({
   
   if (teams.length === 0 && draftNodes.size === 0) {
     return (
-      <div className={cn("flex flex-col items-center justify-center h-full bg-muted/30 rounded-lg", className)}>
+      <div className={cn("flex flex-col items-center justify-center h-full min-h-[300px] bg-muted/30 rounded-lg", className)}>
         <Users className="h-12 w-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">No teams to display</h3>
         <p className="text-sm text-muted-foreground mb-4 max-w-md text-center">

@@ -370,7 +370,7 @@ export function HierarchyTreeView<TItem extends HierarchyItem>({
   
   if (items.length === 0) {
     return (
-      <div className={cn("flex flex-col items-center justify-center py-8 text-center", className)}>
+      <div className={cn("flex flex-col items-center justify-center py-8 text-center min-h-[300px]", className)}>
         {config?.emptyIcon || <FolderTree className="h-10 w-10 text-muted-foreground mb-3" />}
         <h3 className="font-semibold mb-1">
           {labels.emptyTitle || `No ${itemName}s defined`}
@@ -389,7 +389,7 @@ export function HierarchyTreeView<TItem extends HierarchyItem>({
   }
   
   return (
-    <div className={cn("", className)}>
+    <div className={cn("flex flex-col", className)}>
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-2 border-b">
         <div className="text-sm text-muted-foreground">

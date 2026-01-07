@@ -565,7 +565,7 @@ export default function TeamsPage() {
           
           <TabsContent value="tree" className="mt-0">
             <Card className="py-0">
-              <CardContent className="p-0 py-0 min-h-[400px] max-h-[calc(100vh-400px)] overflow-auto">
+              <CardContent className="p-0 py-0 h-[350px] overflow-auto">
                 <TeamTreeView
                   teams={teams}
                   selectedTeamId={selectedTeam?.id}
@@ -582,6 +582,7 @@ export default function TeamsPage() {
                   canEdit={canEdit}
                   canDelete={canDelete}
                   isLoading={isLoading}
+                  className="h-full"
                 />
               </CardContent>
             </Card>
@@ -590,7 +591,7 @@ export default function TeamsPage() {
           <TabsContent value="chart" className={isFullscreen ? "mt-0 h-screen" : "mt-0"}>
             <Card className={isFullscreen ? "border-0 shadow-none h-full py-0" : "overflow-hidden py-0"}>
               <CardContent className={isFullscreen ? "p-0 h-full" : "p-0"}>
-                <div className={isFullscreen ? "h-full" : "h-[calc(100vh-400px)] min-h-[400px]"}>
+                <div className={isFullscreen ? "h-full" : "h-[350px]"}>
                   <TeamChartDesigner
                     teams={teamsWithPosition}
                     people={peopleOptions}
