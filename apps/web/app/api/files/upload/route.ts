@@ -54,10 +54,18 @@ export async function POST(request: NextRequest) {
     const entityTypeRaw = formData.get("entityType") as string | null
     const entityIdRaw = formData.get("entityId") as string | null
     const customName = formData.get("name") as string | null
+    const pathPrefixRaw = formData.get("pathPrefix") as string | null
     
     // Convert empty strings and "none" to null for optional fields
     const entityType = entityTypeRaw && entityTypeRaw !== "none" && entityTypeRaw !== "" ? entityTypeRaw : null
     const entityId = entityIdRaw && entityIdRaw !== "none" && entityIdRaw !== "" ? entityIdRaw : null
+    // Sanitize path prefix - remove leading/trailing slashes and any dangerous path traversal
+    const pathPrefix = pathPrefixRaw 
+      ? pathPrefixRaw
+          .replace(/\.\./g, "") // Remove path traversal
+          .replace(/^\/|\/$/g, "") // Remove leading/trailing slashes
+          .trim()
+      : null
     
     if (!file) {
       return NextResponse.json(
@@ -139,14 +147,21 @@ export async function POST(request: NextRequest) {
     
     // Build storage path
     // Priority: category.folderPath > auto-generated path
+    // Then append pathPrefix if provided
     let fullPath: string
     
     if (category.folderPath) {
-      // Use the configured folder path directly + unique filename
-      fullPath = `${category.folderPath.replace(/^\/|\/$/g, "")}/${uniqueFilename}`
+      // Use the configured folder path directly
+      const baseFolderPath = category.folderPath.replace(/^\/|\/$/g, "")
+      fullPath = pathPrefix 
+        ? `${baseFolderPath}/${pathPrefix}/${uniqueFilename}`
+        : `${baseFolderPath}/${uniqueFilename}`
     } else {
-      // Auto-generate path: orgId/moduleScope/categorySlug/filename
-      fullPath = `${session.orgId}/${category.moduleScope}/${category.slug}/${uniqueFilename}`
+      // Auto-generate path: orgId/moduleScope/categorySlug/[pathPrefix]/filename
+      const basePath = `${session.orgId}/${category.moduleScope}/${category.slug}`
+      fullPath = pathPrefix 
+        ? `${basePath}/${pathPrefix}/${uniqueFilename}`
+        : `${basePath}/${uniqueFilename}`
     }
     
     // Prepend storage integration's base path if configured

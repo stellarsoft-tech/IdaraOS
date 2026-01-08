@@ -26,6 +26,10 @@ export interface StepNodeData extends Record<string, unknown> {
   dueOffsetDays?: number
   isRequired: boolean
   isSelected?: boolean
+  // Attachment configuration
+  attachmentsEnabled: boolean
+  fileCategoryId?: string | null
+  filePathPrefix?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -178,4 +182,5 @@ export const defaultStepNodeData: Partial<StepNodeData> = {
   stepType: "task",
   assigneeType: "unassigned",
   isRequired: true,
+  attachmentsEnabled: true, // Enable attachments by default
 }

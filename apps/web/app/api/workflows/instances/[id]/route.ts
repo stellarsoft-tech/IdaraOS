@@ -224,6 +224,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           isRequired: templateStep.isRequired,
           positionX: templateStep.positionX,
           positionY: templateStep.positionY,
+          // Attachment configuration
+          attachmentsEnabled: templateStep.attachmentsEnabled,
+          fileCategoryId: templateStep.fileCategoryId ?? undefined,
+          filePathPrefix: templateStep.filePathPrefix ?? undefined,
         } : null,
         createdAt: step.createdAt.toISOString(),
         updatedAt: step.updatedAt.toISOString(),

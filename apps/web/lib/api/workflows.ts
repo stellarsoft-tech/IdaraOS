@@ -62,6 +62,10 @@ export interface WorkflowTemplateStep {
   dueOffsetDays?: number
   dueOffsetFrom: string
   isRequired: boolean
+  // Attachment configuration
+  attachmentsEnabled: boolean
+  fileCategoryId?: string
+  filePathPrefix?: string
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -156,6 +160,10 @@ export interface WorkflowInstanceStep {
     isRequired: boolean
     positionX: number
     positionY: number
+    // Attachment configuration from template
+    attachmentsEnabled: boolean
+    fileCategoryId?: string
+    filePathPrefix?: string
   } | null
   createdAt: string
   updatedAt: string
@@ -205,6 +213,10 @@ export interface SaveTemplateStep {
   dueOffsetDays?: number
   dueOffsetFrom?: string
   isRequired?: boolean
+  // Attachment configuration
+  attachmentsEnabled?: boolean
+  fileCategoryId?: string | null
+  filePathPrefix?: string | null
   metadata?: Record<string, unknown>
 }
 

@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/workflows"
 import { usePeopleList } from "@/lib/api/people"
 import { useOrganizationalRolesList } from "@/lib/api/org-roles"
+import { useFileCategoriesList } from "@/lib/api/file-categories"
 
 const statusColors: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -49,6 +50,7 @@ export default function WorkflowDesignerPage({ params }: PageProps) {
   const { data: template, isLoading, error } = useWorkflowTemplateDetail(id)
   const { data: people = [] } = usePeopleList()
   const { data: roles = [] } = useOrganizationalRolesList()
+  const { data: fileCategories = [] } = useFileCategoriesList({ moduleScope: "workflows", activeOnly: true })
   
   // Set breadcrumb to show template name and "Designer"
   useBreadcrumbLabels(template?.name, "Designer")
@@ -148,6 +150,7 @@ export default function WorkflowDesignerPage({ params }: PageProps) {
           readOnly={template.status === "archived"}
           people={people}
           roles={roles}
+          fileCategories={fileCategories}
         />
       </div>
       

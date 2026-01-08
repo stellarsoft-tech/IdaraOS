@@ -10,4 +10,5 @@ export * from "./workflow-task-list"
 export * from "./edit-template-dialog"
 export * from "./create-instance-dialog"
 export * from "./workflow-instances-table"
+export * from "./task-detail-sheet"
 

@@ -41,7 +41,9 @@ import {
   GitBranch,
   Layers,
   X,
-  User
+  User,
+  Paperclip,
+  FolderOpen
 } from "lucide-react"
 import { workflowNodeTypes, type StepNodeData, defaultStepNodeData } from "./step-node"
 import type { 
@@ -51,6 +53,7 @@ import type {
   SaveTemplateEdge,
 } from "@/lib/api/workflows"
 import { RoleTreeSelect } from "@/components/people/role-tree-select"
+import type { FileCategory } from "@/lib/api/file-categories"
 
 interface PersonOption {
   id: string
@@ -82,6 +85,8 @@ interface WorkflowDesignerProps {
   people?: PersonOption[]
   /** List of organizational roles for role-based assignment */
   roles?: RoleOption[]
+  /** File categories for workflow attachment configuration */
+  fileCategories?: FileCategory[]
 }
 
 type WorkflowNode = Node<StepNodeData>
@@ -103,6 +108,10 @@ function stepToNode(step: WorkflowTemplateStep): WorkflowNode {
       defaultAssignee: step.defaultAssignee,
       dueOffsetDays: step.dueOffsetDays,
       isRequired: step.isRequired,
+      // Attachment configuration
+      attachmentsEnabled: step.attachmentsEnabled,
+      fileCategoryId: step.fileCategoryId,
+      filePathPrefix: step.filePathPrefix,
       metadata: step.metadata,
     },
   }
@@ -144,6 +153,10 @@ function nodeToStep(node: WorkflowNode): SaveTemplateStep {
     defaultAssigneeId: node.data.defaultAssigneeId,
     dueOffsetDays: node.data.dueOffsetDays,
     isRequired: node.data.isRequired,
+    // Attachment configuration
+    attachmentsEnabled: node.data.attachmentsEnabled,
+    fileCategoryId: node.data.fileCategoryId,
+    filePathPrefix: node.data.filePathPrefix,
     metadata: node.data.metadata,
   }
 }
@@ -185,6 +198,7 @@ export function WorkflowDesigner({
   className,
   people = [],
   roles = [],
+  fileCategories = [],
 }: WorkflowDesignerProps) {
   // Convert initial data
   const initialNodes = useMemo(
@@ -691,6 +705,90 @@ export function WorkflowDesigner({
                 onCheckedChange={(checked) => updateNodeData({ isRequired: checked })}
                 disabled={readOnly}
               />
+            </div>
+
+            {/* Attachments Section */}
+            <div className="pt-4 border-t space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Paperclip className="h-4 w-4" />
+                <span>Attachments</span>
+              </div>
+              
+              {/* Enable Attachments Toggle */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="attachments-enabled">Enable Attachments</Label>
+                <Switch
+                  id="attachments-enabled"
+                  checked={selectedNode.data.attachmentsEnabled}
+                  onCheckedChange={(checked) => updateNodeData({ attachmentsEnabled: checked })}
+                  disabled={readOnly}
+                />
+              </div>
+              
+              {selectedNode.data.attachmentsEnabled && (
+                <>
+                  {/* File Category */}
+                  <div className="space-y-2">
+                    <Label>File Category</Label>
+                    {readOnly ? (
+                      <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm">
+                          {fileCategories.find(c => c.id === selectedNode.data.fileCategoryId)?.name ?? "Select at upload time"}
+                        </span>
+                      </div>
+                    ) : fileCategories.length > 0 ? (
+                      <Select
+                        value={selectedNode.data.fileCategoryId ?? "__none__"}
+                        onValueChange={(value) => {
+                          if (value === "__none__") {
+                            updateNodeData({ fileCategoryId: null })
+                          } else {
+                            updateNodeData({ fileCategoryId: value })
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select category..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">
+                            <span className="text-muted-foreground">Select at upload time</span>
+                          </SelectItem>
+                          {fileCategories.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
+                        <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">No categories configured</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Pre-select a category for file uploads on this step.
+                    </p>
+                  </div>
+                  
+                  {/* File Path Prefix */}
+                  <div className="space-y-2">
+                    <Label htmlFor="file-path-prefix">Path Prefix (Optional)</Label>
+                    <Input
+                      id="file-path-prefix"
+                      value={selectedNode.data.filePathPrefix ?? ""}
+                      onChange={(e) => updateNodeData({ filePathPrefix: e.target.value || null })}
+                      placeholder="e.g., {instanceName}/documents"
+                      disabled={readOnly}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Subfolder path for uploaded files. Use {"{instanceName}"} for workflow name.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Delete Button */}

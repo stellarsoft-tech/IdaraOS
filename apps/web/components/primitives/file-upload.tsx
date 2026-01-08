@@ -58,6 +58,12 @@ export interface FileUploadProps {
   /** Pre-selected category (bypasses category selection) */
   categoryId?: string
   
+  /** Default category ID from template configuration (allows user override) */
+  defaultCategoryId?: string
+  
+  /** Path prefix to prepend to storage path (e.g., from workflow template) */
+  defaultPathPrefix?: string
+  
   /** Callback when file(s) are uploaded */
   onUpload?: (files: UploadedFile[]) => void
   
@@ -153,6 +159,8 @@ export function FileUpload({
   entityType,
   entityId,
   categoryId: fixedCategoryId,
+  defaultCategoryId,
+  defaultPathPrefix,
   onUpload,
   onError,
   multiple = false,
@@ -165,8 +173,11 @@ export function FileUpload({
 }: FileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(fixedCategoryId ?? null)
+  // Use fixedCategoryId if provided, otherwise default to defaultCategoryId (can be overridden by user)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(fixedCategoryId ?? defaultCategoryId ?? null)
   const [isDragging, setIsDragging] = useState(false)
+  // Path prefix for storage path (from template configuration)
+  const pathPrefix = defaultPathPrefix ?? null
   
   const queryClient = useQueryClient()
   const { data: categories = [], isLoading: categoriesLoading } = useModuleFileCategories(moduleScope)
@@ -269,6 +280,11 @@ export function FileUpload({
       formData.append("categoryId", effectiveCategoryId)
       formData.append("entityType", entityType)
       formData.append("entityId", entityId)
+      
+      // Include path prefix if configured (e.g., from workflow template)
+      if (pathPrefix) {
+        formData.append("pathPrefix", pathPrefix)
+      }
       
       // TODO: Implement actual upload with progress tracking
       // For now, simulate with a simple POST

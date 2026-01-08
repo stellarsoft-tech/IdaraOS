@@ -49,6 +49,10 @@ const StepSchema = z.object({
   dueOffsetDays: z.number().optional().nullable(),
   dueOffsetFrom: z.string().default("workflow_start"),
   isRequired: z.boolean().default(true),
+  // Attachment configuration
+  attachmentsEnabled: z.boolean().default(true),
+  fileCategoryId: z.string().uuid().nullable().optional(),
+  filePathPrefix: z.string().optional().nullable(),
   metadata: z.record(z.unknown()).optional().nullable(),
 })
 
@@ -127,6 +131,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         dueOffsetDays: workflowTemplateSteps.dueOffsetDays,
         dueOffsetFrom: workflowTemplateSteps.dueOffsetFrom,
         isRequired: workflowTemplateSteps.isRequired,
+        // Attachment configuration
+        attachmentsEnabled: workflowTemplateSteps.attachmentsEnabled,
+        fileCategoryId: workflowTemplateSteps.fileCategoryId,
+        filePathPrefix: workflowTemplateSteps.filePathPrefix,
         metadata: workflowTemplateSteps.metadata,
         createdAt: workflowTemplateSteps.createdAt,
         updatedAt: workflowTemplateSteps.updatedAt,
@@ -220,6 +228,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         dueOffsetDays: step.dueOffsetDays ?? undefined,
         dueOffsetFrom: step.dueOffsetFrom ?? "workflow_start",
         isRequired: step.isRequired,
+        // Attachment configuration
+        attachmentsEnabled: step.attachmentsEnabled,
+        fileCategoryId: step.fileCategoryId ?? undefined,
+        filePathPrefix: step.filePathPrefix ?? undefined,
         metadata: step.metadata,
         createdAt: step.createdAt.toISOString(),
         updatedAt: step.updatedAt.toISOString(),
@@ -346,6 +358,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
               dueOffsetDays: step.dueOffsetDays ?? null,
               dueOffsetFrom: step.dueOffsetFrom,
               isRequired: step.isRequired,
+              // Attachment configuration
+              attachmentsEnabled: step.attachmentsEnabled,
+              fileCategoryId: step.fileCategoryId ?? null,
+              filePathPrefix: step.filePathPrefix ?? null,
               metadata: step.metadata ?? null,
             })
             .returning()

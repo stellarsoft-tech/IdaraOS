@@ -7,6 +7,7 @@ import { pgTable, uuid, text, timestamp, index, boolean, integer, real, jsonb, t
 import { relations } from "drizzle-orm"
 import { persons } from "./people"
 import { users } from "./users"
+import { fileCategories } from "./storage"
 
 // ============================================================================
 // ENUMS
@@ -147,6 +148,11 @@ export const workflowTemplateSteps = pgTable(
     
     // Step flags
     isRequired: boolean("is_required").notNull().default(true),
+    
+    // Attachment configuration
+    attachmentsEnabled: boolean("attachments_enabled").notNull().default(true),
+    fileCategoryId: uuid("file_category_id").references(() => fileCategories.id, { onDelete: "set null" }),
+    filePathPrefix: text("file_path_prefix"), // Optional subfolder path template (e.g., "{instanceName}/documents")
     
     // Additional metadata
     metadata: jsonb("metadata").$type<{
@@ -369,6 +375,11 @@ export const workflowTemplateStepsRelations = relations(workflowTemplateSteps, (
     fields: [workflowTemplateSteps.defaultAssigneeId],
     references: [persons.id],
     relationName: "stepDefaultAssignee",
+  }),
+  fileCategory: one(fileCategories, {
+    fields: [workflowTemplateSteps.fileCategoryId],
+    references: [fileCategories.id],
+    relationName: "stepFileCategory",
   }),
   instanceSteps: many(workflowInstanceSteps),
 }))
