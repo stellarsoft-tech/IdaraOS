@@ -52,6 +52,7 @@ import { type OrganizationalRole } from "@/lib/api/org-roles"
 import { type OrganizationalLevel } from "@/lib/api/org-levels"
 import { useTeamsList } from "@/lib/api/teams"
 import { TeamTreeSelect } from "@/components/people/team-tree-select"
+import { TeamMultiSelect } from "@/components/people/team-multi-select"
 
 // Team type for inline editing
 interface TeamOption {
@@ -315,7 +316,8 @@ export interface DraftRole {
   id: string
   name: string
   description: string
-  teamId: string
+  teamId: string // Primary team (for backwards compatibility)
+  teamIds: string[] // All team IDs
   parentRoleId: string | null
   level: number
   positionX: number
@@ -333,7 +335,7 @@ export interface OrgChartDesignerProps {
   onDelete?: (role: OrganizationalRole) => void
   onSave?: (updates: Array<{ id: string; positionX: number; positionY: number; level?: number }>) => void
   onUpdateParent?: (roleId: string, newParentId: string | null) => void
-  onInlineUpdate?: (roleId: string, data: { name?: string; description?: string; teamId?: string; parentRoleId?: string | null; level?: number }) => void
+  onInlineUpdate?: (roleId: string, data: { name?: string; description?: string; teamId?: string; teamIds?: string[]; parentRoleId?: string | null; level?: number }) => void
   /** Called when saving draft roles - receives array of new roles to create */
   onCreate?: (drafts: DraftRole[]) => Promise<void>
   canEdit?: boolean
@@ -433,7 +435,8 @@ export function OrgChartDesigner({
   const [editingRole, setEditingRole] = useState<{
     name: string
     description: string
-    teamId: string
+    teamId: string // Primary team (for backwards compatibility)
+    teamIds: string[] // All team IDs
     parentRoleId: string | null
     level: number
     isDraft?: boolean
@@ -494,11 +497,13 @@ export function OrgChartDesigner({
       posX = parentRole.positionX + 100
     }
     
+    const defaultTeamId = teams[0]?.id || ""
     const newDraft: DraftRole = {
       id: newId,
       name: "New Role",
       description: "",
-      teamId: teams[0]?.id || "",
+      teamId: defaultTeamId,
+      teamIds: defaultTeamId ? [defaultTeamId] : [],
       parentRoleId: parentRoleId || null,
       level: inferredLevel,
       positionX: posX,
@@ -553,6 +558,7 @@ export function OrgChartDesigner({
       name: newDraft.name,
       description: newDraft.description,
       teamId: newDraft.teamId,
+      teamIds: newDraft.teamIds,
       parentRoleId: newDraft.parentRoleId,
       level: inferredLevel,
       isDraft: true,
@@ -560,11 +566,14 @@ export function OrgChartDesigner({
     setIsPanelOpen(true)
     
     // Notify parent about selection change
+    const primaryTeam = teams.find(t => t.id === newDraft.teamId)
     onSelect?.({
       id: newId,
       name: newDraft.name,
       description: newDraft.description,
       teamId: newDraft.teamId,
+      teamIds: newDraft.teamIds,
+      teams: newDraft.teamIds.map(tid => teams.find(t => t.id === tid)).filter((t): t is TeamOption => !!t).map(t => ({ id: t.id, name: t.name })),
       parentRoleId: newDraft.parentRoleId,
       level: inferredLevel,
       holderCount: 0,
@@ -572,7 +581,7 @@ export function OrgChartDesigner({
       sortOrder: 0,
       positionX: posX,
       positionY: posY,
-      team: teams.find(t => t.id === newDraft.teamId) ? { id: newDraft.teamId, name: teams.find(t => t.id === newDraft.teamId)!.name } : null,
+      team: primaryTeam ? { id: primaryTeam.id, name: primaryTeam.name } : null,
       parentRole: parentRole ? { id: parentRole.id, name: parentRole.name, level: parentRole.level } : null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -613,17 +622,21 @@ export function OrgChartDesigner({
             name: draft.name,
             description: draft.description,
             teamId: draft.teamId,
+            teamIds: draft.teamIds,
             parentRoleId: draft.parentRoleId,
             level: draft.level,
             isDraft: true,
           })
           setIsPanelOpen(true)
           // Create a fake role object for selection
+          const draftPrimaryTeam = teams.find(t => t.id === draft.teamId)
           onSelect?.({
             id: draft.id,
             name: draft.name,
             description: draft.description,
             teamId: draft.teamId,
+            teamIds: draft.teamIds,
+            teams: draft.teamIds.map(tid => teams.find(t => t.id === tid)).filter((t): t is TeamOption => !!t).map(t => ({ id: t.id, name: t.name })),
             parentRoleId: draft.parentRoleId,
             level: 0,
             holderCount: 0,
@@ -631,7 +644,7 @@ export function OrgChartDesigner({
             sortOrder: 0,
             positionX: draft.positionX,
             positionY: draft.positionY,
-            team: teams.find(t => t.id === draft.teamId) ? { id: draft.teamId, name: teams.find(t => t.id === draft.teamId)!.name } : null,
+            team: draftPrimaryTeam ? { id: draftPrimaryTeam.id, name: draftPrimaryTeam.name } : null,
             parentRole: null,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -648,6 +661,7 @@ export function OrgChartDesigner({
             name: role.name,
             description: role.description || "",
             teamId: role.teamId,
+            teamIds: role.teamIds || [role.teamId],
             parentRoleId: role.parentRoleId,
             level: role.level,
             isDraft: false,
@@ -773,7 +787,7 @@ export function OrgChartDesigner({
   const handleSave = useCallback(async () => {
     // Validate draft nodes
     const drafts = Array.from(draftNodes.values())
-    const invalidDrafts = drafts.filter(d => !d.name.trim() || !d.teamId)
+    const invalidDrafts = drafts.filter(d => !d.name.trim() || (!d.teamIds || d.teamIds.length === 0))
     
     if (invalidDrafts.length > 0) {
       // Find the first invalid draft and select it
@@ -782,6 +796,7 @@ export function OrgChartDesigner({
         name: firstInvalid.name,
         description: firstInvalid.description,
         teamId: firstInvalid.teamId,
+        teamIds: firstInvalid.teamIds,
         parentRoleId: firstInvalid.parentRoleId,
         level: firstInvalid.level,
         isDraft: true,
@@ -842,7 +857,7 @@ export function OrgChartDesigner({
   }, [nodes, draftNodes, pendingUpdates, onSave, onInlineUpdate, onCreate, setNodes, setEdges])
   
   // Handle inline update from properties panel - applies immediately as preview
-  const handleInlineUpdate = useCallback((field: keyof NonNullable<typeof editingRole>, value: string | number | null) => {
+  const handleInlineUpdate = useCallback((field: keyof NonNullable<typeof editingRole>, value: string | number | string[] | null) => {
     if (!editingRoleId) return
     
     // Calculate inferred level when parentRoleId changes
@@ -860,10 +875,14 @@ export function OrgChartDesigner({
     // Update editing role state
     setEditingRole(prev => {
       if (!prev) return prev
-      const updates: Partial<NonNullable<typeof editingRole>> = { [field]: value }
+      const updates: Partial<NonNullable<typeof editingRole>> = { [field]: value as string | number | string[] }
       // Auto-update level when parentRoleId changes (user can override later)
       if (inferredLevel !== undefined) {
         updates.level = inferredLevel
+      }
+      // When teamIds changes, also update teamId (primary team)
+      if (field === "teamIds" && Array.isArray(value) && value.length > 0) {
+        updates.teamId = value[0]
       }
       return { ...prev, ...updates }
     })
@@ -876,9 +895,13 @@ export function OrgChartDesigner({
         const draft = prev.get(editingRoleId)
         if (!draft) return prev
         const newMap = new Map(prev)
-        const updates: Partial<DraftRole> = { [field]: value }
+        const updates: Partial<DraftRole> = { [field]: value as string | number | string[] }
         if (inferredLevel !== undefined) {
           updates.level = inferredLevel
+        }
+        // When teamIds changes, also update teamId (primary team)
+        if (field === "teamIds" && Array.isArray(value) && value.length > 0) {
+          updates.teamId = value[0]
         }
         newMap.set(editingRoleId, { ...draft, ...updates })
         return newMap
@@ -891,6 +914,10 @@ export function OrgChartDesigner({
         const updates: typeof existing = { ...existing, [field]: value }
         if (inferredLevel !== undefined) {
           updates.level = inferredLevel
+        }
+        // When teamIds changes, also update teamId (primary team)
+        if (field === "teamIds" && Array.isArray(value) && value.length > 0) {
+          updates.teamId = value[0]
         }
         newMap.set(editingRoleId, updates)
         return newMap
@@ -913,6 +940,15 @@ export function OrgChartDesigner({
           ...updatedData, 
           teamId: value as string ?? undefined,
           teamName: teams.find(t => t.id === value)?.name 
+        }
+      } else if (field === "teamIds") {
+        // When teamIds changes, update the visual to show first team name
+        const teamIdsArray = value as string[]
+        const primaryTeamId = teamIdsArray[0]
+        updatedData = { 
+          ...updatedData, 
+          teamId: primaryTeamId ?? undefined,
+          teamName: teams.find(t => t.id === primaryTeamId)?.name 
         }
       } else if (field === "parentRoleId") {
         updatedData = { ...updatedData, parentRoleId: value as string | null }
@@ -1242,46 +1278,37 @@ export function OrgChartDesigner({
               />
             </div>
             
-            {/* Team - Hierarchical selector */}
+            {/* Teams - Multi-select */}
             <div className="space-y-2">
               <Label>
-                Team <span className="text-destructive">*</span>
+                Teams <span className="text-destructive">*</span>
               </Label>
               {fullTeams.length > 0 ? (
-                <TeamTreeSelect
+                <TeamMultiSelect
                   teams={fullTeams}
-                  value={editingRole.teamId || null}
-                  onChange={(value) => handleInlineUpdate("teamId", value || "")}
+                  value={editingRole.teamIds || []}
+                  onChange={(value) => handleInlineUpdate("teamIds", value)}
                   disabled={!canEdit}
-                  placeholder="Select team..."
-                  className={cn(!editingRole.teamId && editingRole.isDraft && "border-destructive")}
+                  placeholder="Select teams..."
+                  className={cn((!editingRole.teamIds || editingRole.teamIds.length === 0) && editingRole.isDraft && "border-destructive")}
                 />
               ) : teams.length > 0 ? (
-                <Select
-                  key={`team-${editingRoleId}`}
-                  value={editingRole.teamId ? editingRole.teamId : undefined}
-                  onValueChange={(value) => handleInlineUpdate("teamId", value)}
+                <TeamMultiSelect
+                  teams={teams.map(t => ({ id: t.id, name: t.name, parentTeamId: null, memberCount: 0 }))}
+                  value={editingRole.teamIds || []}
+                  onChange={(value) => handleInlineUpdate("teamIds", value)}
                   disabled={!canEdit}
-                >
-                  <SelectTrigger className={cn("w-full", !editingRole.teamId && editingRole.isDraft && "border-destructive")}>
-                    <SelectValue placeholder="Select team..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select teams..."
+                  className={cn((!editingRole.teamIds || editingRole.teamIds.length === 0) && editingRole.isDraft && "border-destructive")}
+                />
               ) : (
                 <div className="flex items-center gap-2 py-2 px-3 bg-muted/50 rounded-md">
                   <Users className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">{selectedRole?.team?.name ?? "No team available"}</span>
+                  <span className="text-sm">{selectedRole?.teams?.map(t => t.name).join(", ") || selectedRole?.team?.name || "No team available"}</span>
                 </div>
               )}
-              {!editingRole.teamId && editingRole.isDraft && (
-                <p className="text-xs text-destructive">Team is required</p>
+              {(!editingRole.teamIds || editingRole.teamIds.length === 0) && editingRole.isDraft && (
+                <p className="text-xs text-destructive">At least one team is required</p>
               )}
             </div>
             

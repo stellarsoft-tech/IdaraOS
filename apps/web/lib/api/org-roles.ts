@@ -23,8 +23,10 @@ export interface OrganizationalRole {
   id: string
   name: string
   description?: string
-  teamId: string
-  team: RoleTeam | null
+  teamId: string // Primary team (for backwards compatibility)
+  team: RoleTeam | null // Primary team info
+  teamIds: string[] // All team IDs (including primary)
+  teams: RoleTeam[] // All teams info
   parentRoleId: string | null
   parentRole: ParentRole | null
   level: number
@@ -37,11 +39,12 @@ export interface OrganizationalRole {
   updatedAt: string
 }
 
-// Create role payload - teamId is required
+// Create role payload - teamIds is required (at least one team)
 export interface CreateOrganizationalRole {
   name: string
   description?: string
-  teamId: string
+  teamId?: string // Primary team (deprecated, use teamIds)
+  teamIds?: string[] // All team IDs
   parentRoleId?: string | null
   level?: number
   sortOrder?: number
@@ -53,7 +56,8 @@ export interface CreateOrganizationalRole {
 export interface UpdateOrganizationalRole {
   name?: string
   description?: string | null
-  teamId?: string
+  teamId?: string // Primary team (deprecated, use teamIds)
+  teamIds?: string[] // All team IDs - replaces existing teams
   parentRoleId?: string | null
   level?: number
   sortOrder?: number
@@ -68,7 +72,8 @@ export interface BulkUpdateOrganizationalRoles {
     positionX?: number
     positionY?: number
     parentRoleId?: string | null
-    teamId?: string
+    teamId?: string // Primary team (deprecated, use teamIds)
+    teamIds?: string[] // All team IDs
     level?: number
     sortOrder?: number
   }>

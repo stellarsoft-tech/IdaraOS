@@ -36,6 +36,13 @@
       "when": 1767831297791,
       "tag": "0004_good_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768876036594,
+      "tag": "0005_colorful_pete_wisdom",
+      "breakpoints": true
     }
   ]
 }

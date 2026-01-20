@@ -8,22 +8,26 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq, ilike, or, and, asc, sql, isNull, isNotNull, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { organizationalRoles, persons, teams } from "@/lib/db/schema"
+import { organizationalRoles, organizationalRoleTeams, persons, teams } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
-// Create role schema - teamId is required
+// Create role schema - at least one team is required
 const CreateRoleSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name too long"),
   description: z.string().max(500, "Description too long").optional(),
-  teamId: z.string().uuid("Team is required"),
+  teamId: z.string().uuid().optional(), // Deprecated, use teamIds
+  teamIds: z.array(z.string().uuid()).optional(), // All team IDs
   parentRoleId: z.string().uuid().nullable().optional(),
   level: z.number().int().min(0).optional(),
   sortOrder: z.number().int().optional(),
   positionX: z.number().int().optional(),
   positionY: z.number().int().optional(),
-})
+}).refine(
+  (data) => data.teamIds?.length || data.teamId,
+  { message: "At least one team is required", path: ["teamIds"] }
+)
 
 // Bulk update schema for designer
 const BulkUpdateSchema = z.object({
@@ -32,7 +36,8 @@ const BulkUpdateSchema = z.object({
     positionX: z.number().int().optional(),
     positionY: z.number().int().optional(),
     parentRoleId: z.string().uuid().nullable().optional(),
-    teamId: z.string().uuid().optional(),
+    teamId: z.string().uuid().optional(), // Deprecated, use teamIds
+    teamIds: z.array(z.string().uuid()).optional(), // All team IDs
     level: z.number().int().min(0).optional(),
     sortOrder: z.number().int().optional(),
   })),
@@ -56,15 +61,21 @@ function toApiResponse(
   record: typeof organizationalRoles.$inferSelect,
   parentRole?: ParentRoleInfo | null,
   team?: TeamInfo | null,
+  allTeams?: TeamInfo[],
   holderCount?: number,
   childCount?: number
 ) {
+  // Build teamIds array - primary team first, then additional teams
+  const teamIds = allTeams?.map(t => t.id) ?? (team ? [team.id] : [record.teamId])
+  
   return {
     id: record.id,
     name: record.name,
     description: record.description ?? undefined,
-    teamId: record.teamId,
+    teamId: record.teamId, // Primary team for backwards compatibility
     team: team || null,
+    teamIds, // All team IDs
+    teams: allTeams ?? (team ? [team] : []), // All teams info
     parentRoleId: record.parentRoleId,
     parentRole: parentRole || null,
     level: record.level,
@@ -142,18 +153,42 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Get team info for all roles
-    const teamIds = [...new Set(results.map(r => r.teamId))]
+    // Get all team associations from junction table
+    const roleIds = results.map(r => r.id)
+    const roleTeamsMap = new Map<string, TeamInfo[]>()
+    
+    if (roleIds.length > 0) {
+      // Get team associations from junction table
+      const roleTeamAssociations = await db
+        .select({
+          roleId: organizationalRoleTeams.roleId,
+          teamId: teams.id,
+          teamName: teams.name,
+        })
+        .from(organizationalRoleTeams)
+        .innerJoin(teams, eq(organizationalRoleTeams.teamId, teams.id))
+        .where(inArray(organizationalRoleTeams.roleId, roleIds))
+      
+      for (const rt of roleTeamAssociations) {
+        if (!roleTeamsMap.has(rt.roleId)) {
+          roleTeamsMap.set(rt.roleId, [])
+        }
+        roleTeamsMap.get(rt.roleId)!.push({ id: rt.teamId, name: rt.teamName })
+      }
+    }
+    
+    // Get primary team info for all roles (for backwards compatibility)
+    const primaryTeamIds = [...new Set(results.map(r => r.teamId))]
     const teamsMap = new Map<string, TeamInfo>()
     
-    if (teamIds.length > 0) {
+    if (primaryTeamIds.length > 0) {
       const teamsResult = await db
         .select({
           id: teams.id,
           name: teams.name,
         })
         .from(teams)
-        .where(inArray(teams.id, teamIds))
+        .where(inArray(teams.id, primaryTeamIds))
       
       for (const t of teamsResult) {
         teamsMap.set(t.id, t)
@@ -202,12 +237,20 @@ export async function GET(request: NextRequest) {
     // Transform results
     const response = results.map(role => {
       const parentRole = role.parentRoleId ? parentRolesMap.get(role.parentRoleId) : null
-      const team = teamsMap.get(role.teamId) || null
+      const primaryTeam = teamsMap.get(role.teamId) || null
+      
+      // Get all teams for this role - from junction table, or fallback to primary team
+      let allTeams = roleTeamsMap.get(role.id)
+      if (!allTeams || allTeams.length === 0) {
+        // Fallback: if no junction table entries, use primary team
+        allTeams = primaryTeam ? [primaryTeam] : []
+      }
+      
       // Match holder count by roleId FK
       const holderCount = holderCountsMap.get(role.id) ?? 0
       const childCount = childCountsMap.get(role.id) ?? 0
       
-      return toApiResponse(role, parentRole, team, holderCount, childCount)
+      return toApiResponse(role, parentRole, primaryTeam, allTeams, holderCount, childCount)
     })
     
     return NextResponse.json(response)
@@ -236,16 +279,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const data = CreateRoleSchema.parse(body)
     
-    // Validate team belongs to org
-    const [teamExists] = await db
+    // Determine all team IDs - use teamIds if provided, otherwise use teamId
+    const allTeamIds = data.teamIds?.length ? data.teamIds : (data.teamId ? [data.teamId] : [])
+    const primaryTeamId = allTeamIds[0] // First team is primary
+    
+    // Validate all teams belong to org
+    const validTeams = await db
       .select({ id: teams.id, name: teams.name })
       .from(teams)
-      .where(and(eq(teams.id, data.teamId), eq(teams.orgId, orgId)))
-      .limit(1)
+      .where(and(inArray(teams.id, allTeamIds), eq(teams.orgId, orgId)))
     
-    if (!teamExists) {
+    if (validTeams.length !== allTeamIds.length) {
       return NextResponse.json(
-        { error: "Team not found or does not belong to this organization" },
+        { error: "One or more teams not found or do not belong to this organization" },
         { status: 400 }
       )
     }
@@ -283,14 +329,14 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Create the role
+    // Create the role with primary team
     const result = await db
       .insert(organizationalRoles)
       .values({
         orgId,
         name: data.name,
         description: data.description ?? null,
-        teamId: data.teamId,
+        teamId: primaryTeamId,
         parentRoleId: data.parentRoleId ?? null,
         level,
         sortOrder: data.sortOrder ?? 0,
@@ -301,13 +347,23 @@ export async function POST(request: NextRequest) {
     
     const record = result[0]
     
+    // Insert all team associations into junction table
+    if (allTeamIds.length > 0) {
+      await db.insert(organizationalRoleTeams).values(
+        allTeamIds.map(teamId => ({
+          roleId: record.id,
+          teamId,
+        }))
+      )
+    }
+    
     // Audit log the creation
     if (auditLog) {
       await auditLog.logCreate("people.roles", "organizational_role", {
         id: record.id,
         name: record.name,
         description: record.description,
-        teamId: record.teamId,
+        teamIds: allTeamIds,
         parentRoleId: record.parentRoleId,
         level: record.level,
       })
@@ -329,10 +385,11 @@ export async function POST(request: NextRequest) {
       parentRole = parentResult || null
     }
     
-    // Team info is already available from validation
-    const team: TeamInfo = { id: teamExists.id, name: teamExists.name }
+    // Build teams array from validated teams
+    const teamsInfo: TeamInfo[] = validTeams.map(t => ({ id: t.id, name: t.name }))
+    const primaryTeam = teamsInfo.find(t => t.id === primaryTeamId) || null
     
-    return NextResponse.json(toApiResponse(record, parentRole, team, 0, 0), { status: 201 })
+    return NextResponse.json(toApiResponse(record, parentRole, primaryTeam, teamsInfo, 0, 0), { status: 201 })
   } catch (error) {
     const apiError = handleApiError(error)
     if (apiError) return apiError
@@ -403,14 +460,28 @@ export async function PUT(request: NextRequest) {
       if (update.parentRoleId !== undefined) {
         updateData.parentRoleId = update.parentRoleId
       }
-      if (update.teamId !== undefined) {
-        updateData.teamId = update.teamId
-      }
       if (update.level !== undefined) {
         updateData.level = update.level
       }
       if (update.sortOrder !== undefined) {
         updateData.sortOrder = update.sortOrder
+      }
+      
+      // Handle team updates - prefer teamIds over teamId
+      const teamIdsToSet = update.teamIds?.length ? update.teamIds : (update.teamId ? [update.teamId] : null)
+      
+      if (teamIdsToSet && teamIdsToSet.length > 0) {
+        // Update primary team
+        updateData.teamId = teamIdsToSet[0]
+        
+        // Update junction table - delete existing and insert new
+        await db.delete(organizationalRoleTeams).where(eq(organizationalRoleTeams.roleId, update.id))
+        await db.insert(organizationalRoleTeams).values(
+          teamIdsToSet.map(teamId => ({
+            roleId: update.id,
+            teamId,
+          }))
+        )
       }
       
       await db
