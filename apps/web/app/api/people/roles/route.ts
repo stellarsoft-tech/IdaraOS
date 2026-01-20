@@ -329,33 +329,38 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Create the role with primary team
-    const result = await db
-      .insert(organizationalRoles)
-      .values({
-        orgId,
-        name: data.name,
-        description: data.description ?? null,
-        teamId: primaryTeamId,
-        parentRoleId: data.parentRoleId ?? null,
-        level,
-        sortOrder: data.sortOrder ?? 0,
-        positionX: data.positionX ?? 0,
-        positionY: data.positionY ?? 0,
-      })
-      .returning()
-    
-    const record = result[0]
-    
-    // Insert all team associations into junction table
-    if (allTeamIds.length > 0) {
-      await db.insert(organizationalRoleTeams).values(
-        allTeamIds.map(teamId => ({
-          roleId: record.id,
-          teamId,
-        }))
-      )
-    }
+    // Create the role and junction table entries in a transaction
+    const record = await db.transaction(async (tx) => {
+      // Create the role with primary team
+      const result = await tx
+        .insert(organizationalRoles)
+        .values({
+          orgId,
+          name: data.name,
+          description: data.description ?? null,
+          teamId: primaryTeamId,
+          parentRoleId: data.parentRoleId ?? null,
+          level,
+          sortOrder: data.sortOrder ?? 0,
+          positionX: data.positionX ?? 0,
+          positionY: data.positionY ?? 0,
+        })
+        .returning()
+      
+      const newRole = result[0]
+      
+      // Insert all team associations into junction table
+      if (allTeamIds.length > 0) {
+        await tx.insert(organizationalRoleTeams).values(
+          allTeamIds.map(teamId => ({
+            roleId: newRole.id,
+            teamId,
+          }))
+        )
+      }
+      
+      return newRole
+    })
     
     // Audit log the creation
     if (auditLog) {
@@ -445,50 +450,52 @@ export async function PUT(request: NextRequest) {
       )
     }
     
-    // Update each role
-    for (const update of data.updates) {
-      const updateData: Partial<typeof organizationalRoles.$inferInsert> = {
-        updatedAt: new Date(),
-      }
-      
-      if (update.positionX !== undefined) {
-        updateData.positionX = update.positionX
-      }
-      if (update.positionY !== undefined) {
-        updateData.positionY = update.positionY
-      }
-      if (update.parentRoleId !== undefined) {
-        updateData.parentRoleId = update.parentRoleId
-      }
-      if (update.level !== undefined) {
-        updateData.level = update.level
-      }
-      if (update.sortOrder !== undefined) {
-        updateData.sortOrder = update.sortOrder
-      }
-      
-      // Handle team updates - prefer teamIds over teamId
-      const teamIdsToSet = update.teamIds?.length ? update.teamIds : (update.teamId ? [update.teamId] : null)
-      
-      if (teamIdsToSet && teamIdsToSet.length > 0) {
-        // Update primary team
-        updateData.teamId = teamIdsToSet[0]
+    // Update each role in a transaction to ensure consistency
+    await db.transaction(async (tx) => {
+      for (const update of data.updates) {
+        const updateData: Partial<typeof organizationalRoles.$inferInsert> = {
+          updatedAt: new Date(),
+        }
         
-        // Update junction table - delete existing and insert new
-        await db.delete(organizationalRoleTeams).where(eq(organizationalRoleTeams.roleId, update.id))
-        await db.insert(organizationalRoleTeams).values(
-          teamIdsToSet.map(teamId => ({
-            roleId: update.id,
-            teamId,
-          }))
-        )
+        if (update.positionX !== undefined) {
+          updateData.positionX = update.positionX
+        }
+        if (update.positionY !== undefined) {
+          updateData.positionY = update.positionY
+        }
+        if (update.parentRoleId !== undefined) {
+          updateData.parentRoleId = update.parentRoleId
+        }
+        if (update.level !== undefined) {
+          updateData.level = update.level
+        }
+        if (update.sortOrder !== undefined) {
+          updateData.sortOrder = update.sortOrder
+        }
+        
+        // Handle team updates - prefer teamIds over teamId
+        const teamIdsToSet = update.teamIds?.length ? update.teamIds : (update.teamId ? [update.teamId] : null)
+        
+        if (teamIdsToSet && teamIdsToSet.length > 0) {
+          // Update primary team
+          updateData.teamId = teamIdsToSet[0]
+          
+          // Update junction table - delete existing and insert new
+          await tx.delete(organizationalRoleTeams).where(eq(organizationalRoleTeams.roleId, update.id))
+          await tx.insert(organizationalRoleTeams).values(
+            teamIdsToSet.map(teamId => ({
+              roleId: update.id,
+              teamId,
+            }))
+          )
+        }
+        
+        await tx
+          .update(organizationalRoles)
+          .set(updateData)
+          .where(eq(organizationalRoles.id, update.id))
       }
-      
-      await db
-        .update(organizationalRoles)
-        .set(updateData)
-        .where(eq(organizationalRoles.id, update.id))
-    }
+    })
     
     // Audit log the bulk update
     if (auditLog) {

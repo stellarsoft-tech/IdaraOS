@@ -299,26 +299,31 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       updateData.positionY = data.positionY
     }
     
-    // Update the role
-    const [record] = await db
-      .update(organizationalRoles)
-      .set(updateData)
-      .where(eq(organizationalRoles.id, id))
-      .returning()
-    
-    // Update junction table if teams changed
-    if (teamIdsToSet && teamIdsToSet.length > 0) {
-      // Delete existing team associations
-      await db.delete(organizationalRoleTeams).where(eq(organizationalRoleTeams.roleId, id))
+    // Update the role and junction table in a transaction
+    const [record] = await db.transaction(async (tx) => {
+      // Update the role
+      const [updatedRole] = await tx
+        .update(organizationalRoles)
+        .set(updateData)
+        .where(eq(organizationalRoles.id, id))
+        .returning()
       
-      // Insert new team associations
-      await db.insert(organizationalRoleTeams).values(
-        teamIdsToSet.map(teamId => ({
-          roleId: id,
-          teamId,
-        }))
-      )
-    }
+      // Update junction table if teams changed
+      if (teamIdsToSet && teamIdsToSet.length > 0) {
+        // Delete existing team associations
+        await tx.delete(organizationalRoleTeams).where(eq(organizationalRoleTeams.roleId, id))
+        
+        // Insert new team associations
+        await tx.insert(organizationalRoleTeams).values(
+          teamIdsToSet.map(teamId => ({
+            roleId: id,
+            teamId,
+          }))
+        )
+      }
+      
+      return [updatedRole]
+    })
     
     // Build changes for audit log
     const changes: Record<string, { old: unknown; new: unknown }> = {}

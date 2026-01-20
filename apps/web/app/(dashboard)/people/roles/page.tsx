@@ -635,6 +635,7 @@ export default function RolesPage() {
                             name: draft.name,
                             description: draft.description || undefined,
                             teamId: draft.teamId,
+                            teamIds: draft.teamIds, // Include all team IDs for multi-team support
                             parentRoleId: draft.parentRoleId,
                             level: draft.level,
                             positionX: draft.positionX,

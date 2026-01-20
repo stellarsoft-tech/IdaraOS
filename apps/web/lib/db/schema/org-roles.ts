@@ -76,7 +76,7 @@ export const organizationalRoleTeams = pgTable(
  * Organizational Role relations
  */
 export const organizationalRolesRelations = relations(organizationalRoles, ({ one, many }) => ({
-  // Team this role belongs to
+  // Primary team this role belongs to
   team: one(teams, {
     fields: [organizationalRoles.teamId],
     references: [teams.id],
@@ -96,12 +96,33 @@ export const organizationalRolesRelations = relations(organizationalRoles, ({ on
     fields: [organizationalRoles.levelId],
     references: [organizationalLevels.id],
   }),
-  // Role holders will be accessed via persons.roleId -> organizationalRoles.id
+  // All teams this role belongs to (via junction table)
+  roleTeams: many(organizationalRoleTeams),
+  // Role holders will be accessed via persons.roleId -> organizationalRoles.id 
+}))
+
+/**
+ * Organizational Role Teams relations
+ */
+export const organizationalRoleTeamsRelations = relations(organizationalRoleTeams, ({ one }) => ({
+  role: one(organizationalRoles, {
+    fields: [organizationalRoleTeams.roleId],
+    references: [organizationalRoles.id],
+  }),
+  team: one(teams, {
+    fields: [organizationalRoleTeams.teamId],
+    references: [teams.id],
+  }),
 }))
 
 /**
  * Type inference for OrganizationalRole
  */
-export type OrganizationalRole = typeof organizationalRoles.$inferSelect
+export type OrganizationalRole = typeof organizationalRoles.$inferSelect        
 export type NewOrganizationalRole = typeof organizationalRoles.$inferInsert
 
+/**
+ * Type inference for OrganizationalRoleTeam
+ */
+export type OrganizationalRoleTeam = typeof organizationalRoleTeams.$inferSelect
+export type NewOrganizationalRoleTeam = typeof organizationalRoleTeams.$inferInsert
