@@ -66,15 +66,28 @@ const DATA_MIGRATIONS: DataMigration[] = [
   },
   
   // Add new data migrations below this line:
-  // {
-  //   id: "YYYY-MM-DD_descriptive_name",
-  //   description: "What this migration does",
-  //   run: async (db, pool) => {
-  //     // Your migration logic here
-  //     // Use db.execute(sql`...`) for Drizzle queries
-  //     // Use pool.query('...') for raw SQL if needed
-  //   },
-  // },
+  
+  {
+    id: "2026-01-20_populate_org_role_teams_junction",
+    description: "Populate people_organizational_role_teams junction table from existing teamId values",
+    run: async (db) => {
+      // Insert existing team associations from the teamId column into the junction table
+      // Uses ON CONFLICT DO NOTHING to make it idempotent (safe to run multiple times)
+      const result = await db.execute(sql`
+        INSERT INTO people_organizational_role_teams (role_id, team_id, created_at)
+        SELECT 
+          por.id as role_id,
+          por.team_id as team_id,
+          COALESCE(por.created_at, NOW()) as created_at
+        FROM people_organizational_roles por
+        WHERE por.team_id IS NOT NULL
+        ON CONFLICT (role_id, team_id) DO NOTHING
+      `)
+      
+      // Log how many records were inserted
+      console.log(`            Populated junction table with existing team associations`)
+    },
+  },
 ]
 
 // ============================================================================
