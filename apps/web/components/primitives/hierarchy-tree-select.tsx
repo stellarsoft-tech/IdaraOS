@@ -49,6 +49,7 @@ export interface HierarchyTreeSelectConfig<TItem extends HierarchySelectItem> {
     placeholder?: string // Trigger placeholder
     searchPlaceholder?: string // Search input placeholder
     emptySearch?: string // No results message
+    emptyState?: string // Message when no items available
     clear?: string // Clear button text
     noneOption?: string // "None" option text
   }
@@ -488,6 +489,14 @@ export function HierarchyTreeSelect<TItem extends HierarchySelectItem>({
                     )
                   })
                 )
+              ) : tree.length === 0 ? (
+                /* Empty state when no items available */
+                !allowNone ? (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {config?.emptyIcon || <FolderTree className="h-8 w-8 mx-auto mb-2 opacity-50" />}
+                    <p>{labels.emptyState || "No items available"}</p>
+                  </div>
+                ) : null
               ) : (
                 <>
                   {/* Expand/Collapse controls */}

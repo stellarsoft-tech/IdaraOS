@@ -204,6 +204,8 @@ export default function TeamsPage() {
             excludeId={selectedTeam?.id}
             disabled={disabled}
             placeholder="Select parent team..."
+            allowNone={true}
+            noneOptionLabel="None (Top-level)"
           />
         ),
         renderReadonly: (value: string | null) => {

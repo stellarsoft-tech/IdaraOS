@@ -195,6 +195,8 @@ export default function RolesPage() {
             onChange={(newValue) => onChange(newValue ?? "")}
             disabled={disabled}
             placeholder="Select team..."
+            allowNone={false}
+            emptyMessage="No teams available. Create a team first."
           />
         ),
         renderReadonly: (value: string | null) => {

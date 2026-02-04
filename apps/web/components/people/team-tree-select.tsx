@@ -19,6 +19,12 @@ export interface TeamTreeSelectProps {
   disabled?: boolean
   placeholder?: string
   className?: string
+  /** Whether to show the "None" option. Defaults to true. Set to false for required fields. */
+  allowNone?: boolean
+  /** Label for the "None" option */
+  noneOptionLabel?: string
+  /** Message to show when there are no teams available */
+  emptyMessage?: string
 }
 
 /**
@@ -42,6 +48,9 @@ export function TeamTreeSelect({
   disabled,
   placeholder = "Select parent team...",
   className,
+  allowNone = true,
+  noneOptionLabel = "None (Top-level team)",
+  emptyMessage = "No teams available",
 }: TeamTreeSelectProps) {
   // Map Team[] to HierarchySelectItem[]
   const items: TeamSelectItem[] = useMemo(() => 
@@ -60,14 +69,15 @@ export function TeamTreeSelect({
   // Configuration for team-specific rendering
   const config: HierarchyTreeSelectConfig<TeamSelectItem> = useMemo(() => ({
     labels: {
-      title: "Select Parent Team",
+      title: "Select Team",
       placeholder,
       searchPlaceholder: "Search teams...",
       emptySearch: "No teams found",
+      emptyState: emptyMessage,
       clear: "Clear",
-      noneOption: "None (Top-level team)",
+      noneOption: noneOptionLabel,
     },
-    allowNone: true,
+    allowNone,
     
     // Render team icon
     renderIcon: (item, depth) => (
@@ -97,7 +107,7 @@ export function TeamTreeSelect({
     
     // Sort by name
     sortFn: (a, b) => a.name.localeCompare(b.name),
-  }), [placeholder, excludeId, teams])
+  }), [placeholder, excludeId, teams, allowNone, noneOptionLabel, emptyMessage])
   
   return (
     <HierarchyTreeSelect
