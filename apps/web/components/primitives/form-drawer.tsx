@@ -186,6 +186,8 @@ export function FormDrawer<T = Record<string, unknown>>({
             disabled: isDisabled,
             syncIndicator: fieldConfig.syncIndicator,
             entraFieldName: fieldConfig.entraFieldName,
+            render: fieldConfig.render, // Include custom render function
+            renderReadonly: fieldConfig.renderReadonly, // Include custom readonly render
           } as FormFieldDef
         })
     }
