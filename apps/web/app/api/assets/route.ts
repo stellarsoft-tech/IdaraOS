@@ -12,21 +12,27 @@ import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/con
 import { P } from "@/lib/rbac/resources"
 import { z } from "zod"
 
+// Helper to convert empty strings to null/undefined for optional UUID fields
+const optionalUuid = z.string().transform(val => val === "" ? undefined : val).pipe(z.string().uuid().optional())
+
+// Helper to convert empty strings to undefined for optional string fields
+const optionalString = z.string().transform(val => val === "" ? undefined : val).optional()
+
 // Create asset schema
 const CreateAssetSchema = z.object({
   assetTag: z.string().min(1, "Asset tag is required"),
   name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
-  categoryId: z.string().uuid().optional(),
+  description: optionalString,
+  categoryId: optionalUuid,
   status: z.enum(["available", "assigned", "maintenance", "retired", "disposed"]).default("available"),
-  serialNumber: z.string().optional(),
-  manufacturer: z.string().optional(),
-  model: z.string().optional(),
-  purchaseDate: z.string().optional(),
-  purchaseCost: z.string().optional(),
-  warrantyEnd: z.string().optional(),
-  location: z.string().optional(),
-  notes: z.string().optional(),
+  serialNumber: optionalString,
+  manufacturer: optionalString,
+  model: optionalString,
+  purchaseDate: optionalString,
+  purchaseCost: optionalString,
+  warrantyEnd: optionalString,
+  location: optionalString,
+  notes: optionalString,
 })
 
 // Category info type

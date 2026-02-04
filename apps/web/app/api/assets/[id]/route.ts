@@ -14,23 +14,29 @@ import { P } from "@/lib/rbac/resources"
 import { processWorkflowEvent } from "@/lib/workflows/processor"
 import { z } from "zod"
 
+// Helper to convert empty strings to null for optional UUID fields
+const optionalUuid = z.string().transform(val => val === "" ? null : val).pipe(z.string().uuid().nullable()).optional()
+
+// Helper to convert empty strings to null for optional string fields
+const optionalString = z.string().transform(val => val === "" ? null : val).nullable().optional()
+
 // Update asset schema
 const UpdateAssetSchema = z.object({
   assetTag: z.string().min(1).optional(),
   name: z.string().min(1).optional(),
-  description: z.string().optional().nullable(),
-  categoryId: z.string().uuid().optional().nullable(),
+  description: optionalString,
+  categoryId: optionalUuid,
   status: z.enum(["available", "assigned", "maintenance", "retired", "disposed"]).optional(),
-  serialNumber: z.string().optional().nullable(),
-  manufacturer: z.string().optional().nullable(),
-  model: z.string().optional().nullable(),
-  purchaseDate: z.string().optional().nullable(),
-  purchaseCost: z.string().optional().nullable(),
-  warrantyEnd: z.string().optional().nullable(),
-  location: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-  assignedToId: z.string().uuid().optional().nullable(),
-  assignedAt: z.string().optional().nullable(),
+  serialNumber: optionalString,
+  manufacturer: optionalString,
+  model: optionalString,
+  purchaseDate: optionalString,
+  purchaseCost: optionalString,
+  warrantyEnd: optionalString,
+  location: optionalString,
+  notes: optionalString,
+  assignedToId: optionalUuid,
+  assignedAt: optionalString,
 }).strict()
 
 // Category info type
