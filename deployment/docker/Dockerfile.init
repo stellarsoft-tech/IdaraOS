@@ -10,10 +10,12 @@
 # 3. Developer commits migration files in apps/web/drizzle/
 # 4. On deployment, this container runs migrations automatically
 #
-# DEVELOPMENT/PROTOTYPING:
-# ------------------------
-# For rapid iteration without migrations, use docker-compose.dev.yml
-# which uses Dockerfile.init.dev with db:push instead
+# DEVELOPMENT:
+# ------------
+# docker-compose.dev.yml uses Dockerfile.init.dev which runs the same
+# migration chain (incremental SQL + seed + post-migrate).
+# For rapid schema prototyping without migration files, run manually:
+#   docker compose exec web sh -c "cd /app/apps/web && npx drizzle-kit push --force"
 #
 # =============================================================================
 

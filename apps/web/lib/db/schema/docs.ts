@@ -2,10 +2,10 @@
  * Documentation Schema - Drizzle ORM table definitions
  * Implements a comprehensive documentation module with:
  * - Document metadata and categorization
+ * - Configurable content storage (database, filing module, or hybrid)
  * - Version history tracking
  * - Rollout management (teams, roles, users, org-wide)
  * - Acknowledgment/sign-off tracking
- * - Integration with MDX files stored in the codebase
  */
 
 import { pgTable, uuid, text, timestamp, boolean, index, integer, jsonb, date } from "drizzle-orm/pg-core"
@@ -15,6 +15,7 @@ import { persons } from "./people"
 import { users } from "./users"
 import { teams } from "./teams"
 import { roles } from "./rbac"
+import { files, fileCategories } from "./storage"
 
 // ============================================================================
 // ENUMS
@@ -50,13 +51,22 @@ export type RolloutRequirement = (typeof rolloutRequirementValues)[number]
 export const acknowledgmentStatusValues = ["pending", "viewed", "acknowledged", "signed"] as const
 export type AcknowledgmentStatus = (typeof acknowledgmentStatusValues)[number]
 
+/**
+ * Content storage mode values
+ * - database: content stored in docs_documents.content column (default, zero-config)
+ * - filing: content stored in the Filing module (SharePoint, Azure Blob, etc.)
+ * - hybrid: content in DB (fast reads) + synced to Filing module (external access)
+ */
+export const contentStorageModeValues = ["database", "filing", "hybrid"] as const
+export type ContentStorageMode = (typeof contentStorageModeValues)[number]
+
 // ============================================================================
 // DOCUMENTS
 // ============================================================================
 
 /**
- * Documents table - core document metadata
- * MDX content is stored in files at content/docs/{slug}.mdx
+ * Documents table - core document metadata + content
+ * Content storage is configurable: database, filing module, or hybrid
  */
 export const documents = pgTable(
   "docs_documents",
@@ -65,9 +75,18 @@ export const documents = pgTable(
     orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
     
     // Document identification
-    slug: text("slug").notNull(), // Used for file path: content/docs/{slug}.mdx
+    slug: text("slug").notNull(),
     title: text("title").notNull(),
     description: text("description"),
+    
+    // MDX content (used in "database" and "hybrid" storage modes)
+    content: text("content"),
+    
+    // Per-document storage mode override (null = use org default from docs_settings)
+    storageMode: text("storage_mode", { enum: contentStorageModeValues }),
+    
+    // Link to filing module file record (used in "filing" and "hybrid" modes)
+    fileId: uuid("file_id").references(() => files.id, { onDelete: "set null" }),
     
     // Categorization
     category: text("category", { enum: documentCategoryValues }).notNull().default("general"),
@@ -98,13 +117,13 @@ export const documents = pgTable(
     
     // Additional metadata
     metadata: jsonb("metadata").$type<{
-      referenceId?: string // Document reference code (e.g., "SS-ORG-01")
+      referenceId?: string
       effectiveDate?: string
       expiryDate?: string
       department?: string
       confidentiality?: "public" | "internal" | "confidential" | "restricted"
-      ownerRole?: string // Owner's role/title
-      approvedBy?: { name?: string; role?: string } // Approval info
+      ownerRole?: string
+      approvedBy?: { name?: string; role?: string }
       [key: string]: unknown
     }>(),
     
@@ -278,6 +297,10 @@ export const documentSettings = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }).unique(),
     
+    // Content storage configuration
+    contentStorageMode: text("content_storage_mode", { enum: contentStorageModeValues }).notNull().default("database"),
+    defaultFileCategoryId: uuid("default_file_category_id").references(() => fileCategories.id, { onDelete: "set null" }),
+    
     // Default settings for new documents
     defaultReviewFrequencyDays: integer("default_review_frequency_days").default(365),
     defaultRequirement: text("default_requirement", { enum: rolloutRequirementValues }).default("optional"),
@@ -321,6 +344,10 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   createdBy: one(users, {
     fields: [documents.createdById],
     references: [users.id],
+  }),
+  file: one(files, {
+    fields: [documents.fileId],
+    references: [files.id],
   }),
   versions: many(documentVersions),
   rollouts: many(documentRollouts),
@@ -379,6 +406,10 @@ export const documentSettingsRelations = relations(documentSettings, ({ one }) =
   organization: one(organizations, {
     fields: [documentSettings.orgId],
     references: [organizations.id],
+  }),
+  defaultFileCategory: one(fileCategories, {
+    fields: [documentSettings.defaultFileCategoryId],
+    references: [fileCategories.id],
   }),
 }))
 

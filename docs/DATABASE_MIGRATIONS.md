@@ -216,6 +216,80 @@ const DATA_MIGRATIONS: DataMigration[] = [
 
 ---
 
+## Migration Decision Tree
+
+When making a schema change that involves data, choose the right mechanism:
+
+### A. Column with a known default value
+
+Use the Drizzle schema and let `db:generate` produce the SQL.
+
+```typescript
+// Schema:
+status: text("status").notNull().default("active")
+```
+
+On PostgreSQL 11+, `ADD COLUMN ... NOT NULL DEFAULT <literal>` is **instant** (metadata-only, no table rewrite). No separate backfill step is needed.
+
+### B. Column that needs data from other existing columns (pure SQL)
+
+Use `drizzle-kit generate --custom` to create a custom SQL migration, then write multi-statement SQL that follows the expand-migrate-contract pattern:
+
+```bash
+pnpm --filter web drizzle-kit generate --custom --name=backfill-display-name
+```
+
+For **small/medium tables** (<1M rows), all three phases can go in one file:
+
+```sql
+-- Phase 1 (Expand): Add nullable column
+ALTER TABLE users ADD COLUMN display_name text;
+--> statement-breakpoint
+
+-- Phase 2 (Migrate): Backfill from existing data
+UPDATE users SET display_name = name WHERE display_name IS NULL;
+--> statement-breakpoint
+
+-- Phase 3 (Contract): Add NOT NULL constraint
+ALTER TABLE users ALTER COLUMN display_name SET NOT NULL;
+```
+
+For **large tables** (>1M rows), split into separate migrations with batched backfill in between to avoid long-running locks.
+
+**Important:** Custom SQL migrations are tracked by `__drizzle_migrations` and run once in order, just like auto-generated migrations.
+
+### C. Backfill requiring app logic, filesystem I/O, or external APIs
+
+Register a `DATA_MIGRATIONS` entry in `apps/web/scripts/post-migrate.ts`. This is for logic that cannot be expressed in pure SQL (reading files, calling APIs, complex business transforms).
+
+```typescript
+{
+  id: "2026-04-07_backfill_docs_content_from_mdx",
+  description: "Backfill docs content from MDX files",
+  run: async (db) => {
+    // Read files, query DB, transform data...
+  },
+}
+```
+
+These are tracked in the `data_migrations` table, idempotent, and run automatically with `pnpm db:post-migrate`.
+
+### D. Seed / reference data
+
+Use seed scripts (`db:seed`, `db:seed-rbac`). These are idempotent and environment-specific — not part of migration history.
+
+### Summary Table
+
+| Scenario | Where | Tracked by | Runs with |
+|----------|-------|------------|-----------|
+| DDL (tables, columns, indexes) | `drizzle/*.sql` (auto-generated) | `__drizzle_migrations` | `db:migrate:run` |
+| SQL backfill (column-to-column) | `drizzle/*.sql` (custom) | `__drizzle_migrations` | `db:migrate:run` |
+| Complex backfill (app logic) | `post-migrate.ts` `DATA_MIGRATIONS[]` | `data_migrations` table | `db:post-migrate` |
+| Seed / demo data | `seed.ts`, `seed-rbac.ts` | Idempotent checks | `db:seed` |
+| RBAC permission sync | `sync-rbac-permissions.ts` | Checks existing rows | `db:post-migrate` |
+
+---
+
 ## CI/CD Integration
 
 ### Pre-Merge Checks
@@ -269,16 +343,32 @@ db-init:
 
 ## Environment-Specific Behavior
 
-### Local Development (Rapid Prototyping)
+### Local Development (Default: Incremental Migrations)
 
-When rapidly prototyping, you CAN use `db:push`:
+Local Docker dev uses the same migration chain as production by default:
 
 ```bash
-# Use docker-compose.dev.yml which uses db:push
-docker-compose -f docker-compose.dev.yml up
+# Default: runs db:migrate:run + seed + db:post-migrate on every restart
+docker compose -f docker-compose.dev.yml up
+```
 
-# Or directly:
-pnpm db:push  # Syncs schema directly, no migrations
+Workflow for schema changes:
+
+```bash
+# 1. Edit schema in apps/web/lib/db/schema/*.ts
+# 2. Generate migration SQL
+pnpm --filter web db:generate
+# 3. Restart containers — init applies pending migration automatically
+pnpm docker:dev
+```
+
+### Rapid Prototyping (Optional: Schema Push)
+
+When you need fast iteration without creating migration files, you can use `db:push` manually:
+
+```bash
+# Push schema directly (skips migration files)
+pnpm docker:db:push:force
 ```
 
 **Warning:** `db:push` can:
@@ -287,6 +377,7 @@ pnpm db:push  # Syncs schema directly, no migrations
 - Desync from migration state
 
 Use it only when you are iterating fast and do not care about data loss.
+After prototyping, generate a proper migration with `db:generate` before committing.
 
 ### Staging / Production
 
@@ -451,6 +542,8 @@ If a migration requires code changes (new required column, removed column), docu
 
 ## Docker Migration Flow
 
+Both dev and production use the same init sequence:
+
 ```
 Deployment Flow:
 
@@ -460,14 +553,15 @@ Deployment Flow:
    - Applies only NEW migrations
    - Updates tracking table
 
-2. db-init runs post-migration
-   - Runs: pnpm db:post-migrate
-   - Data migrations (idempotent)
-   - RBAC sync
+2. db-init runs seeds
+   - Runs: pnpm db:seed (idempotent, optional demo data)
+   - Runs: pnpm db:seed-rbac (idempotent, creates roles + admin user)
+     Also calls syncRBACPermissions to ensure Owner has all permissions
 
-3. db-init runs seeds
-   - Runs: pnpm db:seed (idempotent)
-   - Runs: pnpm db:seed-rbac (idempotent)
+3. db-init runs post-migration
+   - Runs: pnpm db:post-migrate
+   - Tracked data migrations (idempotent, runs once per ID)
+   - RBAC permission sync (Owner gets all current permissions)
 
 4. db-init container exits (success)
 
@@ -486,4 +580,4 @@ Deployment Flow:
 
 ---
 
-**Last Updated**: January 2026
+**Last Updated**: April 2026

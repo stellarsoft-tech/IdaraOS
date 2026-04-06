@@ -421,11 +421,12 @@ async function seed() {
     console.log("\n✅ All seed complete!")
   } catch (error) {
     console.error("❌ Seed failed:", error)
-    process.exit(1)
+    throw error
   } finally {
     await pool.end()
   }
 }
 
 seed()
+  .catch(() => process.exit(1))
 

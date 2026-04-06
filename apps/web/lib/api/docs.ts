@@ -35,7 +35,8 @@ export const docsKeys = {
   acknowledgments: () => [...docsKeys.all, "acknowledgments"] as const,
   acknowledgmentList: (filters?: AcknowledgmentFilters) => [...docsKeys.acknowledgments(), "list", filters] as const,
   acknowledgmentDetail: (id: string) => [...docsKeys.acknowledgments(), "detail", id] as const,
-  myDocuments: () => [...docsKeys.all, "my-documents"] as const,
+  myDocuments: (options?: { status?: string; includeOptional?: boolean }) => [...docsKeys.all, "my-documents", options] as const,
+  settings: () => [...docsKeys.all, "settings"] as const,
 }
 
 // ============================================================================
@@ -420,8 +421,85 @@ export function useUpdateAcknowledgment() {
 
 export function useMyDocuments(options?: { status?: string; includeOptional?: boolean }) {
   return useQuery({
-    queryKey: docsKeys.myDocuments(),
+    queryKey: docsKeys.myDocuments(options),
     queryFn: () => fetchMyDocuments(options),
+  })
+}
+
+// ============================================================================
+// FETCH FUNCTIONS - SETTINGS
+// ============================================================================
+
+export interface DocsSettings {
+  id: string
+  orgId: string
+  contentStorageMode: "database" | "filing" | "hybrid"
+  defaultFileCategoryId: string | null
+  defaultReviewFrequencyDays: number | null
+  defaultRequirement: string | null
+  enableEmailNotifications: boolean
+  reminderDaysBefore: number | null
+  headerLogoUrl: string | null
+  footerText: string | null
+  settings: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type UpdateDocsSettings = Partial<
+  Pick<
+    DocsSettings,
+    | "contentStorageMode"
+    | "defaultFileCategoryId"
+    | "defaultReviewFrequencyDays"
+    | "defaultRequirement"
+    | "enableEmailNotifications"
+    | "reminderDaysBefore"
+    | "footerText"
+    | "settings"
+  >
+>
+
+async function fetchDocsSettings(): Promise<{ data: DocsSettings }> {
+  const res = await fetch("/api/docs/settings")
+  if (!res.ok) {
+    throw new Error("Failed to fetch documentation settings")
+  }
+  return res.json()
+}
+
+async function updateDocsSettings(data: UpdateDocsSettings): Promise<{ data: DocsSettings }> {
+  const res = await fetch("/api/docs/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const error = await res.json()
+    throw new Error(error.error || "Failed to update documentation settings")
+  }
+  return res.json()
+}
+
+// ============================================================================
+// REACT QUERY HOOKS - SETTINGS
+// ============================================================================
+
+export function useDocsSettings() {
+  return useQuery({
+    queryKey: docsKeys.settings(),
+    queryFn: fetchDocsSettings,
+  })
+}
+
+export function useUpdateDocsSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateDocsSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: docsKeys.settings() })
+    },
   })
 }
 

@@ -70,10 +70,11 @@ services:
       retries: 5
 
   # ---------------------------------------------------------------------------
-  # Database Schema Push & Seeding (Init Container - DEV MODE)
+  # Database Migrations & Seeding (Init Container - matches production)
   # ---------------------------------------------------------------------------
-  # Uses db:push for rapid prototyping. For production, use docker-compose.local.yml
-  # which uses proper migrations via Dockerfile.init
+  # Runs incremental Drizzle SQL migrations, seeds, and post-migrate hooks
+  # (same chain as production). For rapid schema prototyping without migration
+  # files, run manually:  pnpm docker:db:push:force
   db-init:
     build:
       context: ../..
@@ -84,7 +85,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    # This container exits after pushing schema and seeding
+    # This container exits after running migrations and seeding
 
   # ---------------------------------------------------------------------------
   # IdaraOS Web Application (Development Mode)

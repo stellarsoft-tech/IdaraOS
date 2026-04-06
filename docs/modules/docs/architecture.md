@@ -5,6 +5,7 @@
 The Documentation module provides a comprehensive system for managing organizational documentation including policies, procedures, guidelines, and training materials. It supports:
 
 - **Document Management**: Create, edit, version, and publish documents
+- **Configurable Content Storage**: Database, Filing module (SharePoint/Blob), or hybrid mode
 - **MDX Rendering**: Rich Markdown/MDX content with custom components
 - **Mermaid Diagrams**: Flowcharts, sequence diagrams with pan/zoom/fullscreen
 - **Rollout Management**: Target documents to teams, roles, or the entire organization
@@ -16,12 +17,17 @@ The Documentation module provides a comprehensive system for managing organizati
 ```mermaid
 flowchart TB
     subgraph storage [Storage Layer]
-        MDXFiles[MDX Files<br/>content/docs/*.mdx]
-        DB[(PostgreSQL)]
+        DB[(PostgreSQL<br/>docs_documents.content)]
+        Filing[Filing Module<br/>SharePoint / Azure Blob]
+    end
+    
+    subgraph resolver [Storage Resolver]
+        SR[resolveStorageMode]
     end
     
     subgraph api [API Layer]
         DocsAPI["/api/docs/documents"]
+        SettingsAPI["/api/docs/settings"]
         RolloutsAPI["/api/docs/rollouts"]
         AcksAPI["/api/docs/acknowledgments"]
         MyDocsAPI["/api/docs/my-documents"]
@@ -32,18 +38,35 @@ flowchart TB
         UserView[User Views]
     end
     
-    MDXFiles --> DocsAPI
-    DB --> DocsAPI
+    DocsAPI --> SR
+    SR -->|database mode| DB
+    SR -->|filing mode| Filing
+    SR -->|hybrid mode| DB
+    SR -.->|hybrid sync| Filing
+    
     DB --> RolloutsAPI
     DB --> AcksAPI
     DB --> MyDocsAPI
     
     DocsAPI --> AdminView
+    SettingsAPI --> AdminView
     RolloutsAPI --> AdminView
     AcksAPI --> AdminView
     MyDocsAPI --> UserView
     DocsAPI --> UserView
 ```
+
+## Content Storage Modes
+
+Document MDX content can be persisted in three configurable modes, set at the org level (Docs > Settings) with optional per-document overrides:
+
+| Mode | Read From | Write To | Use Case |
+|------|-----------|----------|----------|
+| **database** (default) | DB column | DB column | Zero-config, works everywhere |
+| **filing** | Filing module | Filing module | Org wants docs in SharePoint; IdaraOS manages metadata |
+| **hybrid** | DB column (primary) | DB + Filing (async sync) | Fast DB reads + external browsing/backup |
+
+The storage resolver (`lib/docs/storage.ts`) encapsulates this logic. API routes call `readContent()` and `writeContent()` without knowing which backend is active.
 
 ## Database Entity Relationship Diagram
 
@@ -151,23 +174,27 @@ sequenceDiagram
     participant Admin
     participant UI as React UI
     participant API as Next.js API
+    participant SR as Storage Resolver
     participant DB as PostgreSQL
-    participant FS as File System
+    participant Filing as Filing Module
     
     Admin->>UI: Create New Document
     UI->>API: POST /api/docs/documents
-    API->>DB: Insert document metadata
-    API->>FS: Write MDX file to content/docs/
-    DB-->>API: Return document record
-    FS-->>API: Confirm file written
+    API->>DB: Insert document record
+    API->>SR: writeContent(doc, settings, content)
+    
+    alt database mode
+        SR->>DB: UPDATE content column
+    else filing mode
+        SR->>Filing: Upload .mdx file
+        SR->>DB: Store file_id reference
+    else hybrid mode
+        SR->>DB: UPDATE content column
+        SR-->>Filing: Async sync .mdx file
+    end
+    
     API-->>UI: Return created document
     UI-->>Admin: Show document editor
-    
-    Admin->>UI: Edit Content
-    UI->>API: PUT /api/docs/documents/[id]
-    API->>FS: Update MDX file
-    API->>DB: Update metadata
-    API-->>UI: Return updated document
     
     Admin->>UI: Publish Document
     UI->>API: PUT /api/docs/documents/[id]
@@ -298,7 +325,7 @@ stateDiagram-v2
 ## Database Schema Tables
 
 ### docs_documents
-Primary table for document metadata.
+Primary table for document metadata and content.
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -307,6 +334,9 @@ Primary table for document metadata.
 | slug | TEXT | URL-friendly identifier |
 | title | TEXT | Document title |
 | description | TEXT | Brief description |
+| content | TEXT | MDX content (database/hybrid modes) |
+| storage_mode | ENUM | Per-document override: database, filing, hybrid (null = use org default) |
+| file_id | UUID | FK to core_files (filing/hybrid modes) |
 | category | ENUM | policy, procedure, guideline, manual, template, training, general |
 | tags | JSONB | Array of tags |
 | status | ENUM | draft, in_review, published, archived |
@@ -441,8 +471,10 @@ apps/web/
 │   │   │   ├── route.ts           # List acknowledgments (supports rolloutId filter)
 │   │   │   └── [id]/
 │   │   │       └── route.ts       # Update acknowledgment
-│   │   └── my-documents/
-│   │       └── route.ts           # User's pending documents
+│   │   ├── my-documents/
+│   │   │   └── route.ts           # User's pending documents
+│   │   └── settings/
+│   │       └── route.ts           # GET/PUT docs module settings
 │   └── (dashboard)/docs/
 │       ├── page.tsx               # Overview
 │       ├── documents/
@@ -464,7 +496,7 @@ apps/web/
 │       ├── procedures/
 │       │   └── page.tsx           # SOP documents
 │       └── settings/
-│           └── page.tsx           # Module settings
+│           └── page.tsx           # Module settings (incl. storage mode)
 ├── components/docs/
 │   ├── index.ts                   # Exports
 │   ├── mdx-renderer.tsx           # MDX rendering
@@ -475,13 +507,18 @@ apps/web/
 │   ├── table-of-contents.tsx      # ToC with scrollspy
 │   └── rollout-detail-drawer.tsx  # Rollout acknowledgments drawer
 ├── content/docs/
-│   └── *.mdx                      # MDX document files
+│   └── *.mdx                      # Legacy MDX files (used for seeding only)
+├── scripts/
+│   └── migrate-docs-to-db.ts     # One-time backfill of DB content from .mdx files
 └── lib/
-    ├── api/docs.ts                # React Query hooks
+    ├── api/docs.ts                # React Query hooks (documents, rollouts, settings)
     ├── docs/
-    │   ├── mdx.ts                 # MDX file utilities
+    │   ├── storage.ts             # Storage resolver (readContent, writeContent)
+    │   ├── mdx.ts                 # Frontmatter parser (no filesystem I/O)
     │   └── types.ts               # TypeScript types & Zod schemas
-    └── db/schema/docs.ts          # Drizzle schema
+    ├── filing/
+    │   └── upload.ts              # Reusable server-side file upload logic
+    └── db/schema/docs.ts          # Drizzle schema (content, storageMode, fileId)
 ```
 
 ## Integration Points

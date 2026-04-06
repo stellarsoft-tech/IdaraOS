@@ -14,14 +14,17 @@ import {
   documentRollouts,
   documentAcknowledgments,
   persons,
-  users,
 } from "@/lib/db/schema"
-import { UpdateDocumentSchema, CreateVersionSchema } from "@/lib/docs/types"
-import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { UpdateDocumentSchema } from "@/lib/docs/types"
+import { requirePermission, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
-import { readDocumentContent, writeDocumentContent, deleteDocumentFile } from "@/lib/docs/mdx"
+import {
+  readContent,
+  writeContent,
+  deleteContent,
+  getOrgDocsSettings,
+} from "@/lib/docs/storage"
 
-// UUID regex
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function isUUID(str: string): boolean {
@@ -41,12 +44,11 @@ interface RouteContext {
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const session = await requirePermission(...P.docs.documents.view())
-    
+
     const { id } = await context.params
     const includeContent = request.nextUrl.searchParams.get("content") !== "false"
     const rolloutId = request.nextUrl.searchParams.get("rolloutId")
-    
-    // Find document
+
     const [doc] = await db
       .select({
         id: documents.id,
@@ -54,6 +56,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
         slug: documents.slug,
         title: documents.title,
         description: documents.description,
+        content: documents.content,
+        storageMode: documents.storageMode,
+        fileId: documents.fileId,
         category: documents.category,
         tags: documents.tags,
         status: documents.status,
@@ -84,12 +89,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
         )
       )
       .limit(1)
-    
+
     if (!doc) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 })
     }
-    
-    // Get version history
+
     const versions = await db
       .select({
         id: documentVersions.id,
@@ -105,19 +109,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
       .leftJoin(persons, eq(documentVersions.approvedById, persons.id))
       .where(eq(documentVersions.documentId, doc.id))
       .orderBy(desc(documentVersions.createdAt))
-    
-    // Get acknowledgment stats (only from active rollouts)
+
     const ackStats = await db
-      .select({
-        status: documentAcknowledgments.status,
-      })
+      .select({ status: documentAcknowledgments.status })
       .from(documentAcknowledgments)
-      .innerJoin(documentRollouts, and(
-        eq(documentAcknowledgments.rolloutId, documentRollouts.id),
-        eq(documentRollouts.isActive, true)
-      ))
+      .innerJoin(
+        documentRollouts,
+        and(
+          eq(documentAcknowledgments.rolloutId, documentRollouts.id),
+          eq(documentRollouts.isActive, true)
+        )
+      )
       .where(eq(documentAcknowledgments.documentId, doc.id))
-    
+
     const acknowledgmentStats = {
       total: ackStats.length,
       pending: ackStats.filter((a) => a.status === "pending").length,
@@ -125,46 +129,44 @@ export async function GET(request: NextRequest, context: RouteContext) {
       acknowledged: ackStats.filter((a) => a.status === "acknowledged").length,
       signed: ackStats.filter((a) => a.status === "signed").length,
     }
-    
-    // Read content - either from rollout snapshot or from file
+
     let content: string | null = null
     let rolloutVersion: string | null = null
-    
+
     if (includeContent) {
       if (rolloutId) {
-        // Get content snapshot from the specific rollout
         const [rollout] = await db
           .select({
             contentSnapshot: documentRollouts.contentSnapshot,
             versionAtRollout: documentRollouts.versionAtRollout,
           })
           .from(documentRollouts)
-          .where(and(
-            eq(documentRollouts.id, rolloutId),
-            eq(documentRollouts.documentId, doc.id)
-          ))
+          .where(
+            and(
+              eq(documentRollouts.id, rolloutId),
+              eq(documentRollouts.documentId, doc.id)
+            )
+          )
           .limit(1)
-        
+
         if (rollout) {
           content = rollout.contentSnapshot
           rolloutVersion = rollout.versionAtRollout
         }
       }
-      
-      // If no rollout content found, read from file
+
       if (!content) {
-        content = await readDocumentContent(doc.slug)
+        const orgSettings = await getOrgDocsSettings(session.orgId)
+        content = await readContent(doc, orgSettings)
       }
     }
-    
-    // Build response
+
     const response = {
       ...doc,
       owner: doc.ownerId
         ? { id: doc.ownerId, name: doc.ownerName, email: doc.ownerEmail }
         : null,
       content,
-      // If viewing rollout-specific content, show the version at rollout time
       currentVersion: rolloutVersion || doc.currentVersion,
       displayVersion: rolloutVersion || doc.currentVersion,
       isRolloutContent: !!rolloutVersion,
@@ -176,24 +178,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
       })),
       acknowledgmentStats,
     }
-    
+
     return NextResponse.json({ data: response })
   } catch (error) {
     console.error("Error fetching document:", error)
-    return NextResponse.json({ error: "Failed to fetch document" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to fetch document" },
+      { status: 500 }
+    )
   }
 }
 
-/**
- * Bump patch version (e.g., "1.0" -> "1.0.1", "1.0.1" -> "1.0.2")
- */
 function bumpPatchVersion(version: string): string {
   const parts = version.split(".")
   if (parts.length === 2) {
-    // e.g., "1.0" -> "1.0.1"
     return `${parts[0]}.${parts[1]}.1`
   } else if (parts.length >= 3) {
-    // e.g., "1.0.1" -> "1.0.2"
     const patch = parseInt(parts[2], 10) || 0
     return `${parts[0]}.${parts[1]}.${patch + 1}`
   }
@@ -206,23 +206,24 @@ function bumpPatchVersion(version: string): string {
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const session = await requirePermission(...P.docs.documents.view())
-    
+
     const { id } = await context.params
     const body = await request.json()
-    
-    // Validate request body
+
     const parseResult = UpdateDocumentSchema.safeParse(body)
     if (!parseResult.success) {
-      console.error("Document update validation error:", parseResult.error.flatten())
+      console.error(
+        "Document update validation error:",
+        parseResult.error.flatten()
+      )
       return NextResponse.json(
         { error: "Invalid request body", details: parseResult.error.flatten() },
         { status: 400 }
       )
     }
-    
+
     const data = parseResult.data
-    
-    // Find existing document
+
     const [existing] = await db
       .select()
       .from(documents)
@@ -233,19 +234,26 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         )
       )
       .limit(1)
-    
+
     if (!existing) {
-      return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Document not found" },
+        { status: 404 }
+      )
     }
-    
-    // Check if slug is being changed and if new slug already exists
+
     if (data.slug && data.slug !== existing.slug) {
       const [slugExists] = await db
         .select({ id: documents.id })
         .from(documents)
-        .where(and(eq(documents.orgId, session.orgId), eq(documents.slug, data.slug)))
+        .where(
+          and(
+            eq(documents.orgId, session.orgId),
+            eq(documents.slug, data.slug)
+          )
+        )
         .limit(1)
-      
+
       if (slugExists) {
         return NextResponse.json(
           { error: "A document with this slug already exists" },
@@ -253,35 +261,49 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         )
       }
     }
-    
-    // Read existing content to detect changes
-    const existingContent = await readDocumentContent(existing.slug)
-    const contentChanged = data.content !== undefined && data.content !== existingContent
-    
-    // Write content to file if provided
+
+    // Read existing content via storage resolver to detect changes
+    const orgSettings = await getOrgDocsSettings(session.orgId)
+    const existingContent = await readContent(existing, orgSettings)
+    const contentChanged =
+      data.content !== undefined && data.content !== existingContent
+
+    // Write content via storage resolver if provided
+    let fileId = existing.fileId
     if (data.content !== undefined) {
-      const slug = data.slug || existing.slug
-      const written = await writeDocumentContent(slug, data.content || "")
-      if (!written) {
+      try {
+        const result = await writeContent(
+          existing,
+          orgSettings,
+          data.content || "",
+          session.userId
+        )
+        fileId = result.fileId
+      } catch (err) {
+        console.error("[Docs] Content write failed:", err)
         return NextResponse.json(
-          { error: "Failed to write document content" },
+          {
+            error:
+              err instanceof Error
+                ? err.message
+                : "Failed to write document content",
+          },
           { status: 500 }
         )
       }
     }
-    
-    // Determine if status is changing to published
-    const isPublishing = data.status === "published" && existing.status !== "published"
-    
-    // Prepare update data
+
+    const isPublishing =
+      data.status === "published" && existing.status !== "published"
+
     const updateData: Record<string, unknown> = {
       ...data,
-      content: undefined, // Don't store content in DB
+      content: undefined, // content is persisted by writeContent above
+      fileId,
       updatedAt: new Date(),
       nextReviewAt: data.nextReviewAt || existing.nextReviewAt,
     }
-    
-    // Handle publishedAt
+
     if (isPublishing) {
       updateData.publishedAt = new Date()
     } else if (data.publishedAt) {
@@ -289,48 +311,45 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     } else {
       updateData.publishedAt = existing.publishedAt
     }
-    
-    // Determine if we need to auto-create a version
-    // Auto-version: Published doc + content changed + version not manually changed
-    const isManualVersionBump = data.currentVersion && data.currentVersion !== existing.currentVersion
-    const shouldAutoVersion = existing.status === "published" && contentChanged && !isManualVersionBump
-    
-    // If auto-versioning, bump the patch version
+
+    const isManualVersionBump =
+      data.currentVersion && data.currentVersion !== existing.currentVersion
+    const shouldAutoVersion =
+      existing.status === "published" && contentChanged && !isManualVersionBump
+
     if (shouldAutoVersion) {
       updateData.currentVersion = bumpPatchVersion(existing.currentVersion)
     }
-    
-    // Update document
+
     const [updated] = await db
       .update(documents)
       .set(updateData)
       .where(eq(documents.id, existing.id))
       .returning()
-    
-    // Create version record for manual version bump
+
     if (isManualVersionBump) {
       await db.insert(documentVersions).values({
         documentId: existing.id,
         version: data.currentVersion!,
-        changeDescription: body.changeDescription || `Updated to version ${data.currentVersion}`,
+        changeDescription:
+          body.changeDescription ||
+          `Updated to version ${data.currentVersion}`,
         changeSummary: body.changeSummary,
         contentSnapshot: data.content || existingContent || undefined,
         createdById: session.userId,
       })
-    }
-    // Create version record for auto-versioning (content change on published doc)
-    else if (shouldAutoVersion) {
+    } else if (shouldAutoVersion) {
       await db.insert(documentVersions).values({
         documentId: existing.id,
         version: updated.currentVersion,
         changeDescription: body.changeDescription || "Content updated",
-        changeSummary: body.changeSummary || "Automatic version from content update",
+        changeSummary:
+          body.changeSummary || "Automatic version from content update",
         contentSnapshot: data.content || undefined,
         createdById: session.userId,
       })
     }
-    
-    // Audit log
+
     const audit = await getAuditLogger()
     if (audit) {
       await audit.logUpdate(
@@ -342,11 +361,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         { title: updated.title, status: updated.status }
       )
     }
-    
+
     return NextResponse.json({ data: updated })
   } catch (error) {
     console.error("Error updating document:", error)
-    return NextResponse.json({ error: "Failed to update document" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to update document" },
+      { status: 500 }
+    )
   }
 }
 
@@ -356,10 +378,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const session = await requirePermission(...P.docs.documents.view())
-    
+
     const { id } = await context.params
-    
-    // Find existing document
+
     const [existing] = await db
       .select()
       .from(documents)
@@ -370,18 +391,19 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         )
       )
       .limit(1)
-    
+
     if (!existing) {
-      return NextResponse.json({ error: "Document not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Document not found" },
+        { status: 404 }
+      )
     }
-    
-    // Delete the document (cascades to versions, rollouts, acknowledgments)
+
+    // Clean up filing artefacts before cascade-deleting the document
+    await deleteContent(existing)
+
     await db.delete(documents).where(eq(documents.id, existing.id))
-    
-    // Delete the content file
-    await deleteDocumentFile(existing.slug)
-    
-    // Audit log
+
     const audit = await getAuditLogger()
     if (audit) {
       await audit.logDelete("docs.documents", "document", {
@@ -390,11 +412,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         title: existing.title,
       })
     }
-    
+
     return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error("Error deleting document:", error)
-    return NextResponse.json({ error: "Failed to delete document" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to delete document" },
+      { status: 500 }
+    )
   }
 }
-

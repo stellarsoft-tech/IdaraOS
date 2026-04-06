@@ -127,13 +127,13 @@ jobs:
           
           # Check migration status
           echo "🔍 Checking migration status..."
-          npx drizzle-kit migrate:status || true
+          pnpm db:migrate:status || true
           
           echo ""
           echo "📋 Running database migrations..."
           
-          # Run migrations
-          npx drizzle-kit migrate || {
+          # Run migrations (uses scripts/migrate.ts for consistent SSL/error handling)
+          pnpm db:migrate:run || {
             EXIT_CODE=$?
             echo "⚠️  Migration exited with code $EXIT_CODE"
             exit $EXIT_CODE
@@ -454,13 +454,13 @@ jobs:
           
           # Check migration status
           echo "🔍 Checking migration status..."
-          npx drizzle-kit migrate:status || true
+          pnpm db:migrate:status || true
           
           echo ""
           echo "📋 Running database migrations..."
           
-          # Run migrations
-          npx drizzle-kit migrate || {
+          # Run migrations (uses scripts/migrate.ts for consistent SSL/error handling)
+          pnpm db:migrate:run || {
             EXIT_CODE=$?
             echo "⚠️  Migration exited with code $EXIT_CODE"
             exit $EXIT_CODE
@@ -765,13 +765,13 @@ jobs:
           
           # Check migration status
           echo "🔍 Checking migration status..."
-          npx drizzle-kit migrate:status || true
+          pnpm db:migrate:status || true
           
           echo ""
           echo "📋 Running database migrations..."
           
-          # Run migrations
-          npx drizzle-kit migrate || {
+          # Run migrations (uses scripts/migrate.ts for consistent SSL/error handling)
+          pnpm db:migrate:run || {
             EXIT_CODE=$?
             echo "⚠️  Migration exited with code $EXIT_CODE"
             exit $EXIT_CODE

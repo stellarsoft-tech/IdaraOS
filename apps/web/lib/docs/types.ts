@@ -78,7 +78,7 @@ export type CreateDocument = z.infer<typeof CreateDocumentSchema>
  */
 export const UpdateDocumentSchema = CreateDocumentSchema.partial().extend({
   publishedAt: z.string().optional().nullable(),
-  // Allow any additional fields from the form
+  storageMode: z.enum(["database", "filing", "hybrid"]).nullable().optional(),
   changeDescription: z.string().optional(),
   changeSummary: z.string().optional(),
 })
@@ -183,6 +183,8 @@ export interface DocumentWithRelations {
   createdAt: string
   updatedAt: string
   publishedAt: string | null
+  /** Per-document override; null means inherit org default from docs settings. */
+  storageMode?: "database" | "filing" | "hybrid" | null
   // Additional computed fields
   content?: string | null
   rolloutCount?: number

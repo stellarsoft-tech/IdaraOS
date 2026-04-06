@@ -65,7 +65,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Progress } from "@/components/ui/progress"
 import { MDXRenderer, RolloutDetailDrawer } from "@/components/docs"
-import { useDocument, useUpdateDocument, useDeleteDocument, useRollouts, useAcknowledgments } from "@/lib/api/docs"
+import { useDocument, useUpdateDocument, useDeleteDocument, useRollouts, useAcknowledgments, useDocsSettings } from "@/lib/api/docs"
+import { useFileCategoriesList } from "@/lib/api/file-categories"
 import type { DocumentCategory, DocumentStatus, DocumentVersionWithRelations, RolloutWithTarget } from "@/lib/docs/types"
 import { toast } from "sonner"
 
@@ -86,6 +87,21 @@ const categoryLabels: Record<DocumentCategory, string> = {
   general: "General",
 }
 
+const STORAGE_MODE_ORG_DEFAULT = "__org_default__"
+
+const DOC_STORAGE_MODES = ["database", "filing", "hybrid"] as const
+type DocStorageMode = (typeof DOC_STORAGE_MODES)[number]
+
+function parseDocStorageMode(value: unknown): DocStorageMode | null {
+  if (value === STORAGE_MODE_ORG_DEFAULT || value === "" || value == null) {
+    return null
+  }
+  if (typeof value !== "string") {
+    return null
+  }
+  return DOC_STORAGE_MODES.includes(value as DocStorageMode) ? (value as DocStorageMode) : null
+}
+
 export default function DocumentDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -98,7 +114,7 @@ export default function DocumentDetailPage() {
   const [isEditing, setIsEditing] = React.useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
   const [formData, setFormData] = React.useState<Record<string, unknown>>({})
-  const [content, setContent] = React.useState("")
+  const [content, setContent] = React.useState<string | null>(null)
   const [fullscreenMode, setFullscreenMode] = React.useState<"editor" | "preview" | null>(null)
   const [selectedRollout, setSelectedRollout] = React.useState<RolloutWithTarget | null>(null)
   const [rolloutDrawerOpen, setRolloutDrawerOpen] = React.useState(false)
@@ -108,6 +124,11 @@ export default function DocumentDetailPage() {
   // Load rollouts and acknowledgments
   const { data: rolloutsData } = useRollouts({ documentId: doc?.id })
   const { data: acksData } = useAcknowledgments({ documentId: doc?.id })
+  const { data: docsSettingsData } = useDocsSettings()
+  const { data: docsCategoriesData } = useFileCategoriesList({ moduleScope: "docs" })
+
+  const docsCategories = docsCategoriesData ?? []
+  const orgStorageMode = docsSettingsData?.data?.contentStorageMode ?? "database"
   
   const rollouts = rolloutsData?.data || []
   const acknowledgments = acksData?.data || []
@@ -132,18 +153,18 @@ export default function DocumentDetailPage() {
         showVersionHistory: doc.showVersionHistory,
         nextReviewAt: doc.nextReviewAt || "",
         reviewFrequencyDays: doc.reviewFrequencyDays || "",
-        // Metadata fields
+        storageMode: doc.storageMode || STORAGE_MODE_ORG_DEFAULT,
         referenceId: metadata.referenceId || "",
         effectiveDate: metadata.effectiveDate || "",
         ownerRole: metadata.ownerRole || "",
         approvedByName: metadata.approvedBy?.name || "",
         approvedByRole: metadata.approvedBy?.role || "",
       })
-      setContent(doc.content || "")
+      setContent(doc.content ?? null)
     }
   }, [doc])
   
-  const handleSave = async () => {
+  const handleSaveSettings = async () => {
     if (!doc) return
     
     try {
@@ -168,14 +189,15 @@ export default function DocumentDetailPage() {
           : undefined,
       }
       
-      // Exclude our UI-only fields from formData before sending
-      const { referenceId, effectiveDate, ownerRole, approvedByName, approvedByRole, ...restFormData } = formData
-      
+      const { referenceId, effectiveDate, ownerRole, approvedByName, approvedByRole, storageMode, ...restFormData } = formData
+
+      const resolvedStorageMode = parseDocStorageMode(storageMode)
+
       await updateDocument.mutateAsync({
         id: doc.id,
         data: {
           ...restFormData,
-          content,
+          storageMode: resolvedStorageMode,
           metadata,
         },
       })
@@ -198,6 +220,42 @@ export default function DocumentDetailPage() {
       } else {
         toast.error("Failed to save document", {
           description: err?.message || "Please check your input and try again",
+        })
+      }
+    }
+  }
+
+  const handleSaveContent = async () => {
+    if (!doc) return
+    if (content === null) {
+      toast.error("Document content isn't loaded yet", {
+        description: "Please refresh and try again.",
+      })
+      return
+    }
+
+    try {
+      await updateDocument.mutateAsync({
+        id: doc.id,
+        data: { content },
+      })
+      toast.success("Content saved successfully")
+      refetch()
+    } catch (error: unknown) {
+      const err = error as { message?: string; details?: { fieldErrors?: Record<string, string[]> } }
+      const fieldErrors = err?.details?.fieldErrors
+
+      if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+        const errorMessages = Object.entries(fieldErrors)
+          .map(([field, errors]) => `${field}: ${errors.join(", ")}`)
+          .join("\n")
+        toast.error("Validation failed", {
+          description: errorMessages,
+          duration: 5000,
+        })
+      } else {
+        toast.error("Failed to save content", {
+          description: err?.message || "Please try again",
         })
       }
     }
@@ -342,7 +400,7 @@ export default function DocumentDetailPage() {
                     <p className="text-sm text-muted-foreground">{doc?.title}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button onClick={handleSave} disabled={updateDocument.isPending}>
+                    <Button onClick={handleSaveContent} disabled={updateDocument.isPending || content === null}>
                       {updateDocument.isPending && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       )}
@@ -356,7 +414,7 @@ export default function DocumentDetailPage() {
                   </div>
                 </div>
                 <Textarea
-                  value={content}
+                  value={content ?? ""}
                   onChange={(e) => setContent(e.target.value)}
                   className="flex-1 font-mono text-sm resize-none rounded-none border-0 focus-visible:ring-0"
                   placeholder="# Document Title&#10;&#10;Start writing your document content here..."
@@ -409,7 +467,7 @@ export default function DocumentDetailPage() {
               </CardHeader>
               <CardContent>
                 <Textarea
-                  value={content}
+                  value={content ?? ""}
                   onChange={(e) => setContent(e.target.value)}
                   className="font-mono text-sm min-h-[500px]"
                   placeholder="# Document Title
@@ -428,7 +486,7 @@ flowchart LR
 ```"
                 />
                 <div className="flex justify-end mt-4">
-                  <Button onClick={handleSave} disabled={updateDocument.isPending}>
+                  <Button onClick={handleSaveContent} disabled={updateDocument.isPending || content === null}>
                     {updateDocument.isPending && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
@@ -676,8 +734,41 @@ flowchart LR
                 </div>
               </div>
               
+              <Separator />
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium">Advanced &mdash; Storage Override</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Override the organization&apos;s default storage mode for this document only. Leave
+                    as &quot;Use organization default&quot; to inherit the setting from Docs &gt; Settings.
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Storage Mode</Label>
+                    <Select
+                      value={(formData.storageMode as string) || STORAGE_MODE_ORG_DEFAULT}
+                      onValueChange={(value) => setFormData({ ...formData, storageMode: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Use organization default" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={STORAGE_MODE_ORG_DEFAULT}>
+                          Use organization default ({orgStorageMode})
+                        </SelectItem>
+                        <SelectItem value="database">Database</SelectItem>
+                        <SelectItem value="filing">Filing Module</SelectItem>
+                        <SelectItem value="hybrid">Hybrid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              
               <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={updateDocument.isPending}>
+                <Button onClick={handleSaveSettings} disabled={updateDocument.isPending}>
                   {updateDocument.isPending && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}

@@ -19,7 +19,7 @@ import {
 import { CreateRolloutSchema } from "@/lib/docs/types"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
-import { readDocumentContent } from "@/lib/docs/mdx"
+import { readContent, getOrgDocsSettings } from "@/lib/docs/storage"
 
 /**
  * GET /api/docs/rollouts
@@ -170,8 +170,12 @@ export async function POST(request: NextRequest) {
     // Verify document exists and belongs to org, and get version/content
     const [doc] = await db
       .select({ 
-        id: documents.id, 
+        id: documents.id,
+        orgId: documents.orgId,
         slug: documents.slug,
+        content: documents.content,
+        storageMode: documents.storageMode,
+        fileId: documents.fileId,
         currentVersion: documents.currentVersion,
       })
       .from(documents)
@@ -182,8 +186,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 })
     }
     
-    // Get current document content to snapshot
-    const contentSnapshot = await readDocumentContent(doc.slug)
+    const orgSettings = await getOrgDocsSettings(session.orgId)
+    const contentSnapshot = await readContent(doc, orgSettings)
     
     // Validate target exists if specified
     if (data.targetType !== "organization" && data.targetId) {

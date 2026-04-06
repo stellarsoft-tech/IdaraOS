@@ -1,12 +1,18 @@
 # =============================================================================
-# IdaraOS - Database Initialization Container (Development/Prototyping)
+# IdaraOS - Database Initialization Container (Development)
 # =============================================================================
 #
-# WARNING: This file uses db:push which can DROP tables and lose data!
-# Only use this for local development when you don't care about data loss.
+# Uses the SAME incremental Drizzle migration chain as production:
+#   1. pnpm db:migrate:run   — apply pending SQL migrations
+#   2. pnpm db:seed           — insert demo data (idempotent, optional)
+#   3. pnpm db:seed-rbac      — create roles, permissions, admin user
+#   4. pnpm db:post-migrate   — data migrations + RBAC sync (Owner fix)
 #
-# For production or when you have data you want to keep, use Dockerfile.init
-# which uses proper migrations.
+# This ensures local dev behaves identically to Azure deploys.
+#
+# RAPID PROTOTYPING (optional, use only when you need schema push):
+#   docker compose -f docker-compose.dev.yml exec web \
+#     sh -c "cd /app/apps/web && npx drizzle-kit push --force && pnpm db:seed-rbac"
 #
 # =============================================================================
 
@@ -27,19 +33,25 @@ ENV NODE_ENV=development
 
 CMD ["sh", "-c", "\
 echo '=========================================='; \
-echo 'IdaraOS Database Schema Push (DEV MODE)'; \
+echo 'IdaraOS Database Migrations (DEV)'; \
 echo '=========================================='; \
-echo ''; \
-echo '⚠️  WARNING: Using db:push - data may be lost!'; \
-echo '    For production, use Dockerfile.init with migrations.'; \
-echo ''; \
 cd /app/apps/web; \
 \
-echo '📋 Pushing schema to database...'; \
-npx drizzle-kit push --force; \
+echo ''; \
+echo '📋 Running database migrations...'; \
+pnpm db:migrate:run; \
 \
-if [ $? -ne 0 ]; then \
-  echo '❌ Schema push failed!'; \
+MIGRATE_EXIT=$?; \
+if [ $MIGRATE_EXIT -ne 0 ]; then \
+  echo ''; \
+  echo '❌ Migration failed with exit code: '$MIGRATE_EXIT; \
+  echo ''; \
+  echo 'Troubleshooting:'; \
+  echo '  1. Check if DATABASE_URL is correct'; \
+  echo '  2. Check migration status: pnpm db:migrate:status'; \
+  echo '  3. If DB was created with db:push, run: pnpm db:baseline'; \
+  echo '  4. For rapid prototyping without migrations:'; \
+  echo '     docker compose exec web sh -c \"cd /app/apps/web && npx drizzle-kit push --force\"'; \
   exit 1; \
 fi; \
 \
@@ -50,6 +62,10 @@ pnpm db:seed 2>&1 || true; \
 echo ''; \
 echo '📋 Seeding RBAC...'; \
 pnpm db:seed-rbac 2>&1 || true; \
+\
+echo ''; \
+echo '📋 Running post-migration hooks...'; \
+pnpm db:post-migrate 2>&1 || true; \
 \
 echo ''; \
 echo '=========================================='; \

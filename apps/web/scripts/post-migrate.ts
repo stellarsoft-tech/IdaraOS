@@ -24,8 +24,11 @@
 
 import { drizzle } from "drizzle-orm/node-postgres"
 import { Pool } from "pg"
-import { sql } from "drizzle-orm"
+import { sql, eq } from "drizzle-orm"
+import fs from "fs"
+import path from "path"
 import { syncRBACPermissions } from "./sync-rbac-permissions"
+import { documents } from "../lib/db/schema/docs"
 
 // ============================================================================
 // Types
@@ -84,8 +87,61 @@ const DATA_MIGRATIONS: DataMigration[] = [
         ON CONFLICT (role_id, team_id) DO NOTHING
       `)
       
-      // Log how many records were inserted
       console.log(`            Populated junction table with existing team associations`)
+    },
+  },
+
+  {
+    id: "2026-04-07_backfill_docs_content_from_mdx",
+    description: "Backfill docs_documents.content from content/docs/*.mdx files",
+    run: async (db) => {
+      const contentDir = path.join(process.cwd(), "content/docs")
+
+      let mdxFiles: string[] = []
+      try {
+        const allFiles = fs.readdirSync(contentDir)
+        mdxFiles = allFiles.filter((f) => f.endsWith(".mdx"))
+      } catch {
+        console.log(`            No content/docs directory found — skipping (expected in production)`)
+        return
+      }
+
+      if (mdxFiles.length === 0) {
+        console.log(`            No .mdx files found — nothing to backfill`)
+        return
+      }
+
+      let migrated = 0
+      let skipped = 0
+
+      for (const file of mdxFiles) {
+        const slug = file.replace(".mdx", "")
+        const filePath = path.join(contentDir, file)
+
+        const [doc] = await db
+          .select({ id: documents.id, content: documents.content })
+          .from(documents)
+          .where(eq(documents.slug, slug))
+          .limit(1)
+
+        if (!doc) {
+          continue
+        }
+
+        if (doc.content) {
+          skipped++
+          continue
+        }
+
+        const content = fs.readFileSync(filePath, "utf-8")
+        await db
+          .update(documents)
+          .set({ content })
+          .where(eq(documents.id, doc.id))
+        migrated++
+      }
+
+      console.log(`            Backfilled ${migrated} document(s), skipped ${skipped} (already had content)`)
     },
   },
 ]

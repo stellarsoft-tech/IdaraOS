@@ -43,6 +43,13 @@
       "when": 1768876036594,
       "tag": "0005_colorful_pete_wisdom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775136979993,
+      "tag": "0006_smooth_midnight",
+      "breakpoints": true
     }
   ]
 }

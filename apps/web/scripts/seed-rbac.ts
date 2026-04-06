@@ -18,7 +18,7 @@ import { Pool } from "pg"
 import { eq, and } from "drizzle-orm"
 import * as schema from "../lib/db/schema"
 import { hashPassword } from "../lib/auth/session"
-import { MODULE_REGISTRY, ACTION_REGISTRY } from "./sync-rbac-permissions"
+import { MODULE_REGISTRY, ACTION_REGISTRY, syncRBACPermissions } from "./sync-rbac-permissions"
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/idaraos",
@@ -430,6 +430,11 @@ async function seedRBAC() {
       console.log(`  ✓ admin@example.com already has Owner RBAC role`)
     }
   }
+
+  // Reconcile Owner role permissions with the current MODULE_REGISTRY so
+  // seed-rbac alone is sufficient to heal Owner after permission-row churn
+  console.log("\n🔐 Syncing RBAC permissions (ensuring Owner has all permissions)...")
+  await syncRBACPermissions()
 
   console.log("\n✅ RBAC seeding complete!")
   console.log("\n📋 Admin credentials:")
