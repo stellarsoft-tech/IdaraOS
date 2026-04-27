@@ -18,6 +18,10 @@ import { getSession } from "@/lib/auth/session"
 import { eq, and } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
 
+export const dynamic = "force-dynamic"
+
+const noStore = { "Cache-Control": "no-store, must-revalidate" } as const
+
 // ============================================================================
 // VALIDATION SCHEMAS
 // ============================================================================
@@ -107,7 +111,7 @@ export async function GET(
       return NextResponse.json({ error: "Evidence not found" }, { status: 404 })
     }
 
-    // Fetch linked controls
+    // Fetch linked controls (scope join to org so links to foreign rows never appear)
     const linkedControls = await db
       .select({
         id: securityEvidenceLinks.id,
@@ -117,15 +121,25 @@ export async function GET(
         notes: securityEvidenceLinks.notes,
       })
       .from(securityEvidenceLinks)
-      .innerJoin(securityControls, eq(securityEvidenceLinks.controlId, securityControls.id))
+      .innerJoin(
+        securityControls,
+        and(
+          eq(securityEvidenceLinks.controlId, securityControls.id),
+          eq(securityControls.orgId, session.orgId),
+        ),
+      )
       .where(eq(securityEvidenceLinks.evidenceId, id))
 
-    return NextResponse.json({
-      data: {
-        ...evidence,
-        linkedControls,
+    return NextResponse.json(
+      {
+        data: {
+          ...evidence,
+          linkedControls,
+          controlsCount: linkedControls.length,
+        },
       },
-    })
+      { headers: noStore },
+    )
   } catch (error) {
     console.error("Error fetching evidence:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

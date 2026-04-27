@@ -53,11 +53,13 @@ import {
 } from "@/components/ui/dialog"
 import {
   useSecurityEvidenceItem,
+  useSecurityEvidenceLinks,
   useUpdateSecurityEvidence,
   useDeleteSecurityEvidence,
   useSecurityControls,
   useLinkEvidenceControl,
   useUnlinkEvidenceControl,
+  type EvidenceLinkedControl,
 } from "@/lib/api/security"
 import {
   evidenceTypeValues,
@@ -149,6 +151,8 @@ export default function EvidenceDetailPage() {
   const [controlSearch, setControlSearch] = useState("")
 
   const { data, isLoading, error } = useSecurityEvidenceItem(id)
+  const { data: linksPayload, isError: linksError, isFetching: linksFetching } =
+    useSecurityEvidenceLinks(id)
   const { data: controlsData } = useSecurityControls({ limit: 100 })
   const updateEvidence = useUpdateSecurityEvidence()
   const deleteEvidence = useDeleteSecurityEvidence()
@@ -157,7 +161,22 @@ export default function EvidenceDetailPage() {
 
   const evidence = data?.data
   const controls = controlsData?.data || []
-  const linkedControls = evidence?.linkedControls ?? []
+
+  // Prefer GET /evidence/:id/links so we never show a stale/empty `linkedControls`
+  // payload from a cached main fetch; fall back to embedded + [] while loading.
+  const linkedControls: EvidenceLinkedControl[] = useMemo(() => {
+    if (!linksError && linksPayload?.data !== undefined) {
+      return linksPayload.data.map((row) => ({
+        id: row.id,
+        controlId: row.controlId,
+        controlIdCode: row.control.controlId,
+        controlTitle: row.control.title,
+        notes: row.notes,
+      }))
+    }
+    return evidence?.linkedControls ?? []
+  }, [linksPayload, linksError, evidence?.linkedControls])
+
   const linkedControlIds = useMemo(
     () => new Set(linkedControls.map((lc) => lc.controlId)),
     [linkedControls],
@@ -288,7 +307,7 @@ export default function EvidenceDetailPage() {
               <div className="flex items-center gap-3 text-sm">
                 <Shield className="h-4 w-4 text-muted-foreground" />
                 <span>
-                  Linked controls: {linkedControls.length}
+                  Linked controls: {linksFetching ? "…" : linkedControls.length}
                 </span>
               </div>
               {evidence.externalSystem && (
@@ -340,6 +359,43 @@ export default function EvidenceDetailPage() {
             </TabsList>
 
             <TabsContent value="details" className="mt-4 space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle>Linked controls</CardTitle>
+                    {linksFetching && (
+                      <span className="text-xs text-muted-foreground">Refreshing…</span>
+                    )}
+                  </div>
+                  <CardDescription>
+                    Evidence must be linked to each control it supports. Open the
+                    &quot;Linked Controls&quot; tab to add or remove links.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {linkedControls.length > 0 ? (
+                    <ul className="space-y-2">
+                      {linkedControls.map((lc) => (
+                        <li key={lc.id}>
+                          <Link
+                            href={`/security/controls/${lc.controlId}`}
+                            className="text-sm font-medium text-primary hover:underline"
+                          >
+                            {lc.controlIdCode} — {lc.controlTitle}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {linksFetching
+                        ? "Loading control links…"
+                        : "No controls linked yet. Use Linked Controls to link this evidence."}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle>Description</CardTitle>

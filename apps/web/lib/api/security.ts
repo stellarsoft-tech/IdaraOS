@@ -63,6 +63,21 @@ export interface EvidenceLinkedControl {
   notes?: string | null
 }
 
+/** Row from GET /api/security/evidence/:id/links (nested control metadata) */
+export interface EvidenceControlLinkRow {
+  id: string
+  evidenceId: string
+  controlId: string
+  notes?: string | null
+  createdAt: string
+  control: {
+    controlId: string
+    title: string
+    status: string
+    implementationStatus: string
+  }
+}
+
 export interface SecurityEvidence {
   id: string
   title: string
@@ -432,11 +447,28 @@ export function useSecurityEvidenceItem(id: string | undefined) {
   return useQuery<{ data: SecurityEvidence }>({
     queryKey: ["security-evidence-item", id],
     queryFn: async () => {
-      const res = await fetch(`/api/security/evidence/${id}`)
+      const res = await fetch(`/api/security/evidence/${id}`, { cache: "no-store" })
       if (!res.ok) throw new Error("Failed to fetch evidence")
       return res.json()
     },
     enabled: !!id,
+  })
+}
+
+/** Source of truth for which controls an evidence item is linked to (avoids stale embedded `linkedControls` on the detail payload). */
+export function useSecurityEvidenceLinks(evidenceId: string | undefined) {
+  return useQuery<{ data: EvidenceControlLinkRow[] }>({
+    queryKey: ["security-evidence-links", evidenceId],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/evidence/${evidenceId}/links`, {
+        cache: "no-store",
+      })
+      if (!res.ok) throw new Error("Failed to fetch evidence links")
+      return res.json()
+    },
+    enabled: !!evidenceId,
+    staleTime: 0,
+    refetchOnMount: "always",
   })
 }
 
@@ -460,8 +492,13 @@ export function useCreateSecurityEvidence() {
       }
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
+      const eid = (result as { data?: { id?: string } })?.data?.id
+      if (eid) {
+        queryClient.invalidateQueries({ queryKey: ["security-evidence-item", eid] })
+        queryClient.invalidateQueries({ queryKey: ["security-evidence-links", eid] })
+      }
     },
   })
 }
@@ -485,6 +522,7 @@ export function useUpdateSecurityEvidence() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
       queryClient.invalidateQueries({ queryKey: ["security-evidence-item", id] })
+      queryClient.invalidateQueries({ queryKey: ["security-evidence-links", id] })
     },
   })
 }
@@ -500,8 +538,10 @@ export function useDeleteSecurityEvidence() {
       if (!res.ok) throw new Error("Failed to delete evidence")
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
+      queryClient.removeQueries({ queryKey: ["security-evidence-item", id] })
+      queryClient.removeQueries({ queryKey: ["security-evidence-links", id] })
     },
   })
 }
@@ -533,6 +573,7 @@ export function useLinkEvidenceControl() {
     onSuccess: (_, { evidenceId }) => {
       queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
       queryClient.invalidateQueries({ queryKey: ["security-evidence-item", evidenceId] })
+      queryClient.invalidateQueries({ queryKey: ["security-evidence-links", evidenceId] })
     },
   })
 }
@@ -561,6 +602,7 @@ export function useUnlinkEvidenceControl() {
     onSuccess: (_, { evidenceId }) => {
       queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
       queryClient.invalidateQueries({ queryKey: ["security-evidence-item", evidenceId] })
+      queryClient.invalidateQueries({ queryKey: ["security-evidence-links", evidenceId] })
     },
   })
 }
