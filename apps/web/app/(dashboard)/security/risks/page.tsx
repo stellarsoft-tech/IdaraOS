@@ -204,7 +204,7 @@ const createFormSchema = z.object({
   treatment: z.enum(riskTreatmentValues).optional(),
   treatmentPlan: z.string().optional(),
   ownerId: z.preprocess(
-    (v) => (v === "" || v === undefined ? null : v),
+    (v) => (v === "" || v === "__unassigned__" || v === undefined ? null : v),
     z.string().uuid().nullable().optional(),
   ),
 })
@@ -299,13 +299,15 @@ export default function RisksPage() {
 
   const risks = risksData?.data || []
 
-  // Inject the live list of people as owner options on top of the static config
+  // Inject the live list of people as owner options on top of the static config.
+  // Radix <Select.Item> disallows value="", so use a sentinel that we translate
+  // to null in the Zod preprocess above.
   const createFormConfig = useMemo(() => ({
     ...formConfig,
     ownerId: {
       ...formConfig.ownerId,
       options: [
-        { value: "", label: "— Unassigned —" },
+        { value: "__unassigned__", label: "— Unassigned —" },
         ...people.map((p) => ({ value: p.id, label: p.name })),
       ],
     },
