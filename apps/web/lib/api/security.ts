@@ -55,6 +55,14 @@ export interface ControlMapping {
   standardControl: StandardControl
 }
 
+export interface EvidenceLinkedControl {
+  id: string
+  controlId: string
+  controlIdCode: string
+  controlTitle: string
+  notes?: string | null
+}
+
 export interface SecurityEvidence {
   id: string
   title: string
@@ -64,6 +72,7 @@ export interface SecurityEvidence {
   fileUrl?: string | null
   fileName?: string | null
   fileSize?: number | null
+  mimeType?: string | null
   externalUrl?: string | null
   externalSystem?: string | null
   collectedAt: string
@@ -73,6 +82,8 @@ export interface SecurityEvidence {
   tags?: string[] | null
   controlsCount?: number
   linkedControlIds?: string[] | null
+  // Only present on the detail-fetch response (GET /api/security/evidence/:id)
+  linkedControls?: EvidenceLinkedControl[]
   createdAt: string
   updatedAt: string
 }
@@ -95,6 +106,16 @@ export interface SecurityFramework {
   updatedAt: string
 }
 
+export interface RiskMitigatingControl {
+  id: string
+  controlId: string
+  controlIdCode: string
+  controlTitle: string
+  implementationStatus: string
+  effectiveness?: string | null
+  notes?: string | null
+}
+
 export interface SecurityRisk {
   id: string
   riskId: string
@@ -114,6 +135,8 @@ export interface SecurityRisk {
   treatmentPlan?: string | null
   treatmentDueDate?: string | null
   controlsCount?: number
+  // Only present on the detail-fetch response (GET /api/security/risks/:id)
+  mitigatingControls?: RiskMitigatingControl[]
   createdAt: string
   updatedAt: string
 }
@@ -483,6 +506,65 @@ export function useDeleteSecurityEvidence() {
   })
 }
 
+export function useLinkEvidenceControl() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      evidenceId,
+      controlId,
+      notes,
+    }: {
+      evidenceId: string
+      controlId: string
+      notes?: string
+    }) => {
+      const res = await fetch(`/api/security/evidence/${evidenceId}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ controlId, notes }),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to link control")
+      }
+      return res.json()
+    },
+    onSuccess: (_, { evidenceId }) => {
+      queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
+      queryClient.invalidateQueries({ queryKey: ["security-evidence-item", evidenceId] })
+    },
+  })
+}
+
+export function useUnlinkEvidenceControl() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      evidenceId,
+      linkId,
+    }: {
+      evidenceId: string
+      linkId: string
+    }) => {
+      const res = await fetch(
+        `/api/security/evidence/${evidenceId}/links?linkId=${encodeURIComponent(linkId)}`,
+        { method: "DELETE" },
+      )
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}))
+        throw new Error(error.error || "Failed to unlink control")
+      }
+      return res.json()
+    },
+    onSuccess: (_, { evidenceId }) => {
+      queryClient.invalidateQueries({ queryKey: ["security-evidence"] })
+      queryClient.invalidateQueries({ queryKey: ["security-evidence-item", evidenceId] })
+    },
+  })
+}
+
 // ============================================================================
 // FRAMEWORKS HOOKS
 // ============================================================================
@@ -695,6 +777,67 @@ export function useDeleteSecurityRisk() {
       return res.json()
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-risks"] })
+    },
+  })
+}
+
+/**
+ * Link a control to a risk (mitigating control).
+ */
+export function useLinkRiskControl() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      riskId,
+      controlId,
+      effectiveness,
+      notes,
+    }: {
+      riskId: string
+      controlId: string
+      effectiveness?: "high" | "medium" | "low"
+      notes?: string
+    }) => {
+      const res = await fetch(`/api/security/risks/${riskId}/controls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ controlId, effectiveness, notes }),
+      })
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}))
+        throw new Error(errorBody.error || "Failed to link control")
+      }
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["security-risk", variables.riskId] })
+      queryClient.invalidateQueries({ queryKey: ["security-risks"] })
+    },
+  })
+}
+
+/**
+ * Remove a control link from a risk.
+ */
+export function useUnlinkRiskControl() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ riskId, controlId }: { riskId: string; controlId: string }) => {
+      const res = await fetch(
+        `/api/security/risks/${riskId}/controls?controlId=${encodeURIComponent(controlId)}`,
+        { method: "DELETE" }
+      )
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}))
+        throw new Error(errorBody.error || "Failed to unlink control")
+      }
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["security-risk", variables.riskId] })
       queryClient.invalidateQueries({ queryKey: ["security-risks"] })
     },
   })

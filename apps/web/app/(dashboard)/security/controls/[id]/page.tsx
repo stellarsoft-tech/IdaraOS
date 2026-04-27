@@ -69,7 +69,10 @@ const editControlSchema = z.object({
   implementationNotes: z.string().optional(),
   controlType: z.string().optional(),
   category: z.string().optional(),
-  reviewFrequencyDays: z.number().int().min(1).max(365).optional().nullable(),
+  reviewFrequencyDays: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1).max(365).optional()
+  ),
 })
 
 // Evidence creation schema

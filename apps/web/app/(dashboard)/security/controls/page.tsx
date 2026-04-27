@@ -158,7 +158,10 @@ const createFormSchema = z.object({
   category: z.string().optional(),
   controlType: z.string().optional(),
   implementationStatus: z.enum(["not_implemented", "partially_implemented", "implemented", "effective"]).default("not_implemented"),
-  reviewFrequencyDays: z.coerce.number().int().min(1).max(365).optional(),
+  reviewFrequencyDays: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1).max(365).optional()
+  ),
 })
 
 // Form config
