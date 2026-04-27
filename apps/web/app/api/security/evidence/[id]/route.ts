@@ -22,19 +22,34 @@ import { getAuditLogger } from "@/lib/api/context"
 // VALIDATION SCHEMAS
 // ============================================================================
 
+// Clear optional URL / date fields when the form sends "" (must not turn undefined
+// into null, or partial PATCHes would wipe columns that weren’t in the body).
+const optionalUrlOrNull = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.union([z.string().url(), z.null()]).optional(),
+)
+
+const optionalDateStringOrNull = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.union([z.string().min(1), z.null()]).optional(),
+)
+
 const updateEvidenceSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().optional().nullable(),
   type: z.enum(evidenceTypeValues).optional(),
   status: z.enum(evidenceStatusValues).optional(),
-  fileUrl: z.string().url().optional().nullable(),
+  fileUrl: optionalUrlOrNull,
   fileName: z.string().optional().nullable(),
   fileSize: z.number().int().optional().nullable(),
   mimeType: z.string().optional().nullable(),
-  externalUrl: z.string().url().optional().nullable(),
+  externalUrl: optionalUrlOrNull,
   externalSystem: z.string().optional().nullable(),
-  collectedAt: z.string().optional(),
-  validUntil: z.string().optional().nullable(),
+  collectedAt: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z.string().optional(),
+  ),
+  validUntil: optionalDateStringOrNull,
   tags: z.array(z.string()).optional(),
 })
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, FileCheck, FileText, Image, Link, Calendar, Clock, Shield } from "lucide-react"
 import { z } from "zod"
 import { format } from "date-fns"
@@ -191,6 +192,7 @@ const formConfig = {
 }
 
 export default function EvidencePage() {
+  const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedControlIds, setSelectedControlIds] = useState<string[]>([])
   
@@ -319,6 +321,7 @@ export default function EvidencePage() {
         loading={isLoading}
         searchKey="title"
         searchPlaceholder="Search evidence..."
+        onRowClick={(row) => router.push(`/security/evidence/${row.id}`)}
         facetedFilters={{
           type: {
             type: "enum",

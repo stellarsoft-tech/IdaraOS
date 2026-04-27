@@ -15,7 +15,7 @@ import {
 } from "@/lib/db/schema/security"
 import { users } from "@/lib/db/schema/users"
 import { getSession } from "@/lib/auth/session"
-import { eq, and, desc, ilike, or, count } from "drizzle-orm"
+import { eq, and, desc, ilike, or, count, inArray } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
 
 // ============================================================================
@@ -93,6 +93,33 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(securityEvidence.status, query.status))
     }
 
+    // When scoping to a control, filter by linked evidence *before* limit/offset.
+    // (Previously we paginated all org evidence then filtered in memory, which
+    // dropped valid links whenever they fell past the first page — e.g. after
+    // creating more evidence elsewhere.)
+    if (query.controlId) {
+      const linkedRows = await db
+        .select({ evidenceId: securityEvidenceLinks.evidenceId })
+        .from(securityEvidenceLinks)
+        .where(eq(securityEvidenceLinks.controlId, query.controlId))
+
+      const evidenceIdsForControl = [...new Set(linkedRows.map((r) => r.evidenceId))]
+
+      if (evidenceIdsForControl.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: {
+            page: query.page,
+            limit: query.limit,
+            total: 0,
+            totalPages: 0,
+          },
+        })
+      }
+
+      conditions.push(inArray(securityEvidence.id, evidenceIdsForControl))
+    }
+
     // Fetch evidence with collector info
     const evidence = await db
       .select({
@@ -143,20 +170,8 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    // Filter by controlId if specified
-    let filteredEvidence = evidenceWithCounts
-    if (query.controlId) {
-      const linkedEvidenceIds = await db
-        .select({ evidenceId: securityEvidenceLinks.evidenceId })
-        .from(securityEvidenceLinks)
-        .where(eq(securityEvidenceLinks.controlId, query.controlId))
-
-      const linkedIds = new Set(linkedEvidenceIds.map(e => e.evidenceId))
-      filteredEvidence = evidenceWithCounts.filter(e => linkedIds.has(e.id))
-    }
-
     return NextResponse.json({
-      data: filteredEvidence,
+      data: evidenceWithCounts,
       pagination: {
         page: query.page,
         limit: query.limit,
