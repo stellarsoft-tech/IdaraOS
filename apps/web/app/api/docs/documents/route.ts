@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get("category")
     const ownerId = searchParams.get("ownerId")
     const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "20")
+    const requestedLimit = parseInt(searchParams.get("limit") || "20")
+    const limit = Math.min(Math.max(requestedLimit, 1), 500)
     const offset = (page - 1) * limit
 
     const conditions = [eq(documents.orgId, session.orgId)]

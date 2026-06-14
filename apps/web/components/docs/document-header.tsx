@@ -45,7 +45,7 @@ interface DocumentHeaderProps {
  * Matching the reference design with 2-row grid metadata
  */
 export function DocumentHeader({
-  title,
+  title: _title,
   referenceId,
   version,
   owner,
@@ -54,21 +54,18 @@ export function DocumentHeader({
   className,
   actions,
 }: DocumentHeaderProps) {
-  // Check if we have any metadata to show
   const hasMetadata = referenceId || version || owner || effectiveDate || approvedBy
+
+  if (!hasMetadata && !actions) {
+    return null
+  }
 
   return (
     <div className={cn("mb-4", className)}>
-      {/* Title row with optional actions */}
-      <div className="flex items-start justify-between gap-4 mb-2">
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {actions}
-      </div>
-      
-      {/* Metadata Box - 2 row grid layout like reference */}
-      {hasMetadata && (
-        <div className="rounded-lg border bg-card/50 px-4 py-2.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5 text-sm">
+      <div className="flex items-start justify-between gap-4">
+        {hasMetadata ? (
+          <div className="rounded-lg border bg-card/50 px-4 py-2.5 flex-1 min-w-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-1.5 text-sm">
             {/* Row 1 */}
             {/* Reference ID */}
             {referenceId && (
@@ -131,7 +128,9 @@ export function DocumentHeader({
             )}
           </div>
         </div>
-      )}
+        ) : null}
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </div>
     </div>
   )
 }

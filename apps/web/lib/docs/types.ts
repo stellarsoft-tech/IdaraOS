@@ -321,7 +321,13 @@ export interface DocumentFilters {
   category?: DocumentCategory | DocumentCategory[]
   ownerId?: string
   tag?: string
+  page?: number
+  /** Max documents to return; defaults to DOCS_LIST_FETCH_LIMIT */
+  limit?: number
 }
+
+/** Upper bound for document list requests from the UI */
+export const DOCS_LIST_FETCH_LIMIT = 500
 
 export interface RolloutFilters {
   documentId?: string

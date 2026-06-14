@@ -3,20 +3,21 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import type {
-  DocumentWithRelations,
-  DocumentVersionWithRelations,
-  RolloutWithTarget,
-  AcknowledgmentWithUser,
-  PendingDocument,
-  DocumentFilters,
-  RolloutFilters,
-  AcknowledgmentFilters,
-  CreateDocument,
-  UpdateDocument,
-  CreateRollout,
-  UpdateRollout,
-  UpdateAcknowledgment,
+import {
+  DOCS_LIST_FETCH_LIMIT,
+  type DocumentWithRelations,
+  type DocumentVersionWithRelations,
+  type RolloutWithTarget,
+  type AcknowledgmentWithUser,
+  type PendingDocument,
+  type DocumentFilters,
+  type RolloutFilters,
+  type AcknowledgmentFilters,
+  type CreateDocument,
+  type UpdateDocument,
+  type CreateRollout,
+  type UpdateRollout,
+  type UpdateAcknowledgment,
 } from "@/lib/docs/types"
 
 // ============================================================================
@@ -64,6 +65,8 @@ async function fetchDocuments(filters?: DocumentFilters): Promise<DocumentListRe
     params.set("category", Array.isArray(filters.category) ? filters.category.join(",") : filters.category)
   }
   if (filters?.ownerId) params.set("ownerId", filters.ownerId)
+  if (filters?.page) params.set("page", String(filters.page))
+  params.set("limit", String(filters?.limit ?? DOCS_LIST_FETCH_LIMIT))
   
   const res = await fetch(`/api/docs/documents?${params}`)
   if (!res.ok) {

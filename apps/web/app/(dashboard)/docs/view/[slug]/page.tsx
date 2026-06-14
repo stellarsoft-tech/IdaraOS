@@ -315,19 +315,27 @@ export default function DocumentViewerPage() {
       <div className="flex gap-6">
         {/* Document Content */}
         <div className={cn("flex-1 min-w-0", showToc ? "lg:pr-0" : "")}>
-          {/* Document Header - Always shown for proper display */}
-          <DocumentHeader
-            title={doc.title}
-            referenceId={referenceId}
-            version={doc.currentVersion}
-            owner={doc.owner ? {
-              name: doc.owner.name,
-              role: doc.metadata?.ownerRole as string | undefined,
-            } : undefined}
-            effectiveDate={effectiveDate}
-            approvedBy={approvedBy}
-            actions={<ActionButtons />}
-          />
+          {/* Document metadata header */}
+          {doc.showHeader && (
+            <DocumentHeader
+              title={doc.title}
+              referenceId={referenceId}
+              version={doc.currentVersion}
+              owner={doc.owner ? {
+                name: doc.owner.name,
+                role: doc.metadata?.ownerRole as string | undefined,
+              } : undefined}
+              effectiveDate={effectiveDate}
+              approvedBy={approvedBy}
+              actions={<ActionButtons />}
+            />
+          )}
+          
+          {!doc.showHeader && (
+            <div className="flex justify-end mb-4 print:hidden">
+              <ActionButtons />
+            </div>
+          )}
           
           {/* Main Content */}
           <div

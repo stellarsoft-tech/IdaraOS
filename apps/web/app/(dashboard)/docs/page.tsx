@@ -17,6 +17,7 @@ export default function DocsOverviewPage() {
   const { data: rolloutStatsData, isLoading: statsLoading } = useRolloutStats()
   
   const documents = documentsData?.data || []
+  const totalDocuments = documentsData?.pagination?.total ?? documents.length
   const myDocs = myDocsData?.data || []
   const myDocsStats = myDocsData?.stats || { total: 0, pending: 0, overdue: 0 }
   const rolloutStats = rolloutStatsData?.data
@@ -43,7 +44,7 @@ export default function DocsOverviewPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Documents"
-          value={docsLoading ? "-" : documents.length}
+          value={docsLoading ? "-" : totalDocuments}
           icon={FileText}
         />
         <StatCard
