@@ -126,6 +126,12 @@ export const objectivePriorityValues = ["low", "medium", "high", "critical"] as 
 export type ObjectivePriority = (typeof objectivePriorityValues)[number]
 
 /**
+ * Objective achievement status values (ISO 27001 Clause 6.2 outcome measurement)
+ */
+export const objectiveAchievementStatusValues = ["not_measured", "not_achieved", "partially_achieved", "achieved"] as const
+export type ObjectiveAchievementStatus = (typeof objectiveAchievementStatusValues)[number]
+
+/**
  * Control type values
  * Types of security controls based on their function
  */
@@ -696,9 +702,17 @@ export const securityObjectives = pgTable(
     // Timeline
     targetDate: date("target_date"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+
+    // Reporting period (ISO 27001 Clause 6.2 — measurable objectives over a defined period)
+    periodLabel: text("period_label"), // e.g., "FY 2026", "Q1 2026"
+    periodStart: date("period_start"),
+    periodEnd: date("period_end"),
     
     // Progress
     progress: integer("progress").default(0),
+
+    // Outcome measurement (distinct from workflow status)
+    achievementStatus: text("achievement_status", { enum: objectiveAchievementStatusValues }).notNull().default("not_measured"),
     
     // KPIs/Success criteria
     kpis: jsonb("kpis").$type<string[]>(),
@@ -707,6 +721,11 @@ export const securityObjectives = pgTable(
     // Links
     linkedRiskIds: jsonb("linked_risk_ids").$type<string[]>(),
     linkedControlIds: jsonb("linked_control_ids").$type<string[]>(),
+    linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
+    linkedDocumentIds: jsonb("linked_document_ids").$type<string[]>(),
+
+    // Framework scope (e.g., iso-27001 for ISMS objectives)
+    frameworkCode: text("framework_code"),
     
     // Notes
     notes: text("notes"),
@@ -721,6 +740,9 @@ export const securityObjectives = pgTable(
     index("idx_security_objectives_priority").on(table.priority),
     index("idx_security_objectives_owner").on(table.ownerId),
     index("idx_security_objectives_target_date").on(table.targetDate),
+    index("idx_security_objectives_period_label").on(table.periodLabel),
+    index("idx_security_objectives_achievement_status").on(table.achievementStatus),
+    index("idx_security_objectives_framework_code").on(table.frameworkCode),
   ]
 )
 

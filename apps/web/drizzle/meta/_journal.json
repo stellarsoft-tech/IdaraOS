@@ -50,6 +50,13 @@
       "when": 1775136979993,
       "tag": "0006_smooth_midnight",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1775200000000,
+      "tag": "0007_security_objectives_period",
+      "breakpoints": true
     }
   ]
 }

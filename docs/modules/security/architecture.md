@@ -71,6 +71,8 @@ graph LR
     Frameworks --> SOC[SOC 2]
     
     ISO --> ISO_Dash[Dashboard]
+    ISO --> ISO_Clauses[ISMS Clauses]
+    ISO --> ISO_Objectives[Security Objectives]
     ISO --> ISO_SoA[SoA]
     ISO --> ISO_Controls[Annex A]
     ISO --> ISO_Gaps[Gap Analysis]
@@ -324,7 +326,7 @@ sequenceDiagram
 | `security_clause_compliance` | ISMS clause compliance tracking per org/framework |
 | `security_audits` | Internal/external audit records |
 | `security_audit_findings` | Findings and NCRs from audits |
-| `security_objectives` | Security objectives and treatment plans |
+| `security_objectives` | Security objectives with reporting periods, achievement status, and evidence links (ISO 27001 Clause 6.2) |
 
 ## API Routes
 
@@ -347,6 +349,8 @@ sequenceDiagram
 | GET/POST | `/api/security/clauses` | List/create clause compliance records |
 | GET/PATCH/DELETE | `/api/security/clauses/[id]` | CRUD for clause compliance |
 | GET/POST | `/api/security/audits` | List/create audits |
+| GET/POST | `/api/security/objectives` | List/create objectives (filter by period, achievement, framework) |
+| GET/PATCH/DELETE | `/api/security/objectives/[id]` | CRUD for objective including evidence links |
 
 ## Core Features
 
@@ -555,11 +559,14 @@ apps/web/
 │       │       └── mappings/page.tsx   # Manage framework mappings
 │       ├── evidence/page.tsx           # Evidence Store
 │       ├── audits/page.tsx             # Audits
-│       ├── objectives/page.tsx         # Objectives
+│       ├── objectives/
+│       │   ├── page.tsx                # All security objectives
+│       │   └── [id]/page.tsx           # Objective detail with evidence linking
 │       └── frameworks/
 │           ├── page.tsx                # Frameworks list
 │           ├── iso-27001/
 │           │   ├── page.tsx            # ISO 27001 Dashboard
+│           │   ├── objectives/page.tsx # Clause 6.2 objectives (period + achievement + evidence)
 │           │   ├── soa/page.tsx        # Statement of Applicability
 │           │   ├── controls/page.tsx   # Annex A browser (with Create Control buttons)
 │           │   ├── clauses/page.tsx    # ISMS Clauses (4-10) tracking

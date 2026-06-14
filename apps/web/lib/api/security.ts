@@ -1042,14 +1042,25 @@ export interface SecurityObjective {
   description?: string | null
   category?: string | null
   priority: "low" | "medium" | "high" | "critical"
-  status: "not_started" | "in_progress" | "completed" | "cancelled"
+  status: "not_started" | "in_progress" | "completed" | "on_hold" | "cancelled"
   progress: number
   targetDate?: string | null
   completedAt?: string | null
+  periodLabel?: string | null
+  periodStart?: string | null
+  periodEnd?: string | null
+  achievementStatus: "not_measured" | "not_achieved" | "partially_achieved" | "achieved"
   kpis?: string[] | null
+  successCriteria?: string | null
   ownerId?: string | null
   ownerName?: string | null
   ownerEmail?: string | null
+  linkedRiskIds?: string[] | null
+  linkedControlIds?: string[] | null
+  linkedEvidenceIds?: string[] | null
+  linkedDocumentIds?: string[] | null
+  frameworkCode?: string | null
+  notes?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -1058,6 +1069,9 @@ interface ObjectivesQueryParams {
   search?: string
   status?: string
   priority?: string
+  achievementStatus?: string
+  periodLabel?: string
+  frameworkCode?: string
   page?: number
   limit?: number
 }
@@ -1093,6 +1107,59 @@ export function useCreateSecurityObjective() {
       if (!res.ok) {
         const error = await res.json()
         throw new Error(error.error || "Failed to create objective")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-objectives"] })
+    },
+  })
+}
+
+export function useSecurityObjective(id: string | undefined) {
+  return useQuery<{ data: SecurityObjective }>({
+    queryKey: ["security-objective", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/objectives/${id}`, { cache: "no-store" })
+      if (!res.ok) throw new Error("Failed to fetch objective")
+      return res.json()
+    },
+    enabled: !!id,
+  })
+}
+
+export function useUpdateSecurityObjective() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SecurityObjective> }) => {
+      const res = await fetch(`/api/security/objectives/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update objective")
+      }
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["security-objectives"] })
+      queryClient.invalidateQueries({ queryKey: ["security-objective", variables.id] })
+    },
+  })
+}
+
+export function useDeleteSecurityObjective() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/security/objectives/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to delete objective")
       }
       return res.json()
     },

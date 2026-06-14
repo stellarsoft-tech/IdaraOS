@@ -274,6 +274,28 @@ export default function ISO27001DashboardPage() {
             </Card>
 
             <Card className="hover:border-primary/50 transition-colors">
+              <Link href="/security/frameworks/iso-27001/objectives">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Target className="h-4 w-4" />
+                    Security Objectives
+                  </CardTitle>
+                  <CardDescription>
+                    Clause 6.2 — measurable objectives with periods and evidence
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Track achievement per reporting period
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Link>
+            </Card>
+
+            <Card className="hover:border-primary/50 transition-colors">
               <Link href="/security/frameworks/iso-27001/clauses">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">

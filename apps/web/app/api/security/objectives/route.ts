@@ -3,7 +3,8 @@ import { db } from "@/lib/db"
 import { 
   securityObjectives,
   objectiveStatusValues,
-  objectivePriorityValues
+  objectivePriorityValues,
+  objectiveAchievementStatusValues,
 } from "@/lib/db/schema/security"
 import { getSession } from "@/lib/auth/session"
 import { eq, and, ilike, count, desc } from "drizzle-orm"
@@ -20,8 +21,16 @@ const createObjectiveSchema = z.object({
   status: z.enum(objectiveStatusValues).default("not_started"),
   targetDate: z.string().optional(),
   progress: z.coerce.number().min(0).max(100).default(0),
+  periodLabel: z.string().optional(),
+  periodStart: z.string().optional(),
+  periodEnd: z.string().optional(),
+  achievementStatus: z.enum(objectiveAchievementStatusValues).default("not_measured"),
   kpis: z.array(z.string()).optional(),
-  ownerId: z.string().uuid().optional(),
+  successCriteria: z.string().optional(),
+  ownerId: z.string().uuid().optional().nullable(),
+  linkedEvidenceIds: z.array(z.string()).optional(),
+  linkedDocumentIds: z.array(z.string()).optional(),
+  frameworkCode: z.string().optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -35,6 +44,9 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")
     const status = searchParams.get("status")
     const priority = searchParams.get("priority")
+    const achievementStatus = searchParams.get("achievementStatus")
+    const periodLabel = searchParams.get("periodLabel")
+    const frameworkCode = searchParams.get("frameworkCode")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
@@ -50,26 +62,48 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(securityObjectives.priority, priority as typeof objectivePriorityValues[number]))
     }
 
+    if (achievementStatus) {
+      conditions.push(eq(securityObjectives.achievementStatus, achievementStatus as typeof objectiveAchievementStatusValues[number]))
+    }
+
+    if (periodLabel) {
+      conditions.push(eq(securityObjectives.periodLabel, periodLabel))
+    }
+
+    if (frameworkCode) {
+      conditions.push(eq(securityObjectives.frameworkCode, frameworkCode))
+    }
+
+    const selectFields = {
+      id: securityObjectives.id,
+      objectiveId: securityObjectives.objectiveId,
+      title: securityObjectives.title,
+      description: securityObjectives.description,
+      category: securityObjectives.category,
+      priority: securityObjectives.priority,
+      status: securityObjectives.status,
+      progress: securityObjectives.progress,
+      targetDate: securityObjectives.targetDate,
+      completedAt: securityObjectives.completedAt,
+      periodLabel: securityObjectives.periodLabel,
+      periodStart: securityObjectives.periodStart,
+      periodEnd: securityObjectives.periodEnd,
+      achievementStatus: securityObjectives.achievementStatus,
+      kpis: securityObjectives.kpis,
+      successCriteria: securityObjectives.successCriteria,
+      ownerId: securityObjectives.ownerId,
+      ownerName: persons.name,
+      ownerEmail: persons.email,
+      linkedEvidenceIds: securityObjectives.linkedEvidenceIds,
+      linkedDocumentIds: securityObjectives.linkedDocumentIds,
+      frameworkCode: securityObjectives.frameworkCode,
+      createdAt: securityObjectives.createdAt,
+      updatedAt: securityObjectives.updatedAt,
+    }
+
     // Get objectives with owner info
     const objectivesQuery = db
-      .select({
-        id: securityObjectives.id,
-        objectiveId: securityObjectives.objectiveId,
-        title: securityObjectives.title,
-        description: securityObjectives.description,
-        category: securityObjectives.category,
-        priority: securityObjectives.priority,
-        status: securityObjectives.status,
-        progress: securityObjectives.progress,
-        targetDate: securityObjectives.targetDate,
-        completedAt: securityObjectives.completedAt,
-        kpis: securityObjectives.kpis,
-        ownerId: securityObjectives.ownerId,
-        ownerName: persons.name,
-        ownerEmail: persons.email,
-        createdAt: securityObjectives.createdAt,
-        updatedAt: securityObjectives.updatedAt,
-      })
+      .select(selectFields)
       .from(securityObjectives)
       .leftJoin(persons, eq(securityObjectives.ownerId, persons.id))
       .where(and(...conditions))
@@ -81,24 +115,7 @@ export async function GET(request: NextRequest) {
     let objectives
     if (search) {
       objectives = await db
-        .select({
-          id: securityObjectives.id,
-          objectiveId: securityObjectives.objectiveId,
-          title: securityObjectives.title,
-          description: securityObjectives.description,
-          category: securityObjectives.category,
-          priority: securityObjectives.priority,
-          status: securityObjectives.status,
-          progress: securityObjectives.progress,
-          targetDate: securityObjectives.targetDate,
-          completedAt: securityObjectives.completedAt,
-          kpis: securityObjectives.kpis,
-          ownerId: securityObjectives.ownerId,
-          ownerName: persons.name,
-          ownerEmail: persons.email,
-          createdAt: securityObjectives.createdAt,
-          updatedAt: securityObjectives.updatedAt,
-        })
+        .select(selectFields)
         .from(securityObjectives)
         .leftJoin(persons, eq(securityObjectives.ownerId, persons.id))
         .where(and(
@@ -175,8 +192,16 @@ export async function POST(request: NextRequest) {
         status: validatedData.status,
         progress: validatedData.progress,
         targetDate: validatedData.targetDate ? new Date(validatedData.targetDate).toISOString().split("T")[0] : null,
+        periodLabel: validatedData.periodLabel,
+        periodStart: validatedData.periodStart ? new Date(validatedData.periodStart).toISOString().split("T")[0] : null,
+        periodEnd: validatedData.periodEnd ? new Date(validatedData.periodEnd).toISOString().split("T")[0] : null,
+        achievementStatus: validatedData.achievementStatus,
         kpis: validatedData.kpis,
+        successCriteria: validatedData.successCriteria,
         ownerId: validatedData.ownerId,
+        linkedEvidenceIds: validatedData.linkedEvidenceIds,
+        linkedDocumentIds: validatedData.linkedDocumentIds,
+        frameworkCode: validatedData.frameworkCode,
       })
       .returning()
 
