@@ -48,7 +48,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useDocuments, useDeleteDocument } from "@/lib/api/docs"
-import type { DocumentWithRelations, DocumentCategory, DocumentStatus } from "@/lib/docs/types"
+import {
+  documentCategoryLabels,
+  type DocumentWithRelations,
+  type DocumentCategory,
+  type DocumentStatus,
+} from "@/lib/docs/types"
 import { toast } from "sonner"
 import { usePermission } from "@/lib/rbac/hooks"
 
@@ -59,15 +64,6 @@ const statusConfig: Record<DocumentStatus, { label: string; variant: "default" |
   archived: { label: "Archived", variant: "danger" },
 }
 
-const categoryLabels: Record<DocumentCategory, string> = {
-  policy: "Policy",
-  procedure: "Procedure",
-  guideline: "Guideline",
-  manual: "Manual",
-  template: "Template",
-  training: "Training",
-  general: "General",
-}
 
 export default function DocumentsListPage() {
   const router = useRouter()
@@ -160,7 +156,7 @@ export default function DocumentsListPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {Object.entries(categoryLabels).map(([value, label]) => (
+            {Object.entries(documentCategoryLabels).map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
@@ -330,7 +326,7 @@ function DocumentCard({
             <div className="min-w-0">
               <CardTitle className="text-base truncate">{doc.title}</CardTitle>
               <CardDescription className="text-xs mt-1">
-                v{doc.currentVersion} • {categoryLabels[doc.category]}
+                v{doc.currentVersion} • {documentCategoryLabels[doc.category]}
               </CardDescription>
             </div>
           </div>

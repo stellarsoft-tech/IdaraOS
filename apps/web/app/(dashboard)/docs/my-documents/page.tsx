@@ -14,6 +14,7 @@ import {
   PenLine,
   ScrollText,
   Users,
+  Workflow,
 } from "lucide-react"
 
 import { PageHeader } from "@/components/page-header"
@@ -31,6 +32,7 @@ import type { PendingDocument } from "@/lib/docs/types"
 const categoryConfig: Record<string, { label: string; icon: React.ElementType }> = {
   policy: { label: "Policy", icon: ScrollText },
   procedure: { label: "Procedure", icon: FileText },
+  process: { label: "Process", icon: Workflow },
   guideline: { label: "Guideline", icon: FileText },
   manual: { label: "Manual", icon: BookOpen },
   template: { label: "Template", icon: FileText },

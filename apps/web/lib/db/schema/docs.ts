@@ -30,7 +30,7 @@ export type DocumentStatus = (typeof documentStatusValues)[number]
 /**
  * Document category values
  */
-export const documentCategoryValues = ["policy", "procedure", "guideline", "manual", "template", "training", "general"] as const
+export const documentCategoryValues = ["policy", "procedure", "process", "guideline", "manual", "template", "training", "general"] as const
 export type DocumentCategory = (typeof documentCategoryValues)[number]
 
 /**

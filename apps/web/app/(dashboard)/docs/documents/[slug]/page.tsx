@@ -67,7 +67,13 @@ import { Progress } from "@/components/ui/progress"
 import { MDXRenderer, RolloutDetailDrawer } from "@/components/docs"
 import { useDocument, useUpdateDocument, useDeleteDocument, useRollouts, useAcknowledgments, useDocsSettings } from "@/lib/api/docs"
 import { useFileCategoriesList } from "@/lib/api/file-categories"
-import type { DocumentCategory, DocumentStatus, DocumentVersionWithRelations, RolloutWithTarget } from "@/lib/docs/types"
+import {
+  documentCategoryLabels,
+  type DocumentCategory,
+  type DocumentStatus,
+  type DocumentVersionWithRelations,
+  type RolloutWithTarget,
+} from "@/lib/docs/types"
 import { toast } from "sonner"
 
 const statusConfig: Record<DocumentStatus, { label: string; variant: "default" | "success" | "warning" | "danger" | "info" | "purple" }> = {
@@ -75,16 +81,6 @@ const statusConfig: Record<DocumentStatus, { label: string; variant: "default" |
   in_review: { label: "In Review", variant: "warning" },
   published: { label: "Published", variant: "success" },
   archived: { label: "Archived", variant: "danger" },
-}
-
-const categoryLabels: Record<DocumentCategory, string> = {
-  policy: "Policy",
-  procedure: "Procedure",
-  guideline: "Guideline",
-  manual: "Manual",
-  template: "Template",
-  training: "Training",
-  general: "General",
 }
 
 const STORAGE_MODE_ORG_DEFAULT = "__org_default__"
@@ -325,7 +321,7 @@ export default function DocumentDetailPage() {
                 <h1 className="text-2xl font-semibold tracking-tight">{doc.title}</h1>
                 <StatusBadge variant={statusCfg.variant}>{statusCfg.label}</StatusBadge>
               </div>
-              <p className="text-sm text-muted-foreground">{`v${doc.currentVersion} • ${categoryLabels[doc.category]}`}</p>
+              <p className="text-sm text-muted-foreground">{`v${doc.currentVersion} • ${documentCategoryLabels[doc.category]}`}</p>
             </div>
           </div>
         <div className="flex items-center gap-2">
@@ -560,7 +556,7 @@ flowchart LR
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(categoryLabels).map(([value, label]) => (
+                      {Object.entries(documentCategoryLabels).map(([value, label]) => (
                         <SelectItem key={value} value={value}>
                           {label}
                         </SelectItem>

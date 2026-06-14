@@ -17,8 +17,29 @@ export type DocumentStatus = z.infer<typeof documentStatusEnum>
 /**
  * Document category enum
  */
-export const documentCategoryEnum = z.enum(["policy", "procedure", "guideline", "manual", "template", "training", "general"])
+export const documentCategoryEnum = z.enum([
+  "policy",
+  "procedure",
+  "process",
+  "guideline",
+  "manual",
+  "template",
+  "training",
+  "general",
+])
 export type DocumentCategory = z.infer<typeof documentCategoryEnum>
+
+/** Display labels for document categories */
+export const documentCategoryLabels: Record<DocumentCategory, string> = {
+  policy: "Policy",
+  procedure: "Procedure",
+  process: "Process",
+  guideline: "Guideline",
+  manual: "Manual",
+  template: "Template",
+  training: "Training",
+  general: "General",
+}
 
 /**
  * Rollout target type enum

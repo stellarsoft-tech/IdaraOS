@@ -12,8 +12,9 @@ import {
   objectivePriorityValues,
   objectiveAchievementStatusValues,
 } from "@/lib/db/schema/security"
-import { persons } from "@/lib/db/schema"
+import { users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
+import { isAssignableObjectiveOwner } from "@/lib/security/objective-owners"
 import { eq, and } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
 
@@ -79,8 +80,8 @@ export async function GET(
         kpis: securityObjectives.kpis,
         successCriteria: securityObjectives.successCriteria,
         ownerId: securityObjectives.ownerId,
-        ownerName: persons.name,
-        ownerEmail: persons.email,
+        ownerName: users.name,
+        ownerEmail: users.email,
         linkedRiskIds: securityObjectives.linkedRiskIds,
         linkedControlIds: securityObjectives.linkedControlIds,
         linkedEvidenceIds: securityObjectives.linkedEvidenceIds,
@@ -91,7 +92,7 @@ export async function GET(
         updatedAt: securityObjectives.updatedAt,
       })
       .from(securityObjectives)
-      .leftJoin(persons, eq(securityObjectives.ownerId, persons.id))
+      .leftJoin(users, eq(securityObjectives.ownerId, users.id))
       .where(and(
         eq(securityObjectives.id, id),
         eq(securityObjectives.orgId, session.orgId)
@@ -134,6 +135,16 @@ export async function PATCH(
 
     if (!existing) {
       return NextResponse.json({ error: "Objective not found" }, { status: 404 })
+    }
+
+    if (
+      validatedData.ownerId !== undefined &&
+      !(await isAssignableObjectiveOwner(session.orgId, validatedData.ownerId))
+    ) {
+      return NextResponse.json(
+        { error: "Owner must be an active platform user" },
+        { status: 400 }
+      )
     }
 
     const [updated] = await db

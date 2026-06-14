@@ -1076,6 +1076,24 @@ interface ObjectivesQueryParams {
   limit?: number
 }
 
+export interface AssignableObjectiveOwner {
+  id: string
+  name: string
+  email: string
+  status: string
+}
+
+export function useAssignableObjectiveOwners() {
+  return useQuery<{ data: AssignableObjectiveOwner[] }>({
+    queryKey: ["security-objectives", "assignable-owners"],
+    queryFn: async () => {
+      const res = await fetch("/api/security/objectives/assignable-owners")
+      if (!res.ok) throw new Error("Failed to fetch assignable owners")
+      return res.json()
+    },
+  })
+}
+
 export function useSecurityObjectives(params: ObjectivesQueryParams = {}) {
   const queryParams = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {

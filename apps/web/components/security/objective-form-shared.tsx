@@ -58,18 +58,37 @@ export const objectiveOwnerFieldConfig: FieldConfig = {
   component: "select",
   label: "Owner",
   placeholder: "Select owner",
-  helpText: "Person accountable for this objective",
+  helpText: "Platform user accountable for this objective",
   options: [],
 }
 
+export interface ObjectiveOwnerOption {
+  id: string
+  name: string
+  email?: string | null
+}
+
+function formatOwnerLabel(owner: ObjectiveOwnerOption): string {
+  return owner.email ? `${owner.name} (${owner.email})` : owner.name
+}
+
 export function buildOwnerFieldConfig(
-  people: Array<{ id: string; name: string }>
+  assignableUsers: ObjectiveOwnerOption[],
+  currentOwner?: ObjectiveOwnerOption | null
 ): FieldConfig {
+  const owners = [...assignableUsers]
+  if (currentOwner && !owners.some((owner) => owner.id === currentOwner.id)) {
+    owners.push(currentOwner)
+  }
+
   return {
     ...objectiveOwnerFieldConfig,
     options: [
       { value: "__unassigned__", label: "— Unassigned —" },
-      ...people.map((p) => ({ value: p.id, label: p.name })),
+      ...owners.map((owner) => ({
+        value: owner.id,
+        label: formatOwnerLabel(owner),
+      })),
     ],
   }
 }

@@ -20,12 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  useAssignableObjectiveOwners,
   useSecurityObjectives,
   useSecurityEvidence,
   useCreateSecurityObjective,
   type SecurityObjective,
 } from "@/lib/api/security"
-import { usePeopleList } from "@/lib/api/people"
 import {
   buildEvidenceFieldConfig,
   buildOwnerFieldConfig,
@@ -243,17 +243,18 @@ export default function ISO27001ObjectivesPage() {
     limit: 200,
   })
   const createObjective = useCreateSecurityObjective()
-  const { data: people = [] } = usePeopleList({ status: ["active"] })
+  const { data: assignableOwnersData } = useAssignableObjectiveOwners()
+  const assignableOwners = assignableOwnersData?.data ?? []
   const { data: evidenceData } = useSecurityEvidence({ limit: 200 })
   const evidenceList = evidenceData?.data ?? []
 
   const createFormConfigWithPeople = useMemo(
     () => ({
       ...formConfig,
-      ownerId: buildOwnerFieldConfig(people),
+      ownerId: buildOwnerFieldConfig(assignableOwners),
       linkedEvidenceIds: buildEvidenceFieldConfig(evidenceList),
     }),
-    [people, evidenceList]
+    [assignableOwners, evidenceList]
   )
 
   const objectives = objectivesData?.data || []

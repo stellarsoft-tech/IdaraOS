@@ -40,19 +40,6 @@ interface DocumentHeaderProps {
 }
 
 /**
- * Category display labels
- */
-const categoryLabels: Record<DocumentCategory, string> = {
-  policy: "Policy",
-  procedure: "Procedure",
-  guideline: "Guideline",
-  manual: "Manual",
-  template: "Template",
-  training: "Training",
-  general: "General",
-}
-
-/**
  * Document Header Component
  * Displays document title and metadata in a clean, professional layout
  * Matching the reference design with 2-row grid metadata

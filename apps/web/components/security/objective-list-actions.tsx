@@ -29,7 +29,7 @@ import {
   type SecurityEvidence,
   type SecurityObjective,
 } from "@/lib/api/security"
-import { usePeopleList } from "@/lib/api/people"
+import { useAssignableObjectiveOwners } from "@/lib/api/security"
 import { periodFromYear } from "@/lib/security/objectives"
 import {
   buildEvidenceFieldConfig,
@@ -53,7 +53,8 @@ interface ObjectiveEditDrawerProps {
 /** Inline edit drawer for objectives from the list or detail page. */
 export function ObjectiveEditDrawer({ objective, open, onOpenChange }: ObjectiveEditDrawerProps) {
   const updateObjective = useUpdateSecurityObjective()
-  const { data: people = [] } = usePeopleList({ status: ["active"] })
+  const { data: assignableOwnersData } = useAssignableObjectiveOwners()
+  const assignableOwners = assignableOwnersData?.data ?? []
   const { data: evidenceData } = useSecurityEvidence({ limit: 200 })
   const evidenceList = evidenceData?.data ?? []
 
@@ -64,10 +65,19 @@ export function ObjectiveEditDrawer({ objective, open, onOpenChange }: Objective
     return {
       ...objectiveEditBaseFormConfig,
       year: buildYearFieldConfig(yearExtra),
-      ownerId: buildOwnerFieldConfig(people),
+      ownerId: buildOwnerFieldConfig(
+        assignableOwners,
+        objective?.ownerId
+          ? {
+              id: objective.ownerId,
+              name: objective.ownerName ?? "Unknown user",
+              email: objective.ownerEmail,
+            }
+          : null
+      ),
       linkedEvidenceIds: buildEvidenceFieldConfig(evidenceList),
     }
-  }, [objective, people, evidenceList])
+  }, [objective, assignableOwners, evidenceList])
 
   const handleUpdate = async (values: z.infer<typeof objectiveEditFormSchema>) => {
     if (!objective) return

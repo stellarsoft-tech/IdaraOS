@@ -23,18 +23,8 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MDXRenderer } from "@/components/docs"
 import { useCreateDocument } from "@/lib/api/docs"
-import type { DocumentCategory } from "@/lib/docs/types"
+import { documentCategoryLabels, type DocumentCategory } from "@/lib/docs/types"
 import { toast } from "sonner"
-
-const categoryLabels: Record<DocumentCategory, string> = {
-  policy: "Policy",
-  procedure: "Procedure",
-  guideline: "Guideline",
-  manual: "Manual",
-  template: "Template",
-  training: "Training",
-  general: "General",
-}
 
 const defaultContent = `# Document Title
 
@@ -200,7 +190,7 @@ export default function NewDocumentPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(categoryLabels).map(([value, label]) => (
+                  {Object.entries(documentCategoryLabels).map(([value, label]) => (
                     <SelectItem key={value} value={value}>
                       {label}
                     </SelectItem>
