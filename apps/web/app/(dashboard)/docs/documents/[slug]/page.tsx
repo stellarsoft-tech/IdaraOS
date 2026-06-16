@@ -45,6 +45,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,7 +68,7 @@ import { Progress } from "@/components/ui/progress"
 import { MDXRenderer, RolloutDetailDrawer } from "@/components/docs"
 import { useDocument, useUpdateDocument, useDeleteDocument, useRollouts, useAcknowledgments, useDocsSettings } from "@/lib/api/docs"
 import { useFileCategoriesList } from "@/lib/api/file-categories"
-import { useAssignableObjectiveOwners } from "@/lib/api/security"
+import { useAssignableObjectiveOwners, useSecurityEvidence } from "@/lib/api/security"
 import {
   documentCategoryLabels,
   type DocumentCategory,
@@ -88,6 +89,27 @@ const STORAGE_MODE_ORG_DEFAULT = "__org_default__"
 
 const DOC_STORAGE_MODES = ["database", "filing", "hybrid"] as const
 type DocStorageMode = (typeof DOC_STORAGE_MODES)[number]
+
+const incidentClassificationOptions = [
+  { value: "event", label: "Event" },
+  { value: "incident", label: "Incident" },
+]
+
+const incidentSeverityOptions = [
+  { value: "p1", label: "P1 — Critical" },
+  { value: "p2", label: "P2 — High" },
+  { value: "p3", label: "P3 — Medium" },
+  { value: "p4", label: "P4 — Low" },
+]
+
+const incidentRegisterStatusOptions = [
+  { value: "draft", label: "Draft" },
+  { value: "reported", label: "Reported" },
+  { value: "triaging", label: "Triaging" },
+  { value: "responding", label: "Responding" },
+  { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
+]
 
 function parseDocStorageMode(value: unknown): DocStorageMode | null {
   if (value === STORAGE_MODE_ORG_DEFAULT || value === "" || value == null) {
@@ -124,9 +146,11 @@ export default function DocumentDetailPage() {
   const { data: docsSettingsData } = useDocsSettings()
   const { data: docsCategoriesData } = useFileCategoriesList({ moduleScope: "docs" })
   const { data: ownersData } = useAssignableObjectiveOwners()
+  const { data: evidenceData } = useSecurityEvidence({ limit: 200 })
 
   const docsCategories = docsCategoriesData ?? []
   const assignableOwners = ownersData?.data ?? []
+  const evidenceList = evidenceData?.data ?? []
   const orgStorageMode = docsSettingsData?.data?.contentStorageMode ?? "database"
   
   const rollouts = rolloutsData?.data || []
@@ -139,7 +163,12 @@ export default function DocumentDetailPage() {
         referenceId?: string
         effectiveDate?: string
         ownerRole?: string
+        incidentId?: string
+        classification?: string
+        severity?: string
+        status?: string
         ownerUserId?: string
+        linkedEvidenceIds?: string[]
         approvedBy?: { name?: string; role?: string }
       }
       setFormData({
@@ -157,7 +186,12 @@ export default function DocumentDetailPage() {
         referenceId: metadata.referenceId || "",
         effectiveDate: metadata.effectiveDate || "",
         ownerRole: metadata.ownerRole || "",
+        incidentId: metadata.incidentId || metadata.referenceId || "",
+        incidentClassification: metadata.classification || "incident",
+        incidentSeverity: metadata.severity || "p3",
+        incidentRegisterStatus: metadata.status || "draft",
         incidentOwnerId: metadata.ownerUserId || "__unassigned__",
+        linkedEvidenceIds: metadata.linkedEvidenceIds || [],
         approvedByName: metadata.approvedBy?.name || "",
         approvedByRole: metadata.approvedBy?.role || "",
       })
@@ -173,7 +207,14 @@ export default function DocumentDetailPage() {
       const refId = formData.referenceId as string | undefined
       const effDate = formData.effectiveDate as string | undefined
       const ownerRoleVal = formData.ownerRole as string | undefined
+      const incidentId = formData.incidentId as string | undefined
+      const incidentClassification = formData.incidentClassification as string | undefined
+      const incidentSeverity = formData.incidentSeverity as string | undefined
+      const incidentRegisterStatus = formData.incidentRegisterStatus as string | undefined
       const incidentOwnerId = formData.incidentOwnerId as string | undefined
+      const linkedEvidenceIds = Array.isArray(formData.linkedEvidenceIds)
+        ? formData.linkedEvidenceIds.filter((id): id is string => typeof id === "string")
+        : []
       const approvedName = formData.approvedByName as string | undefined
       const approvedRole = formData.approvedByRole as string | undefined
       const nextCategory = formData.category as string | undefined
@@ -181,13 +222,18 @@ export default function DocumentDetailPage() {
       // Build metadata object from form fields
       const metadata = {
         ...(doc.metadata || {}),
-        referenceId: refId || undefined,
+        referenceId: refId || incidentId || undefined,
         effectiveDate: effDate || undefined,
         ownerRole: ownerRoleVal || undefined,
+        incidentId: nextCategory === "incident" ? incidentId || undefined : undefined,
+        classification: nextCategory === "incident" ? incidentClassification || "incident" : undefined,
+        severity: nextCategory === "incident" ? incidentSeverity || "p3" : undefined,
+        status: nextCategory === "incident" ? incidentRegisterStatus || "draft" : undefined,
         ownerUserId:
           nextCategory === "incident" && incidentOwnerId && incidentOwnerId !== "__unassigned__"
             ? incidentOwnerId
             : undefined,
+        linkedEvidenceIds: nextCategory === "incident" ? linkedEvidenceIds : undefined,
         approvedBy: (approvedName || approvedRole) 
           ? { 
               name: approvedName || undefined, 
@@ -196,7 +242,21 @@ export default function DocumentDetailPage() {
           : undefined,
       }
       
-      const { referenceId, effectiveDate, ownerRole, incidentOwnerId: _incidentOwnerId, approvedByName, approvedByRole, storageMode, ...restFormData } = formData
+      const {
+        referenceId,
+        effectiveDate,
+        ownerRole,
+        incidentId: _incidentId,
+        incidentClassification: _incidentClassification,
+        incidentSeverity: _incidentSeverity,
+        incidentRegisterStatus: _incidentRegisterStatus,
+        incidentOwnerId: _incidentOwnerId,
+        linkedEvidenceIds: _linkedEvidenceIds,
+        approvedByName,
+        approvedByRole,
+        storageMode,
+        ...restFormData
+      } = formData
 
       const resolvedStorageMode = parseDocStorageMode(storageMode)
 
@@ -595,31 +655,156 @@ flowchart LR
                   </Select>
                 </div>
 
-                {formData.category === "incident" && (
-                  <div className="space-y-2 md:col-span-2">
-                    <Label>Incident Owner</Label>
-                    <Select
-                      value={formData.incidentOwnerId as string || "__unassigned__"}
-                      onValueChange={(value) => setFormData({ ...formData, incidentOwnerId: value })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select owner" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                        {assignableOwners.map((owner) => (
-                          <SelectItem key={owner.id} value={owner.id}>
-                            {owner.name || owner.email} ({owner.email})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Lists platform users and updates the Incident Register owner.
-                    </p>
-                  </div>
-                )}
               </div>
+
+              {formData.category === "incident" && (
+                <>
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium">Incident Register Metadata</h4>
+                      <p className="text-sm text-muted-foreground">
+                        These fields update the Incident Management register for this controlled document.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Incident ID</Label>
+                        <Input
+                          value={formData.incidentId as string || ""}
+                          onChange={(e) => setFormData({ ...formData, incidentId: e.target.value })}
+                          placeholder="e.g., INC-001"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Classification</Label>
+                        <Select
+                          value={formData.incidentClassification as string || "incident"}
+                          onValueChange={(value) => setFormData({ ...formData, incidentClassification: value })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {incidentClassificationOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Severity</Label>
+                        <Select
+                          value={formData.incidentSeverity as string || "p3"}
+                          onValueChange={(value) => setFormData({ ...formData, incidentSeverity: value })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {incidentSeverityOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Register Status</Label>
+                        <Select
+                          value={formData.incidentRegisterStatus as string || "draft"}
+                          onValueChange={(value) => setFormData({ ...formData, incidentRegisterStatus: value })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {incidentRegisterStatusOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Owner</Label>
+                        <Select
+                          value={formData.incidentOwnerId as string || "__unassigned__"}
+                          onValueChange={(value) => setFormData({ ...formData, incidentOwnerId: value })}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select owner" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                            {assignableOwners.map((owner) => (
+                              <SelectItem key={owner.id} value={owner.id}>
+                                {owner.name || owner.email} ({owner.email})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Lists platform users and updates the Incident Register owner.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Linked Evidence</Label>
+                        {evidenceList.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">
+                            No evidence available.{" "}
+                            <Link href="/security/evidence" className="text-primary hover:underline">
+                              Add evidence
+                            </Link>{" "}
+                            first.
+                          </p>
+                        ) : (
+                          <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border p-3">
+                            {evidenceList.map((item) => {
+                              const selected = Array.isArray(formData.linkedEvidenceIds)
+                                ? formData.linkedEvidenceIds as string[]
+                                : []
+                              const checked = selected.includes(item.id)
+                              return (
+                                <label key={item.id} className="flex items-start gap-3 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(isChecked) => {
+                                      const next = isChecked
+                                        ? [...selected, item.id]
+                                        : selected.filter((id) => id !== item.id)
+                                      setFormData({ ...formData, linkedEvidenceIds: next })
+                                    }}
+                                    className="mt-0.5"
+                                  />
+                                  <span>
+                                    <span className="font-medium block">{item.title}</span>
+                                    <span className="text-xs text-muted-foreground capitalize">{item.type}</span>
+                                  </span>
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          Selected items appear in the Incident Register evidence count.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
               
               <div className="space-y-2">
                 <Label>Description</Label>

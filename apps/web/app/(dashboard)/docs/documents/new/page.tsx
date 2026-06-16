@@ -20,9 +20,10 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Checkbox } from "@/components/ui/checkbox"
 import { MDXRenderer } from "@/components/docs"
 import { useCreateDocument } from "@/lib/api/docs"
-import { useAssignableObjectiveOwners } from "@/lib/api/security"
+import { useAssignableObjectiveOwners, useSecurityEvidence } from "@/lib/api/security"
 import { documentCategoryLabels, type DocumentCategory } from "@/lib/docs/types"
 import { toast } from "sonner"
 
@@ -110,6 +111,7 @@ export default function NewDocumentPage() {
   const searchParams = useSearchParams()
   const createDocument = useCreateDocument()
   const { data: ownersData } = useAssignableObjectiveOwners()
+  const { data: evidenceData } = useSecurityEvidence({ limit: 200 })
   const initialCategory =
     searchParams.get("category") === "incident" ? "incident" : "general"
   
@@ -126,7 +128,9 @@ export default function NewDocumentPage() {
   const [incidentSeverity, setIncidentSeverity] = React.useState("p3")
   const [incidentStatus, setIncidentStatus] = React.useState("draft")
   const [incidentOwnerId, setIncidentOwnerId] = React.useState("__unassigned__")
+  const [linkedEvidenceIds, setLinkedEvidenceIds] = React.useState<string[]>([])
   const assignableOwners = ownersData?.data ?? []
+  const evidenceList = evidenceData?.data ?? []
   
   // Auto-generate slug from title
   React.useEffect(() => {
@@ -186,6 +190,7 @@ export default function NewDocumentPage() {
               severity: incidentSeverity,
               status: incidentStatus,
               ownerUserId: incidentOwnerId === "__unassigned__" ? undefined : incidentOwnerId,
+              linkedEvidenceIds,
               confidentiality: "confidential",
               department: "Security",
             }
@@ -375,6 +380,47 @@ export default function NewDocumentPage() {
                     </Select>
                     <p className="text-xs text-muted-foreground">
                       Lists platform users and updates the Incident Register owner.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Linked Evidence</Label>
+                    {evidenceList.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No evidence available.{" "}
+                        <Link href="/security/evidence" className="text-primary hover:underline">
+                          Add evidence
+                        </Link>{" "}
+                        first.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto rounded-md border p-3">
+                        {evidenceList.map((item) => {
+                          const checked = linkedEvidenceIds.includes(item.id)
+                          return (
+                            <label key={item.id} className="flex items-start gap-3 text-sm cursor-pointer">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(isChecked) => {
+                                  setLinkedEvidenceIds((current) =>
+                                    isChecked
+                                      ? [...current, item.id]
+                                      : current.filter((id) => id !== item.id)
+                                  )
+                                }}
+                                className="mt-0.5"
+                              />
+                              <span>
+                                <span className="font-medium block">{item.title}</span>
+                                <span className="text-xs text-muted-foreground capitalize">{item.type}</span>
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Selected items appear in the Incident Register evidence count.
                     </p>
                   </div>
                 </div>
