@@ -12,9 +12,9 @@ import {
   objectivePriorityValues,
   objectiveAchievementStatusValues,
 } from "@/lib/db/schema/security"
-import { users } from "@/lib/db/schema"
+import { persons, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
-import { isAssignableObjectiveOwner } from "@/lib/security/objective-owners"
+import { resolveObjectiveOwnerPersonId } from "@/lib/security/objective-owners"
 import { eq, and } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
 
@@ -79,9 +79,9 @@ export async function GET(
         achievementStatus: securityObjectives.achievementStatus,
         kpis: securityObjectives.kpis,
         successCriteria: securityObjectives.successCriteria,
-        ownerId: securityObjectives.ownerId,
-        ownerName: users.name,
-        ownerEmail: users.email,
+        ownerId: users.id,
+        ownerName: persons.name,
+        ownerEmail: persons.email,
         linkedRiskIds: securityObjectives.linkedRiskIds,
         linkedControlIds: securityObjectives.linkedControlIds,
         linkedEvidenceIds: securityObjectives.linkedEvidenceIds,
@@ -92,7 +92,8 @@ export async function GET(
         updatedAt: securityObjectives.updatedAt,
       })
       .from(securityObjectives)
-      .leftJoin(users, eq(securityObjectives.ownerId, users.id))
+      .leftJoin(persons, eq(securityObjectives.ownerId, persons.id))
+      .leftJoin(users, eq(users.personId, persons.id))
       .where(and(
         eq(securityObjectives.id, id),
         eq(securityObjectives.orgId, session.orgId)
@@ -137,14 +138,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Objective not found" }, { status: 404 })
     }
 
-    if (
-      validatedData.ownerId !== undefined &&
-      !(await isAssignableObjectiveOwner(session.orgId, validatedData.ownerId))
-    ) {
-      return NextResponse.json(
-        { error: "Owner must be an active platform user" },
-        { status: 400 }
-      )
+    let ownerPersonId: string | null | undefined
+    if (validatedData.ownerId !== undefined) {
+      const ownerResolution = await resolveObjectiveOwnerPersonId(session.orgId, validatedData.ownerId)
+      if (ownerResolution.error) {
+        return NextResponse.json(
+          { error: ownerResolution.error },
+          { status: 400 }
+        )
+      }
+      ownerPersonId = ownerResolution.ownerPersonId
     }
 
     const [updated] = await db
@@ -167,7 +170,7 @@ export async function PATCH(
         ...validatedData.achievementStatus !== undefined && { achievementStatus: validatedData.achievementStatus },
         ...validatedData.kpis !== undefined && { kpis: validatedData.kpis },
         ...validatedData.successCriteria !== undefined && { successCriteria: validatedData.successCriteria },
-        ...validatedData.ownerId !== undefined && { ownerId: validatedData.ownerId },
+        ...validatedData.ownerId !== undefined && { ownerId: ownerPersonId },
         ...validatedData.linkedRiskIds !== undefined && { linkedRiskIds: validatedData.linkedRiskIds },
         ...validatedData.linkedControlIds !== undefined && { linkedControlIds: validatedData.linkedControlIds },
         ...validatedData.linkedEvidenceIds !== undefined && { linkedEvidenceIds: validatedData.linkedEvidenceIds },

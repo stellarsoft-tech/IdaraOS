@@ -1078,6 +1078,7 @@ interface ObjectivesQueryParams {
 
 export interface AssignableObjectiveOwner {
   id: string
+  personId?: string | null
   name: string
   email: string
   status: string

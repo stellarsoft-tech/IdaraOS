@@ -698,7 +698,7 @@ export const securityObjectives = pgTable(
     status: text("status", { enum: objectiveStatusValues }).notNull().default("not_started"),
     
     // Ownership
-    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+    ownerId: uuid("owner_id").references(() => persons.id, { onDelete: "set null" }),
     
     // Timeline
     targetDate: date("target_date"),
@@ -889,9 +889,9 @@ export const securityObjectivesRelations = relations(securityObjectives, ({ one 
     fields: [securityObjectives.orgId],
     references: [organizations.id],
   }),
-  owner: one(users, {
+  owner: one(persons, {
     fields: [securityObjectives.ownerId],
-    references: [users.id],
+    references: [persons.id],
   }),
 }))
 

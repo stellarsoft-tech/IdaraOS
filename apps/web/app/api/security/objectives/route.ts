@@ -9,8 +9,8 @@ import {
 import { getSession } from "@/lib/auth/session"
 import { eq, and, ilike, count, desc } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
-import { users } from "@/lib/db/schema"
-import { isAssignableObjectiveOwner } from "@/lib/security/objective-owners"
+import { persons, users } from "@/lib/db/schema"
+import { resolveObjectiveOwnerPersonId } from "@/lib/security/objective-owners"
 import { z } from "zod"
 
 const createObjectiveSchema = z.object({
@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
       achievementStatus: securityObjectives.achievementStatus,
       kpis: securityObjectives.kpis,
       successCriteria: securityObjectives.successCriteria,
-      ownerId: securityObjectives.ownerId,
-      ownerName: users.name,
-      ownerEmail: users.email,
+      ownerId: users.id,
+      ownerName: persons.name,
+      ownerEmail: persons.email,
       linkedEvidenceIds: securityObjectives.linkedEvidenceIds,
       linkedDocumentIds: securityObjectives.linkedDocumentIds,
       frameworkCode: securityObjectives.frameworkCode,
@@ -106,7 +106,8 @@ export async function GET(request: NextRequest) {
     const objectivesQuery = db
       .select(selectFields)
       .from(securityObjectives)
-      .leftJoin(users, eq(securityObjectives.ownerId, users.id))
+      .leftJoin(persons, eq(securityObjectives.ownerId, persons.id))
+      .leftJoin(users, eq(users.personId, persons.id))
       .where(and(...conditions))
       .orderBy(desc(securityObjectives.createdAt))
       .limit(limit)
@@ -118,7 +119,8 @@ export async function GET(request: NextRequest) {
       objectives = await db
         .select(selectFields)
         .from(securityObjectives)
-        .leftJoin(users, eq(securityObjectives.ownerId, users.id))
+        .leftJoin(persons, eq(securityObjectives.ownerId, persons.id))
+        .leftJoin(users, eq(users.personId, persons.id))
         .where(and(
           ...conditions,
           ilike(securityObjectives.title, `%${search}%`)
@@ -181,9 +183,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!(await isAssignableObjectiveOwner(session.orgId, validatedData.ownerId))) {
+    const ownerResolution = await resolveObjectiveOwnerPersonId(session.orgId, validatedData.ownerId)
+    if (ownerResolution.error) {
       return NextResponse.json(
-        { error: "Owner must be an active platform user" },
+        { error: ownerResolution.error },
         { status: 400 }
       )
     }
@@ -206,7 +209,7 @@ export async function POST(request: NextRequest) {
         achievementStatus: validatedData.achievementStatus,
         kpis: validatedData.kpis,
         successCriteria: validatedData.successCriteria,
-        ownerId: validatedData.ownerId,
+        ownerId: ownerResolution.ownerPersonId,
         linkedEvidenceIds: validatedData.linkedEvidenceIds,
         linkedDocumentIds: validatedData.linkedDocumentIds,
         frameworkCode: validatedData.frameworkCode,

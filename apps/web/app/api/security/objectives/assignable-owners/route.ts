@@ -22,6 +22,7 @@ export async function GET() {
     const assignableUsers = await db
       .select({
         id: users.id,
+        personId: users.personId,
         name: users.name,
         email: users.email,
         status: users.status,
