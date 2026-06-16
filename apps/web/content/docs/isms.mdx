@@ -55,6 +55,7 @@ graph TB
 | **Clause 6.2** (security objectives) | Security Objectives — periods, achievement status, evidence links |
 | **Clause 10.2** (nonconformity & corrective action) | Nonconformity & CA — root cause, corrective action, effectiveness review |
 | **Annex A A.5.24–A.5.28** (incident management) | Incident Management — classification, response, lessons learned, evidence |
+| **Annex A A.5.15, A.5.16, A.5.18** (access control and access rights) | People & HR Access Groups and Access Register — least-privilege access bundles, user assignments, review status |
 | **Annex A** (93 controls) | SoA, Annex A browser, gap analysis, control mappings |
 | **Evidence** | Evidence Store + per-control links + objective/clause/incident/NC evidence |
 
@@ -135,6 +136,16 @@ Documents which of the 93 Annex A controls are applicable, implemented, or exclu
 
 Browse the pre-loaded ISO 27001:2022 Annex A control library and create organization controls from standard references.
 
+### People Access Groups (`/people/access-groups`)
+
+Supports **Annex A A.5.15 Access control**, **A.5.16 Identity management**, **A.5.18 Access rights**, and related access restriction controls.
+
+Access groups define least-privilege access bundles based on role and responsibility. Each group captures business justification, access included, owner, review frequency, risk level, and ISO 27001:2022 control references.
+
+### People Access Register (`/people/access-register`)
+
+Provides retained information for periodic access reviews. The register shows which users/people hold each access group, linked system role context, organizational role/team context, review due date, last review date, review status, and revocation actions.
+
 ### Evidence Matrix (`/security/frameworks/iso-27001/evidence`)
 
 Matrix view of evidence coverage per SoA item and control implementation.
@@ -152,6 +163,7 @@ Evidence supports audit and certification readiness through multiple patterns:
 3. **Security objectives** — `linkedEvidenceIds` on objectives for Clause 6.2 measurement records
 4. **Incidents** — `linkedEvidenceIds` on incidents for A.5.28 forensic/operational evidence
 5. **Nonconformities** — `linkedEvidenceIds` on NC records for Clause 10.2 retained information
+6. **Access control** — People Access Groups and Access Register for A.5.15, A.5.16, A.5.18, and A.8.2 access review evidence
 
 ## Permissions
 
@@ -165,6 +177,8 @@ Evidence supports audit and certification readiness through multiple patterns:
 | SoA | `security.soa` |
 | Annex A / Gaps | `security.controls`, `security.frameworks` |
 | Evidence | `security.evidence` |
+| Access Groups | `people.access-groups` |
+| Access Register | `people.access-register` |
 
 ## Related Documents
 

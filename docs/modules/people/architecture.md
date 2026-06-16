@@ -14,6 +14,8 @@ graph TB
         DETAIL[Person Detail]
         TEAMS[Teams Management]
         ROLES[Organizational Roles]
+        ACCESS_GROUPS[Access Groups]
+        ACCESS_REGISTER[Access Register]
         WORKFLOWS[People Workflows]
         SYNC[Sync Settings]
         AUDIT[Audit Log]
@@ -24,9 +26,13 @@ graph TB
     DETAIL --> |linked to| USERS[Settings: Users]
     TEAMS --> |assign to| DIR
     ROLES --> |assign to| DIR
+    ROLES --> |recommend| ACCESS_GROUPS
+    ACCESS_GROUPS --> |assigned through| ACCESS_REGISTER
+    DIR --> |person context| ACCESS_REGISTER
     WORKFLOWS --> |triggers on status| DIR
     SYNC --> |configures| DIR
     DIR --> |actions logged to| AUDIT
+    ACCESS_REGISTER --> |actions logged to| AUDIT
     
     subgraph "Settings Module"
         USERS
@@ -261,6 +267,69 @@ When bidirectional sync is enabled:
 - `department` property maps to team
 - Changes to role/team in IdaraOS can sync back to Entra ID
 
+### Access Groups (`/people/access-groups`)
+
+Define ISO 27001:2022-aligned access bundles based on role, responsibility, and least privilege.
+
+**Features:**
+- Create and maintain access group definitions
+- Capture business justification for the access bundle
+- List access included, such as systems, permissions, folders, or data sets
+- Map recommended organizational roles to each access group
+- Assign an access owner from the People directory
+- Track ISO 27001:2022 control references such as `A.5.15`, `A.5.18`, and `A.8.2`
+- Set review frequency, risk level, and lifecycle status
+- Show assignment counts from the Access Register
+
+**ISO 27001:2022 Alignment:**
+- **A.5.15 Access control** - access groups define access rules based on business requirements
+- **A.5.16 Identity management** - register assignments show which identity/person holds access
+- **A.5.18 Access rights** - register supports access grant, review, and revocation evidence
+- **A.8.2 Privileged access rights** - high/critical risk groups can be identified for tighter review
+- **A.8.3 Information access restriction** - group definitions document restricted data access
+
+**Data Model:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization (multi-tenant) |
+| `name` | VARCHAR | Access group name |
+| `description` | TEXT | Optional description |
+| `business_justification` | TEXT | Why this access exists |
+| `access_items` | JSONB | Systems, permissions, or data sets included |
+| `iso_controls` | JSONB | ISO 27001:2022 control references |
+| `owner_person_id` | UUID | FK to persons |
+| `review_frequency` | ENUM | monthly, quarterly, semi_annual, annual |
+| `risk_level` | ENUM | low, medium, high, critical |
+| `status` | ENUM | active, draft, retired |
+
+### Access Register (`/people/access-register`)
+
+Shows the access groups granted to system users and records review status for access certification evidence. Linked People records are used only for HR context such as organizational role and team.
+
+**Features:**
+- Assign an access group to a system user
+- Show user, email, system role, and linked People organizational role/team where available
+- Show access group, risk level, ISO control references, and review due date
+- Mark reviews as approved or changes required
+- Revoke access assignments
+- Export register data for audit evidence
+
+**Data Model:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Primary key |
+| `org_id` | UUID | Organization (multi-tenant) |
+| `access_group_id` | UUID | FK to access group |
+| `user_id` | UUID | FK to system user receiving access |
+| `person_id` | UUID | Optional FK to linked person for HR context |
+| `granted_by_person_id` | UUID | Optional FK to grantor |
+| `granted_at` | TIMESTAMP | When access was granted |
+| `review_due_at` | TIMESTAMP | Next review due date |
+| `last_reviewed_at` | TIMESTAMP | Last access review date |
+| `review_status` | ENUM | not_reviewed, approved, changes_required, revoked |
+| `notes` | TEXT | Review or grant notes |
+
 ### People Workflows (`/people/workflows`)
 
 Unified view of all workflow instances related to people (onboarding, offboarding, etc.).
@@ -415,6 +484,14 @@ graph TB
 | Roles | Create | Yes | Yes | No | No |
 | Roles | Edit | Yes | Yes | No | No |
 | Roles | Delete | Yes | Yes | No | No |
+| Access Groups | View | Yes | Yes | Yes | No |
+| Access Groups | Create | Yes | Yes | No | No |
+| Access Groups | Edit | Yes | Yes | No | No |
+| Access Groups | Delete | Yes | Yes | No | No |
+| Access Register | View | Yes | Yes | Yes | No |
+| Access Register | Create | Yes | Yes | No | No |
+| Access Register | Edit | Yes | Yes | Yes | No |
+| Access Register | Delete | Yes | Yes | No | No |
 | Workflows | View | Yes | Yes | Yes | Yes |
 | Workflows | Manage | Yes | Yes | Yes | No |
 | Audit Log | View | Yes | Yes | Yes | No |
@@ -437,6 +514,8 @@ graph LR
         DIR[Directory]
         TEAMS[Teams]
         ROLES[Org Roles]
+        AG[Access Groups]
+        AR[Access Register]
         WF[Workflows]
         AUD[Audit Log]
         SYNC[Settings]
@@ -446,6 +525,8 @@ graph LR
     OWNER -->|full access| DIR
     OWNER -->|full access| TEAMS
     OWNER -->|full access| ROLES
+    OWNER -->|full access| AG
+    OWNER -->|full access| AR
     OWNER -->|full access| WF
     OWNER -->|view| AUD
     OWNER -->|full access| SYNC
@@ -454,6 +535,8 @@ graph LR
     ADMIN -->|full access| DIR
     ADMIN -->|full access| TEAMS
     ADMIN -->|full access| ROLES
+    ADMIN -->|full access| AG
+    ADMIN -->|full access| AR
     ADMIN -->|full access| WF
     ADMIN -->|view| AUD
     ADMIN -->|full access| SYNC
@@ -462,6 +545,8 @@ graph LR
     MANAGER -->|view, edit| DIR
     MANAGER -->|view| TEAMS
     MANAGER -->|view| ROLES
+    MANAGER -->|view| AG
+    MANAGER -->|view, edit reviews| AR
     MANAGER -->|view, edit| WF
     MANAGER -->|view| AUD
     
@@ -660,6 +745,25 @@ sequenceDiagram
 | PUT | `/api/people/roles/[id]` | Update role |
 | DELETE | `/api/people/roles/[id]` | Delete role |
 
+### Access Groups API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/people/access-groups` | List all access groups |
+| POST | `/api/people/access-groups` | Create access group |
+| GET | `/api/people/access-groups/[id]` | Get access group details |
+| PUT | `/api/people/access-groups/[id]` | Update access group |
+| DELETE | `/api/people/access-groups/[id]` | Delete access group |
+
+### Access Register API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/people/access-register` | List assigned access groups |
+| POST | `/api/people/access-register` | Assign access group to person |
+| PUT | `/api/people/access-register/[id]` | Update review status |
+| DELETE | `/api/people/access-register/[id]` | Revoke assignment |
+
 ### Request/Response Examples
 
 **GET /api/people**
@@ -722,6 +826,9 @@ sequenceDiagram
 - `people_persons` - Employee records
 - `people_teams` - Organizational teams
 - `people_organizational_roles` - Organizational role hierarchy
+- `people_access_groups` - ISO-aligned access group definitions
+- `people_access_group_roles` - Recommended organizational roles per access group
+- `people_access_group_assignments` - Access register assignments and review status
 
 ### People Table Schema (`people_persons`)
 
@@ -787,9 +894,15 @@ erDiagram
     organizations ||--o{ people : has
     organizations ||--o{ teams : has
     organizations ||--o{ organizational_roles : has
+    organizations ||--o{ access_groups : has
     people ||--o| users : "linked to"
     people }o--o| teams : "member of"
     people }o--o| organizational_roles : "has role"
+    people ||--o{ access_group_assignments : "assigned access"
+    people ||--o{ access_groups : "owns"
+    access_groups ||--o{ access_group_assignments : "granted through"
+    access_groups ||--o{ access_group_roles : "recommended for"
+    organizational_roles ||--o{ access_group_roles : "maps to"
     people }o--o| people : "manager"
     teams }o--o| teams : "parent team"
     teams }o--o| people : "team lead"

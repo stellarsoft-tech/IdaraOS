@@ -278,7 +278,7 @@ export default function EvidencePage() {
         title="Evidence Store"
       description="Central repository for compliance artifacts and documentation."
       action={
-        <Protected module="security.evidence" action="write">
+        <Protected module="security.evidence" action="create">
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Evidence

@@ -31,6 +31,8 @@ export const MODULES = {
   PEOPLE_DIRECTORY: "people.directory",
   PEOPLE_TEAMS: "people.teams",
   PEOPLE_ROLES: "people.roles",
+  PEOPLE_ACCESS_GROUPS: "people.access-groups",
+  PEOPLE_ACCESS_REGISTER: "people.access-register",
   PEOPLE_WORKFLOWS: "people.workflows",
   PEOPLE_SETTINGS: "people.settings",
   PEOPLE_AUDITLOG: "people.auditlog",
@@ -141,6 +143,18 @@ export const P = {
       create: (): PermissionTuple => [MODULES.PEOPLE_ROLES, ACTIONS.CREATE],
       edit: (): PermissionTuple => [MODULES.PEOPLE_ROLES, ACTIONS.EDIT],
       delete: (): PermissionTuple => [MODULES.PEOPLE_ROLES, ACTIONS.DELETE],
+    },
+    accessGroups: {
+      view: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_GROUPS, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_GROUPS, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_GROUPS, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_GROUPS, ACTIONS.DELETE],
+    },
+    accessRegister: {
+      view: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_REGISTER, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_REGISTER, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_REGISTER, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.PEOPLE_ACCESS_REGISTER, ACTIONS.DELETE],
     },
     workflows: {
       view: (): PermissionTuple => [MODULES.PEOPLE_WORKFLOWS, ACTIONS.VIEW],

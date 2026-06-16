@@ -43,6 +43,18 @@ export const routes: Record<string, RouteConfig> = {
     parent: "people",
     description: "Define organizational role hierarchy",
   },
+  "people.access-groups": {
+    path: "/people/access-groups",
+    label: "Access Groups",
+    parent: "people",
+    description: "Define least-privilege access bundles by role and responsibility",
+  },
+  "people.access-register": {
+    path: "/people/access-register",
+    label: "Access Register",
+    parent: "people",
+    description: "Track access groups assigned to users and review status",
+  },
   "people.workflows": {
     path: "/people/workflows",
     label: "Workflows",

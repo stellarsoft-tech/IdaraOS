@@ -48,9 +48,11 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { slug: MODULES.PEOPLE_DIRECTORY, name: "Directory", description: "View and manage employee records", category: "People & HR", icon: "Users", sortOrder: "101", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
   { slug: MODULES.PEOPLE_TEAMS, name: "Teams", description: "Manage organizational teams", category: "People & HR", icon: "UsersRound", sortOrder: "102", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
   { slug: MODULES.PEOPLE_ROLES, name: "Roles", description: "Manage organizational roles and hierarchy", category: "People & HR", icon: "Building2", sortOrder: "103", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
-  { slug: MODULES.PEOPLE_WORKFLOWS, name: "Workflows", description: "View people-related workflows", category: "People & HR", icon: "Workflow", sortOrder: "104", actions: [ACTIONS.VIEW] },
-  { slug: MODULES.PEOPLE_SETTINGS, name: "Settings", description: "Configure People & HR module settings", category: "People & HR", icon: "Settings", sortOrder: "105", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
-  { slug: MODULES.PEOPLE_AUDITLOG, name: "Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "106", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.PEOPLE_ACCESS_GROUPS, name: "Access Groups", description: "Define least-privilege access groups by role and responsibility", category: "People & HR", icon: "ShieldCheck", sortOrder: "104", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.PEOPLE_ACCESS_REGISTER, name: "Access Register", description: "Assign and review access groups held by people", category: "People & HR", icon: "ClipboardCheck", sortOrder: "105", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.PEOPLE_WORKFLOWS, name: "Workflows", description: "View people-related workflows", category: "People & HR", icon: "Workflow", sortOrder: "106", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.PEOPLE_SETTINGS, name: "Settings", description: "Configure People & HR module settings", category: "People & HR", icon: "Settings", sortOrder: "107", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.PEOPLE_AUDITLOG, name: "Audit Log", description: "View audit trail for People & HR module", category: "People & HR", icon: "ScrollText", sortOrder: "108", actions: [ACTIONS.VIEW] },
   
   // Assets
   { slug: MODULES.ASSETS_OVERVIEW, name: "Overview", description: "View assets dashboard", category: "Assets", icon: "LayoutDashboard", sortOrder: "200", actions: [ACTIONS.VIEW] },

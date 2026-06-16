@@ -9,7 +9,7 @@ IdaraOS is organized into modules that handle different aspects of organizationa
 ### Core (Foundation)
 
 - **Settings** - Organization configuration, users, roles, integrations
-- **People & HR** - Employee directory, org chart, roles, teams
+- **People & HR** - Employee directory, org chart, roles, teams, access groups, access register
 
 ### Operations (Planned)
 
@@ -70,6 +70,10 @@ IdaraOS is organized into modules that handle different aspects of organizationa
 - Overview Dashboard - Workforce metrics
 - People Directory - Employee listing and management
 - Person Detail - Individual profiles
+- Teams - Organizational team hierarchy
+- Roles - Organizational role hierarchy
+- Access Groups - ISO 27001:2022-aligned least-privilege access bundles
+- Access Register - User/person access group assignments and review status
 - Onboarding - New hire workflows (placeholder)
 - Time Off - Leave management (placeholder)
 - Sync Settings - Entra group sync for employees (planned)
@@ -118,6 +122,7 @@ Settings
 People & HR
 ├── Settings.Users (linked accounts)
 ├── Settings.Integrations (borrows Entra connection)
+├── Security/ISMS (access control evidence for ISO 27001:2022)
 └── People Sync Settings (module-specific sync config)
 
 Assets (Future)
