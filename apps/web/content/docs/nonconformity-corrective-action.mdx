@@ -1,0 +1,89 @@
+# Nonconformity & Corrective Action
+
+## Overview
+
+The Nonconformity & Corrective Action (NC/CA) module implements **ISO/IEC 27001:2022 Clause 10.2 — Nonconformity and corrective action**.
+
+When the ISMS does not conform to its own requirements or ISO 27001, the organization must react, evaluate root cause, implement corrective action, review effectiveness, and retain documented evidence. IdaraOS tracks each nonconformity from identification through closure.
+
+## ISO 27001:2022 Clause 10.2 Requirements
+
+| Requirement | IdaraOS Field / Feature |
+|-------------|-------------------------|
+| React to nonconformity and take action to control/correct it | Status workflow: Open → Analysis → Corrective Action → Verification → Closed |
+| Deal with consequences (e.g. from incidents or audits) | Source field: internal/external audit, incident, monitoring, management review |
+| Evaluate need for corrective action to eliminate root cause | Root Cause Analysis |
+| Implement corrective action | Corrective Action + due date |
+| Review effectiveness of corrective action | Effectiveness Review |
+| Make changes to ISMS if needed | Link to specific document (policy, procedure, etc.) |
+| Retain documented information as evidence | Linked evidence items; audit trail |
+
+## Module Location
+
+**Security → Nonconformity & CA** (`/security/nonconformities`)
+
+## Key Features
+
+### Record Nonconformities
+
+Create NC records with unique `ncId`, title, description, severity, and source.
+
+### Document Type & Linked Document
+
+Raise a nonconformity **against a specific document**:
+
+1. Select **Document Type** — uses the same categories as the Document Library (policy, procedure, standard, process, etc.)
+2. Select **Linked Document** — list is **filtered automatically** to documents matching the selected type
+
+This ties corrective action directly to the ISMS document that was nonconforming.
+
+### Owner Assignment
+
+Assign an owner from **active platform users** who is accountable for resolution.
+
+### Severity & Source
+
+| Severity | Typical use |
+|----------|-------------|
+| Minor | Localized gap, low impact |
+| Major | Significant control failure |
+| Critical | Systemic or certification-impacting |
+
+| Source | Examples |
+|--------|----------|
+| Internal Audit | Internal audit finding |
+| External Audit | Certification or customer audit |
+| Incident | Post-incident review |
+| Monitoring | KPI/metric breach |
+| Management Review | MRM output |
+| Self Assessment | Control self-assessment |
+
+### Corrective Action Lifecycle
+
+| Status | Purpose |
+|--------|---------|
+| Open | NC recorded, initial triage |
+| Root Cause Analysis | Investigate underlying cause |
+| Corrective Action | Plan and execute fix |
+| Effectiveness Verification | Confirm fix works and does not recur |
+| Closed | Retained evidence complete |
+
+### Evidence Linking
+
+Attach multiple evidence items (audit reports, meeting minutes, test results, updated procedures) to demonstrate Clause 10.2 retained information.
+
+## Permissions
+
+| Action | Permission |
+|--------|------------|
+| View list & detail | `security.nonconformities` (view) |
+| Create | `security.nonconformities` (create) |
+| Edit | `security.nonconformities` (edit) |
+| Delete | `security.nonconformities` (delete) |
+
+## Related Modules
+
+- [Document Library](/docs/documents) — documents linked to NCs
+- [Incident Management](./incident-management) — incidents may spawn NCs
+- [Audits](/security/audits) — audit findings as NC source
+- [ISO 27001 ISMS](./isms) — framework context

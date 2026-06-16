@@ -4,7 +4,7 @@
 
 The ISO 27001:2022 module in IdaraOS helps organizations establish, implement, maintain, and continually improve an **Information Security Management System (ISMS)**. It maps directly to the standard's mandatory clauses (4–10) and Annex A controls (93 controls across four themes).
 
-This module is part of the Security (GRC) area and integrates with the generic foundation layer: risks, controls, evidence, audits, and objectives.
+This module is part of the Security (GRC) area and integrates with the generic foundation layer: risks, controls, evidence, audits, objectives, incident management, and nonconformity/corrective action.
 
 ## Module Structure
 
@@ -25,6 +25,8 @@ graph TB
         CONTROLS[Controls Library]
         STORE[Evidence Store]
         AUDITS[Audits]
+        INCIDENTS[Incident Management]
+        NC[Nonconformity & CA]
     end
 
     DASH --> CLAUSES
@@ -40,6 +42,9 @@ graph TB
     CLAUSES --> STORE
     ANNEX --> CONTROLS
     RISKS --> CONTROLS
+    INCIDENTS --> STORE
+    INCIDENTS --> NC
+    NC --> STORE
 ```
 
 ## ISO 27001:2022 Structure
@@ -48,8 +53,10 @@ graph TB
 |---------|------------------|
 | **Clauses 4–10** (mandatory ISMS requirements) | ISMS Clauses tracker — compliance status, owners, evidence |
 | **Clause 6.2** (security objectives) | Security Objectives — periods, achievement status, evidence links |
+| **Clause 10.2** (nonconformity & corrective action) | Nonconformity & CA — root cause, corrective action, effectiveness review |
+| **Annex A A.5.24–A.5.28** (incident management) | Incident Management — classification, response, lessons learned, evidence |
 | **Annex A** (93 controls) | SoA, Annex A browser, gap analysis, control mappings |
-| **Evidence** | Evidence Store + per-control links + objective/clause evidence |
+| **Evidence** | Evidence Store + per-control links + objective/clause/incident/NC evidence |
 
 ## Sub-Modules
 
@@ -67,7 +74,7 @@ Tracks mandatory management system requirements from ISO 27001:2022 Clauses 4–
 - **Clause 7** — Support
 - **Clause 8** — Operation
 - **Clause 9** — Performance evaluation
-- **Clause 10** — Improvement
+- **Clause 10** — Improvement (includes **nonconformity and corrective action**)
 
 Each requirement records compliance status, owner, implementation notes, and linked evidence.
 
@@ -93,6 +100,33 @@ IdaraOS tracks:
 | Success criteria | Measurable targets (ISO 6.2) |
 | Linked evidence | Measurement records, progress reports, resource plans |
 
+### Incident Management (`/security/incidents`)
+
+Implements **Annex A A.5.24–A.5.28** — information security incident management:
+
+| Control | IdaraOS Feature |
+|---------|-----------------|
+| A.5.24 Planning & preparation | Incident register, owners, severity (P1–P4), status workflow |
+| A.5.25 Event assessment | Event vs incident classification |
+| A.5.26 Response | Containment, eradication, recovery documentation |
+| A.5.27 Lessons learned | Root cause analysis, lessons learned fields |
+| A.5.28 Evidence | Multiple linked evidence items |
+
+Published incidents retain **version history** when edited (document-style versioning for audit evidence).
+
+### Nonconformity & Corrective Action (`/security/nonconformities`)
+
+Implements **Clause 10.2 — Nonconformity and corrective action**:
+
+| Requirement | IdaraOS Feature |
+|-------------|-----------------|
+| React to nonconformity | Status workflow through closure |
+| Root cause analysis | Dedicated RCA field |
+| Corrective action | Action plan + due date |
+| Effectiveness review | Verification before closure |
+| Document linkage | Select document type, then linked document (filtered list) |
+| Retained evidence | Multiple evidence links |
+
 ### Statement of Applicability (`/security/frameworks/iso-27001/soa`)
 
 Documents which of the 93 Annex A controls are applicable, implemented, or excluded — with justification for exclusions.
@@ -111,11 +145,13 @@ Identifies controls not yet implemented and prioritizes remediation.
 
 ## Evidence Linking
 
-Evidence supports audit and certification readiness through three patterns:
+Evidence supports audit and certification readiness through multiple patterns:
 
 1. **Control ↔ Evidence** — junction table (`security_evidence_links`) for Annex A controls
 2. **Clause compliance** — `linkedEvidenceIds` on ISMS clause records
 3. **Security objectives** — `linkedEvidenceIds` on objectives for Clause 6.2 measurement records
+4. **Incidents** — `linkedEvidenceIds` on incidents for A.5.28 forensic/operational evidence
+5. **Nonconformities** — `linkedEvidenceIds` on NC records for Clause 10.2 retained information
 
 ## Permissions
 
@@ -124,6 +160,8 @@ Evidence supports audit and certification readiness through three patterns:
 | Dashboard | `security.frameworks` (view) |
 | ISMS Clauses | `security.clauses` |
 | Security Objectives | `security.objectives` |
+| Incident Management | `security.incidents` |
+| Nonconformity & CA | `security.nonconformities` |
 | SoA | `security.soa` |
 | Annex A / Gaps | `security.controls`, `security.frameworks` |
 | Evidence | `security.evidence` |
@@ -132,3 +170,5 @@ Evidence supports audit and certification readiness through three patterns:
 
 - [Information Security Policy](./information-security-policy)
 - [ISO 27001 Security Objectives Plan](./iso-27001-security-objectives)
+- [Incident Management](./incident-management)
+- [Nonconformity & Corrective Action](./nonconformity-corrective-action)

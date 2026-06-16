@@ -98,6 +98,18 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security",
     description: "Security objectives and improvement plans",
   },
+  "security.incidents": {
+    path: "/security/incidents",
+    label: "Incident Management",
+    parent: "security",
+    description: "Information security incident register and response",
+  },
+  "security.nonconformities": {
+    path: "/security/nonconformities",
+    label: "Nonconformity & Corrective Action",
+    parent: "security",
+    description: "Nonconformities, root cause analysis, and corrective actions",
+  },
   "security.frameworks": {
     path: "/security/frameworks",
     label: "Frameworks (IMS)",

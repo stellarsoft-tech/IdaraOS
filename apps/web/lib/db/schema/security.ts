@@ -12,6 +12,7 @@ import { relations } from "drizzle-orm"
 import { organizations } from "./organizations"
 import { persons } from "./people"
 import { users } from "./users"
+import { documents, documentCategoryValues } from "./docs"
 
 // ============================================================================
 // ENUMS
@@ -1057,4 +1058,226 @@ export type NewSecurityStandardClause = typeof securityStandardClauses.$inferIns
 
 export type SecurityClauseCompliance = typeof securityClauseCompliance.$inferSelect
 export type NewSecurityClauseCompliance = typeof securityClauseCompliance.$inferInsert
+
+// ============================================================================
+// INCIDENT MANAGEMENT (ISO 27001 A.5.24–A.5.28, Clause 10.2)
+// ============================================================================
+
+export const incidentSeverityValues = ["p1", "p2", "p3", "p4"] as const
+export type IncidentSeverity = (typeof incidentSeverityValues)[number]
+
+export const incidentClassificationValues = ["event", "incident"] as const
+export type IncidentClassification = (typeof incidentClassificationValues)[number]
+
+export const incidentStatusValues = [
+  "draft",
+  "reported",
+  "triaging",
+  "responding",
+  "resolved",
+  "closed",
+] as const
+export type IncidentStatus = (typeof incidentStatusValues)[number]
+
+export const incidentPublicationStatusValues = ["draft", "published"] as const
+export type IncidentPublicationStatus = (typeof incidentPublicationStatusValues)[number]
+
+export const securityIncidents = pgTable(
+  "security_incidents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+
+    incidentId: text("incident_id").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+
+    classification: text("classification", { enum: incidentClassificationValues }).notNull().default("incident"),
+    severity: text("severity", { enum: incidentSeverityValues }).notNull().default("p3"),
+    status: text("status", { enum: incidentStatusValues }).notNull().default("draft"),
+    publicationStatus: text("publication_status", { enum: incidentPublicationStatusValues }).notNull().default("draft"),
+    currentVersion: text("current_version").notNull().default("1.0"),
+
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+    reportedById: uuid("reported_by_id").references(() => users.id, { onDelete: "set null" }),
+    approvedById: uuid("approved_by_id").references(() => users.id, { onDelete: "set null" }),
+
+    linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
+
+    detectedAt: timestamp("detected_at", { withTimezone: true }),
+    reportedAt: timestamp("reported_at", { withTimezone: true }),
+    containedAt: timestamp("contained_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+
+    impactDescription: text("impact_description"),
+    containmentActions: text("containment_actions"),
+    eradicationActions: text("eradication_actions"),
+    recoveryActions: text("recovery_actions"),
+    rootCauseAnalysis: text("root_cause_analysis"),
+    lessonsLearned: text("lessons_learned"),
+    notes: text("notes"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_security_incidents_org").on(table.orgId),
+    index("idx_security_incidents_incident_id").on(table.incidentId),
+    index("idx_security_incidents_status").on(table.status),
+    index("idx_security_incidents_severity").on(table.severity),
+    index("idx_security_incidents_owner").on(table.ownerId),
+    index("idx_security_incidents_publication").on(table.publicationStatus),
+  ]
+)
+
+export const securityIncidentVersions = pgTable(
+  "security_incident_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    incidentId: uuid("incident_id").notNull().references(() => securityIncidents.id, { onDelete: "cascade" }),
+    version: text("version").notNull(),
+    changeDescription: text("change_description"),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_security_incident_versions_incident").on(table.incidentId),
+  ]
+)
+
+// ============================================================================
+// NON-CONFORMITY & CORRECTIVE ACTION (ISO 27001 Clause 10.2)
+// ============================================================================
+
+export const ncStatusValues = [
+  "open",
+  "analysis",
+  "corrective_action",
+  "verification",
+  "closed",
+] as const
+export type NcStatus = (typeof ncStatusValues)[number]
+
+export const ncSeverityValues = ["minor", "major", "critical"] as const
+export type NcSeverity = (typeof ncSeverityValues)[number]
+
+export const ncSourceValues = [
+  "internal_audit",
+  "external_audit",
+  "incident",
+  "monitoring",
+  "management_review",
+  "self_assessment",
+  "other",
+] as const
+export type NcSource = (typeof ncSourceValues)[number]
+
+export const securityNonconformities = pgTable(
+  "security_nonconformities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+
+    ncId: text("nc_id").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+
+    status: text("status", { enum: ncStatusValues }).notNull().default("open"),
+    severity: text("severity", { enum: ncSeverityValues }).notNull().default("minor"),
+    source: text("source", { enum: ncSourceValues }).notNull().default("other"),
+
+    documentCategory: text("document_category", { enum: documentCategoryValues }),
+    linkedDocumentId: uuid("linked_document_id").references(() => documents.id, { onDelete: "set null" }),
+
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+    linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
+
+    rootCauseAnalysis: text("root_cause_analysis"),
+    correctiveAction: text("corrective_action"),
+    correctiveActionDueDate: date("corrective_action_due_date"),
+    effectivenessReview: text("effectiveness_review"),
+    effectivenessVerifiedAt: timestamp("effectiveness_verified_at", { withTimezone: true }),
+    effectivenessVerifiedById: uuid("effectiveness_verified_by_id").references(() => users.id, { onDelete: "set null" }),
+
+    detectedAt: date("detected_at"),
+    dueDate: date("due_date"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    notes: text("notes"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_security_nc_org").on(table.orgId),
+    index("idx_security_nc_nc_id").on(table.ncId),
+    index("idx_security_nc_status").on(table.status),
+    index("idx_security_nc_category").on(table.documentCategory),
+    index("idx_security_nc_document").on(table.linkedDocumentId),
+    index("idx_security_nc_owner").on(table.ownerId),
+  ]
+)
+
+export const securityIncidentsRelations = relations(securityIncidents, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [securityIncidents.orgId],
+    references: [organizations.id],
+  }),
+  owner: one(users, {
+    fields: [securityIncidents.ownerId],
+    references: [users.id],
+    relationName: "incidentOwner",
+  }),
+  reportedBy: one(users, {
+    fields: [securityIncidents.reportedById],
+    references: [users.id],
+    relationName: "incidentReporter",
+  }),
+  approvedBy: one(users, {
+    fields: [securityIncidents.approvedById],
+    references: [users.id],
+    relationName: "incidentApprover",
+  }),
+  versions: many(securityIncidentVersions),
+}))
+
+export const securityIncidentVersionsRelations = relations(securityIncidentVersions, ({ one }) => ({
+  incident: one(securityIncidents, {
+    fields: [securityIncidentVersions.incidentId],
+    references: [securityIncidents.id],
+  }),
+  createdBy: one(users, {
+    fields: [securityIncidentVersions.createdById],
+    references: [users.id],
+  }),
+}))
+
+export const securityNonconformitiesRelations = relations(securityNonconformities, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [securityNonconformities.orgId],
+    references: [organizations.id],
+  }),
+  owner: one(users, {
+    fields: [securityNonconformities.ownerId],
+    references: [users.id],
+  }),
+  linkedDocument: one(documents, {
+    fields: [securityNonconformities.linkedDocumentId],
+    references: [documents.id],
+  }),
+  effectivenessVerifiedBy: one(users, {
+    fields: [securityNonconformities.effectivenessVerifiedById],
+    references: [users.id],
+    relationName: "ncVerifier",
+  }),
+}))
+
+export type SecurityIncident = typeof securityIncidents.$inferSelect
+export type NewSecurityIncident = typeof securityIncidents.$inferInsert
+export type SecurityIncidentVersion = typeof securityIncidentVersions.$inferSelect
+export type NewSecurityIncidentVersion = typeof securityIncidentVersions.$inferInsert
+export type SecurityNonconformity = typeof securityNonconformities.$inferSelect
+export type NewSecurityNonconformity = typeof securityNonconformities.$inferInsert
 

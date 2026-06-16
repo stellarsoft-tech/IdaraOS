@@ -52,6 +52,8 @@ export const MODULES = {
   SECURITY_EVIDENCE: "security.evidence",
   SECURITY_AUDITS: "security.audits",
   SECURITY_OBJECTIVES: "security.objectives",
+  SECURITY_INCIDENTS: "security.incidents",
+  SECURITY_NONCONFORMITIES: "security.nonconformities",
   SECURITY_FRAMEWORKS: "security.frameworks",
   SECURITY_SOA: "security.soa",
   SECURITY_CLAUSES: "security.clauses",
@@ -230,6 +232,18 @@ export const P = {
       create: (): PermissionTuple => [MODULES.SECURITY_OBJECTIVES, ACTIONS.CREATE],
       edit: (): PermissionTuple => [MODULES.SECURITY_OBJECTIVES, ACTIONS.EDIT],
       delete: (): PermissionTuple => [MODULES.SECURITY_OBJECTIVES, ACTIONS.DELETE],
+    },
+    incidents: {
+      view: (): PermissionTuple => [MODULES.SECURITY_INCIDENTS, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_INCIDENTS, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.SECURITY_INCIDENTS, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.SECURITY_INCIDENTS, ACTIONS.DELETE],
+    },
+    nonconformities: {
+      view: (): PermissionTuple => [MODULES.SECURITY_NONCONFORMITIES, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_NONCONFORMITIES, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.SECURITY_NONCONFORMITIES, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.SECURITY_NONCONFORMITIES, ACTIONS.DELETE],
     },
     frameworks: {
       view: (): PermissionTuple => [MODULES.SECURITY_FRAMEWORKS, ACTIONS.VIEW],

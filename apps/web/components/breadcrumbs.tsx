@@ -30,6 +30,8 @@ const routeLabels: Record<string, string> = {
   evidence: "Evidence Store",
   soa: "Statement of Applicability",
   objectives: "Objectives & Plan",
+  incidents: "Incident Management",
+  nonconformities: "Nonconformity & CA",
   finance: "Finance",
   expenses: "Expenses",
   invoices: "Invoices",

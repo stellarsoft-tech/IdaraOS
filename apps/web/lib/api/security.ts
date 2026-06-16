@@ -1362,3 +1362,244 @@ export function useDeleteClauseCompliance() {
   })
 }
 
+// ============================================================================
+// INCIDENTS
+// ============================================================================
+
+export interface SecurityIncident {
+  id: string
+  incidentId: string
+  title: string
+  description?: string | null
+  classification: "event" | "incident"
+  severity: "p1" | "p2" | "p3" | "p4"
+  status: "draft" | "reported" | "triaging" | "responding" | "resolved" | "closed"
+  publicationStatus: "draft" | "published"
+  currentVersion: string
+  ownerId?: string | null
+  ownerName?: string | null
+  ownerEmail?: string | null
+  linkedEvidenceIds?: string[] | null
+  detectedAt?: string | null
+  reportedAt?: string | null
+  containedAt?: string | null
+  resolvedAt?: string | null
+  closedAt?: string | null
+  publishedAt?: string | null
+  impactDescription?: string | null
+  containmentActions?: string | null
+  eradicationActions?: string | null
+  recoveryActions?: string | null
+  rootCauseAnalysis?: string | null
+  lessonsLearned?: string | null
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+  versions?: SecurityIncidentVersion[]
+}
+
+export interface SecurityIncidentVersion {
+  id: string
+  incidentId: string
+  version: string
+  changeDescription?: string | null
+  snapshot: Record<string, unknown>
+  createdAt: string
+}
+
+export function useSecurityIncidents(params: { search?: string; status?: string; severity?: string; limit?: number } = {}) {
+  const queryParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") queryParams.set(key, String(value))
+  })
+  if (!params.limit) queryParams.set("limit", "500")
+
+  return useQuery<PaginatedResponse<SecurityIncident>>({
+    queryKey: ["security-incidents", params],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/incidents?${queryParams}`)
+      if (!res.ok) throw new Error("Failed to fetch incidents")
+      return res.json()
+    },
+  })
+}
+
+export function useSecurityIncident(id: string | undefined) {
+  return useQuery<{ data: SecurityIncident }>({
+    queryKey: ["security-incident", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/incidents/${id}`)
+      if (!res.ok) throw new Error("Failed to fetch incident")
+      return res.json()
+    },
+    enabled: !!id,
+  })
+}
+
+export function useCreateSecurityIncident() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Partial<SecurityIncident>) => {
+      const res = await fetch("/api/security/incidents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to create incident")
+      }
+      return res.json()
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["security-incidents"] }),
+  })
+}
+
+export function useUpdateSecurityIncident() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SecurityIncident> & { changeDescription?: string } }) => {
+      const res = await fetch(`/api/security/incidents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update incident")
+      }
+      return res.json()
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["security-incidents"] })
+      queryClient.invalidateQueries({ queryKey: ["security-incident", id] })
+    },
+  })
+}
+
+export function useDeleteSecurityIncident() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/security/incidents/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete incident")
+      return res.json()
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["security-incidents"] }),
+  })
+}
+
+// ============================================================================
+// NON-CONFORMITIES
+// ============================================================================
+
+export interface SecurityNonconformity {
+  id: string
+  ncId: string
+  title: string
+  description?: string | null
+  status: "open" | "analysis" | "corrective_action" | "verification" | "closed"
+  severity: "minor" | "major" | "critical"
+  source: "internal_audit" | "external_audit" | "incident" | "monitoring" | "management_review" | "self_assessment" | "other"
+  documentCategory?: string | null
+  linkedDocumentId?: string | null
+  linkedDocumentTitle?: string | null
+  linkedDocumentSlug?: string | null
+  ownerId?: string | null
+  ownerName?: string | null
+  ownerEmail?: string | null
+  linkedEvidenceIds?: string[] | null
+  rootCauseAnalysis?: string | null
+  correctiveAction?: string | null
+  correctiveActionDueDate?: string | null
+  effectivenessReview?: string | null
+  detectedAt?: string | null
+  dueDate?: string | null
+  closedAt?: string | null
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export function useSecurityNonconformities(params: { search?: string; status?: string; documentCategory?: string; limit?: number } = {}) {
+  const queryParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") queryParams.set(key, String(value))
+  })
+  if (!params.limit) queryParams.set("limit", "500")
+
+  return useQuery<PaginatedResponse<SecurityNonconformity>>({
+    queryKey: ["security-nonconformities", params],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/nonconformities?${queryParams}`)
+      if (!res.ok) throw new Error("Failed to fetch nonconformities")
+      return res.json()
+    },
+  })
+}
+
+export function useSecurityNonconformity(id: string | undefined) {
+  return useQuery<{ data: SecurityNonconformity }>({
+    queryKey: ["security-nonconformity", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/nonconformities/${id}`)
+      if (!res.ok) throw new Error("Failed to fetch nonconformity")
+      return res.json()
+    },
+    enabled: !!id,
+  })
+}
+
+export function useCreateSecurityNonconformity() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Partial<SecurityNonconformity>) => {
+      const res = await fetch("/api/security/nonconformities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to create nonconformity")
+      }
+      return res.json()
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["security-nonconformities"] }),
+  })
+}
+
+export function useUpdateSecurityNonconformity() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SecurityNonconformity> }) => {
+      const res = await fetch(`/api/security/nonconformities/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update nonconformity")
+      }
+      return res.json()
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ["security-nonconformities"] })
+      queryClient.invalidateQueries({ queryKey: ["security-nonconformity", id] })
+    },
+  })
+}
+
+export function useDeleteSecurityNonconformity() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/security/nonconformities/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete nonconformity")
+      return res.json()
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["security-nonconformities"] }),
+  })
+}
+

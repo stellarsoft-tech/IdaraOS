@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, CheckCircle, Clock, AlertTriangle, Shield, FileText, Target, XCircle, BookOpen } from "lucide-react"
+import { ArrowRight, CheckCircle, Clock, AlertTriangle, Shield, FileText, Target, XCircle, BookOpen, FileWarning } from "lucide-react"
 import { format } from "date-fns"
 
 import { PageShell } from "@/components/primitives/page-shell"
@@ -319,6 +319,50 @@ export default function ISO27001DashboardPage() {
                       ) : (
                         <span className="text-muted-foreground">33 requirements</span>
                       )}
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Link>
+            </Card>
+
+            <Card className="hover:border-primary/50 transition-colors">
+              <Link href="/security/incidents">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-4 w-4" />
+                    Incident Management
+                  </CardTitle>
+                  <CardDescription>
+                    Annex A A.5.24–A.5.28 — incident response and evidence
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Register, respond, and retain versioned incident records
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Link>
+            </Card>
+
+            <Card className="hover:border-primary/50 transition-colors">
+              <Link href="/security/nonconformities">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <FileWarning className="h-4 w-4" />
+                    Nonconformity & CA
+                  </CardTitle>
+                  <CardDescription>
+                    Clause 10.2 — corrective action and effectiveness review
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-muted-foreground">
+                      Link NCs to documents and track root cause to closure
                     </div>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>

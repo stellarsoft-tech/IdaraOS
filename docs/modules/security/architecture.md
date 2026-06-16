@@ -25,6 +25,8 @@ graph TB
             Evidence[Evidence Store]
             Audits[Audits]
             Objectives[Objectives]
+            Incidents[Incident Management]
+            Nonconformities[Nonconformity & CA]
         end
         
         subgraph FrameworksHub [Frameworks Hub]
@@ -65,6 +67,8 @@ graph LR
     Security --> EvidenceStore[Evidence Store]
     Security --> Audits[Audits]
     Security --> Objectives[Objectives]
+    Security --> Incidents[Incident Management]
+    Security --> Nonconformities[Nonconformity & CA]
     Security --> Frameworks[Frameworks]
     
     Frameworks --> ISO[ISO 27001]
@@ -327,6 +331,9 @@ sequenceDiagram
 | `security_audits` | Internal/external audit records |
 | `security_audit_findings` | Findings and NCRs from audits |
 | `security_objectives` | Security objectives with reporting periods, achievement status, and evidence links (ISO 27001 Clause 6.2) |
+| `security_incidents` | Information security incidents (Annex A A.5.24–A.5.28) with owner, severity, response fields, publication status |
+| `security_incident_versions` | Version snapshots when published incidents are edited |
+| `security_nonconformities` | Nonconformities and corrective actions (Clause 10.2) with document linkage and evidence |
 
 ## API Routes
 
@@ -351,6 +358,10 @@ sequenceDiagram
 | GET/POST | `/api/security/audits` | List/create audits |
 | GET/POST | `/api/security/objectives` | List/create objectives (filter by period, achievement, framework) |
 | GET/PATCH/DELETE | `/api/security/objectives/[id]` | CRUD for objective including evidence links |
+| GET/POST | `/api/security/incidents` | List/create incidents |
+| GET/PATCH/DELETE | `/api/security/incidents/[id]` | CRUD, publish, version history on published edits |
+| GET/POST | `/api/security/nonconformities` | List/create nonconformities (validates document category match) |
+| GET/PATCH/DELETE | `/api/security/nonconformities/[id]` | CRUD for NC including corrective action fields |
 
 ## Core Features
 
@@ -562,6 +573,12 @@ apps/web/
 │       ├── objectives/
 │       │   ├── page.tsx                # All security objectives
 │       │   └── [id]/page.tsx           # Objective detail with evidence linking
+│       ├── incidents/
+│       │   ├── page.tsx                # Incident register
+│       │   └── [id]/page.tsx           # Incident detail, publish, version history
+│       ├── nonconformities/
+│       │   ├── page.tsx                # NC register with document type filter
+│       │   └── [id]/page.tsx           # NC detail, corrective action lifecycle
 │       └── frameworks/
 │           ├── page.tsx                # Frameworks list
 │           ├── iso-27001/
