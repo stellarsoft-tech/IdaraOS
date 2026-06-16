@@ -64,6 +64,7 @@ export const MODULES = {
   // Documentation
   DOCS_OVERVIEW: "docs.overview",
   DOCS_DOCUMENTS: "docs.documents",
+  DOCS_INCIDENT_DOCUMENTATION: "docs.incident-documentation",
   DOCS_ROLLOUTS: "docs.rollouts",
   DOCS_ACKNOWLEDGMENTS: "docs.acknowledgments",
   DOCS_SETTINGS: "docs.settings",
@@ -294,6 +295,14 @@ export const P = {
       delete: (): PermissionTuple => [MODULES.DOCS_DOCUMENTS, ACTIONS.DELETE],
       print: (): PermissionTuple => [MODULES.DOCS_DOCUMENTS, ACTIONS.PRINT],
       readAll: (): PermissionTuple => [MODULES.DOCS_DOCUMENTS, ACTIONS.READ_ALL],
+    },
+    incidentDocumentation: {
+      view: (): PermissionTuple => [MODULES.DOCS_INCIDENT_DOCUMENTATION, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.DOCS_INCIDENT_DOCUMENTATION, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.DOCS_INCIDENT_DOCUMENTATION, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.DOCS_INCIDENT_DOCUMENTATION, ACTIONS.DELETE],
+      print: (): PermissionTuple => [MODULES.DOCS_INCIDENT_DOCUMENTATION, ACTIONS.PRINT],
+      readAll: (): PermissionTuple => [MODULES.DOCS_INCIDENT_DOCUMENTATION, ACTIONS.READ_ALL],
     },
     rollouts: {
       view: (): PermissionTuple => [MODULES.DOCS_ROLLOUTS, ACTIONS.VIEW],

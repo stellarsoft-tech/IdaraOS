@@ -16,7 +16,7 @@ import {
   persons,
 } from "@/lib/db/schema"
 import { UpdateDocumentSchema } from "@/lib/docs/types"
-import { requirePermission, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, getAuditLogger, handleApiError } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import {
   readContent,
@@ -24,6 +24,7 @@ import {
   deleteContent,
   getOrgDocsSettings,
 } from "@/lib/docs/storage"
+import { syncIncidentRegisterFromDocument } from "@/lib/security/incident-documents"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -242,6 +243,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       )
     }
 
+    await requirePermission(
+      ...(existing.category === "incident" || data.category === "incident"
+        ? P.docs.incidentDocumentation.edit()
+        : P.docs.documents.edit())
+    )
+
     if (data.slug && data.slug !== existing.slug) {
       const [slugExists] = await db
         .select({ id: documents.id })
@@ -350,6 +357,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       })
     }
 
+    await syncIncidentRegisterFromDocument(updated)
+
     const audit = await getAuditLogger()
     if (audit) {
       await audit.logUpdate(
@@ -364,6 +373,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ data: updated })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     console.error("Error updating document:", error)
     return NextResponse.json(
       { error: "Failed to update document" },
@@ -399,6 +410,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       )
     }
 
+    await requirePermission(
+      ...(existing.category === "incident"
+        ? P.docs.incidentDocumentation.delete()
+        : P.docs.documents.delete())
+    )
+
     // Clean up filing artefacts before cascade-deleting the document
     await deleteContent(existing)
 
@@ -415,6 +432,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return new NextResponse(null, { status: 204 })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     console.error("Error deleting document:", error)
     return NextResponse.json(
       { error: "Failed to delete document" },

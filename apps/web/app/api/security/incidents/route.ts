@@ -10,7 +10,7 @@ import {
   incidentClassificationValues,
   incidentPublicationStatusValues,
 } from "@/lib/db/schema/security"
-import { users } from "@/lib/db/schema"
+import { documents, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 import { getAuditLogger } from "@/lib/api/context"
 import { isAssignableObjectiveOwner } from "@/lib/security/objective-owners"
@@ -61,6 +61,9 @@ export async function GET(request: NextRequest) {
           status: securityIncidents.status,
           publicationStatus: securityIncidents.publicationStatus,
           currentVersion: securityIncidents.currentVersion,
+            documentId: securityIncidents.documentId,
+            documentSlug: documents.slug,
+            documentTitle: documents.title,
           ownerId: securityIncidents.ownerId,
           ownerName: owner.name,
           ownerEmail: owner.email,
@@ -75,6 +78,7 @@ export async function GET(request: NextRequest) {
         })
         .from(securityIncidents)
         .leftJoin(owner, eq(securityIncidents.ownerId, owner.id))
+        .leftJoin(documents, eq(securityIncidents.documentId, documents.id))
         .where(and(...conditions))
         .orderBy(desc(securityIncidents.updatedAt))
         .limit(limit)

@@ -4,17 +4,17 @@
 
 The Incident Management module supports **ISO/IEC 27001:2022 Annex A controls A.5.24–A.5.28** and links to **Clause 10.2** (nonconformity and corrective action) when incidents reveal systemic gaps.
 
-Organizations must plan for, detect, assess, respond to, learn from, and preserve evidence for information security incidents. IdaraOS provides a structured incident register with ownership, severity classification, response lifecycle tracking, evidence linking, and version history for published records.
+Organizations must plan for, detect, assess, respond to, learn from, and preserve evidence for information security incidents. IdaraOS uses the Documentation module as the controlled source of incident records, while Incident Management provides the operational register for severity, status, ownership, evidence, and audit visibility.
 
 ## ISO 27001:2022 Mapping
 
 | Control / Clause | Requirement | IdaraOS Coverage |
 |------------------|-------------|------------------|
-| **A.5.24** Planning & preparation | Define incident processes, roles, communication, and response procedures | Incident register, owner assignment, severity (P1–P4), status workflow |
-| **A.5.25** Event assessment | Assess events and decide if they are incidents | Classification: event vs incident; triage status |
-| **A.5.26** Incident response | Containment, eradication, recovery per documented procedures | Response fields: containment, eradication, recovery actions; timestamps |
-| **A.5.27** Lessons learned | Use incident knowledge to improve controls | Root cause analysis, lessons learned, linked evidence |
-| **A.5.28** Evidence collection | Identify, collect, acquire, preserve evidence | Multiple linked evidence items from Evidence Store |
+| **A.5.24** Planning & preparation | Define incident processes, roles, communication, and response procedures | Incident documentation category, register owner, severity (P1–P4), status workflow |
+| **A.5.25** Event assessment | Assess events and decide if they are incidents | Incident document metadata: event vs incident; triage status |
+| **A.5.26** Incident response | Containment, eradication, recovery per documented procedures | Controlled incident report sections for containment, eradication, recovery |
+| **A.5.27** Lessons learned | Use incident knowledge to improve controls | Controlled root cause and lessons learned sections |
+| **A.5.28** Evidence collection | Identify, collect, acquire, preserve evidence | Evidence Store links and file/image evidence references |
 | **Clause 10.2** Improvement | Address nonconformities arising from incidents | Link to Nonconformity & Corrective Action module |
 
 ## Module Location
@@ -25,7 +25,11 @@ Organizations must plan for, detect, assess, respond to, learn from, and preserv
 
 ### Incident Register
 
-Create, view, update, and delete incidents scoped to your organization. Each incident has a unique `incidentId` (e.g. `INC-001`).
+The register lists incident documents scoped to your organization. Each incident document has a unique `incidentId` (e.g. `INC-001`) and appears in the register automatically when created under the **Incident** documentation category.
+
+### Controlled Incident Documentation
+
+Create incident records from **Security → Incident Management → New Incident Document** or **Docs & Policies → Document Library → New Document** with category **Incident**. The document carries the controlled narrative and version history; the register mirrors the operational metadata.
 
 ### Owner Assignment
 
@@ -41,10 +45,10 @@ Assign an incident owner from **active platform users** (not directory/person re
 
 ### Publication & Version History
 
-When an incident is **published**, subsequent edits create a **version snapshot** (same pattern as the Documentation module). This preserves retained information for audits and demonstrates change control over incident records.
+When an incident document is **published**, subsequent content changes create document versions. This keeps audit-retained incident history in the Documentation module instead of duplicating version history in the register.
 
-- **Draft** — editable without versioning
-- **Published** — edits bump `currentVersion` and store prior state in `security_incident_versions`
+- **Draft** — incident document appears in the register as draft
+- **Published** — register reflects published status and current document version
 
 ### Evidence Linking
 
@@ -52,16 +56,17 @@ Attach multiple evidence items from the Evidence Store. Supports A.5.28 chain-of
 
 ### Response Documentation
 
-Capture impact, containment, eradication, recovery, root cause analysis, and lessons learned — aligned with A.5.26 and A.5.27.
+Capture impact, containment, eradication, recovery, root cause analysis, and lessons learned in the incident document template — aligned with A.5.26 and A.5.27.
 
 ## Permissions
 
 | Action | Permission |
 |--------|------------|
-| View list & detail | `security.incidents` (view) |
-| Create | `security.incidents` (create) |
-| Edit / publish | `security.incidents` (edit) |
-| Delete | `security.incidents` (delete) |
+| View register | `security.incidents` (view) |
+| Create incident documents | `docs.incident-documentation` (create) |
+| Edit incident documents | `docs.incident-documentation` (edit) |
+| Delete incident documents | `docs.incident-documentation` (delete) |
+| View all incident documents | `docs.incident-documentation` (read_all) |
 
 ## Related Modules
 

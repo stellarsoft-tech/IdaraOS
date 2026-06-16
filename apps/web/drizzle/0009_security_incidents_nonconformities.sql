@@ -69,23 +69,23 @@ CREATE TABLE "security_nonconformities" (
 --> statement-breakpoint
 ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_owner_id_core_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_reported_by_id_users_id_fk" FOREIGN KEY ("reported_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_reported_by_id_core_users_id_fk" FOREIGN KEY ("reported_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_approved_by_id_users_id_fk" FOREIGN KEY ("approved_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "security_incidents" ADD CONSTRAINT "security_incidents_approved_by_id_core_users_id_fk" FOREIGN KEY ("approved_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "security_incident_versions" ADD CONSTRAINT "security_incident_versions_incident_id_security_incidents_id_fk" FOREIGN KEY ("incident_id") REFERENCES "public"."security_incidents"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "security_incident_versions" ADD CONSTRAINT "security_incident_versions_created_by_id_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "security_incident_versions" ADD CONSTRAINT "security_incident_versions_created_by_id_core_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "security_nonconformities" ADD CONSTRAINT "security_nonconformities_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
 --> statement-breakpoint
 ALTER TABLE "security_nonconformities" ADD CONSTRAINT "security_nonconformities_linked_document_id_docs_documents_id_fk" FOREIGN KEY ("linked_document_id") REFERENCES "public"."docs_documents"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "security_nonconformities" ADD CONSTRAINT "security_nonconformities_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "security_nonconformities" ADD CONSTRAINT "security_nonconformities_owner_id_core_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
-ALTER TABLE "security_nonconformities" ADD CONSTRAINT "security_nonconformities_effectiveness_verified_by_id_users_id_fk" FOREIGN KEY ("effectiveness_verified_by_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+ALTER TABLE "security_nonconformities" ADD CONSTRAINT "security_nonconformities_effectiveness_verified_by_id_core_users_id_fk" FOREIGN KEY ("effectiveness_verified_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
 --> statement-breakpoint
 CREATE INDEX "idx_security_incidents_org" ON "security_incidents" USING btree ("org_id");
 --> statement-breakpoint

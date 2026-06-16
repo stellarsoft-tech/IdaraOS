@@ -3,11 +3,12 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, History, Pencil, Send, Trash2 } from "lucide-react"
+import { ArrowLeft, FileText, History, Pencil, Send, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 
 import { PageHeader } from "@/components/page-header"
+import { useBreadcrumbLabel } from "@/components/breadcrumb-context"
 import { Protected } from "@/components/primitives/protected"
 import { FormDrawer } from "@/components/primitives/form-drawer"
 import { Button } from "@/components/ui/button"
@@ -75,6 +76,7 @@ export default function IncidentDetailPage() {
   const { data: ownersData } = useAssignableObjectiveOwners()
   const { data: evidenceData } = useSecurityEvidence({ limit: 200 })
   const incident = data?.data
+  useBreadcrumbLabel(incident?.title)
 
   const formConfig = useMemo(
     () => ({
@@ -170,6 +172,13 @@ export default function IncidentDetailPage() {
         <Button variant="ghost" size="icon" asChild>
           <Link href="/security/incidents"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
+        {incident.documentSlug && (
+          <Button variant="outline" asChild>
+            <Link href={`/docs/view/${incident.documentSlug}`}>
+              <FileText className="mr-2 h-4 w-4" /> Controlled Document
+            </Link>
+          </Button>
+        )}
         <Protected module="security.incidents" action="edit">
           {incident.publicationStatus !== "published" && (
             <Button variant="outline" onClick={handlePublish}>

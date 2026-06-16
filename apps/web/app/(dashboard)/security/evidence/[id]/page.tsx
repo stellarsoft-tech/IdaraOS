@@ -103,6 +103,16 @@ const editFormSchema = z.object({
   status: z.enum(evidenceStatusValues),
   collectedAt: z.string().min(1, "Collection date is required"),
   validUntil: z.string().optional(),
+  fileUrl: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.string().url("Must be a valid URL").optional(),
+  ),
+  fileName: z.string().optional(),
+  fileSize: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(0).optional(),
+  ),
+  mimeType: z.string().optional(),
   externalUrl: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? undefined : v),
     z.string().url("Must be a valid URL").optional(),
@@ -625,6 +635,34 @@ export default function EvidenceDetailPage() {
           },
           { name: "validUntil", label: "Valid Until", component: "date" },
           {
+            name: "fileUrl",
+            label: "File or Image URL",
+            component: "input",
+            type: "url",
+            placeholder: "https://.../evidence.pdf or https://.../screenshot.png",
+          },
+          {
+            name: "fileName",
+            label: "File Name",
+            component: "input",
+            type: "text",
+            placeholder: "e.g., audit-report.pdf",
+          },
+          {
+            name: "fileSize",
+            label: "File Size (bytes)",
+            component: "input",
+            type: "number",
+            placeholder: "e.g., 1048576",
+          },
+          {
+            name: "mimeType",
+            label: "MIME Type",
+            component: "input",
+            type: "text",
+            placeholder: "e.g., application/pdf or image/png",
+          },
+          {
             name: "externalUrl",
             label: "External URL",
             component: "input",
@@ -650,6 +688,10 @@ export default function EvidenceDetailPage() {
           validUntil: evidence.validUntil
             ? evidence.validUntil.split("T")[0]
             : "",
+          fileUrl: evidence.fileUrl || "",
+          fileName: evidence.fileName || "",
+          fileSize: evidence.fileSize ?? "",
+          mimeType: evidence.mimeType || "",
           externalUrl: evidence.externalUrl || "",
           externalSystem: evidence.externalSystem || "",
         }}

@@ -13,9 +13,10 @@ import {
   persons,
 } from "@/lib/db/schema"
 import { CreateDocumentSchema } from "@/lib/docs/types"
-import { requirePermission, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, getAuditLogger, handleApiError } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { writeContent, getOrgDocsSettings } from "@/lib/docs/storage"
+import { syncIncidentRegisterFromDocument } from "@/lib/security/incident-documents"
 
 /**
  * GET /api/docs/documents
@@ -163,8 +164,6 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requirePermission(...P.docs.documents.view())
-
     const body = await request.json()
 
     const parseResult = CreateDocumentSchema.safeParse(body)
@@ -176,6 +175,11 @@ export async function POST(request: NextRequest) {
     }
 
     const data = parseResult.data
+    const session = await requirePermission(
+      ...(data.category === "incident"
+        ? P.docs.incidentDocumentation.create()
+        : P.docs.documents.create())
+    )
 
     const [existing] = await db
       .select({ id: documents.id })
@@ -232,6 +236,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    await syncIncidentRegisterFromDocument(created)
+
     const audit = await getAuditLogger()
     if (audit) {
       await audit.logCreate("docs.documents", "document", {
@@ -244,6 +250,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: created }, { status: 201 })
   } catch (error) {
+    const apiError = handleApiError(error)
+    if (apiError) return apiError
     console.error("Error creating document:", error)
     return NextResponse.json(
       { error: "Failed to create document" },

@@ -1101,6 +1101,7 @@ export const securityIncidents = pgTable(
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     reportedById: uuid("reported_by_id").references(() => users.id, { onDelete: "set null" }),
     approvedById: uuid("approved_by_id").references(() => users.id, { onDelete: "set null" }),
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
 
     linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
 
@@ -1128,6 +1129,7 @@ export const securityIncidents = pgTable(
     index("idx_security_incidents_status").on(table.status),
     index("idx_security_incidents_severity").on(table.severity),
     index("idx_security_incidents_owner").on(table.ownerId),
+    index("idx_security_incidents_document").on(table.documentId),
     index("idx_security_incidents_publication").on(table.publicationStatus),
   ]
 )

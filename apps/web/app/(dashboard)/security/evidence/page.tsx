@@ -132,6 +132,13 @@ const createFormSchema = z.object({
   type: z.enum(["document", "screenshot", "log", "report", "attestation", "configuration", "other"]).default("document"),
   collectedAt: z.string().min(1, "Collection date is required"),
   validUntil: z.string().optional(),
+  fileUrl: z.string().url().optional().or(z.literal("")),
+  fileName: z.string().optional(),
+  fileSize: z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : value),
+    z.coerce.number().int().min(0).optional()
+  ),
+  mimeType: z.string().optional(),
   externalUrl: z.string().url().optional().or(z.literal("")),
   externalSystem: z.string().optional(),
   controlIds: z.array(z.string()).optional(),
@@ -177,6 +184,31 @@ const formConfig = {
     label: "Valid Until",
     type: "date",
   },
+  fileUrl: {
+    component: "input" as const,
+    label: "File or Image URL",
+    placeholder: "https://.../evidence.pdf or https://.../screenshot.png",
+    type: "url",
+    helpText: "Link to the stored evidence file, image, screenshot, or report.",
+  },
+  fileName: {
+    component: "input" as const,
+    label: "File Name",
+    placeholder: "e.g., audit-report.pdf",
+    type: "text",
+  },
+  fileSize: {
+    component: "input" as const,
+    label: "File Size (bytes)",
+    placeholder: "e.g., 1048576",
+    type: "number",
+  },
+  mimeType: {
+    component: "input" as const,
+    label: "MIME Type",
+    placeholder: "e.g., application/pdf or image/png",
+    type: "text",
+  },
   externalUrl: {
     component: "input" as const,
     label: "External URL",
@@ -221,7 +253,12 @@ export default function EvidencePage() {
     try {
       await createEvidence.mutateAsync({
         ...values,
+        fileUrl: values.fileUrl || undefined,
+        fileName: values.fileName || undefined,
+        fileSize: values.fileSize || undefined,
+        mimeType: values.mimeType || undefined,
         externalUrl: values.externalUrl || undefined,
+        externalSystem: values.externalSystem || undefined,
         controlIds: selectedControlIds.length > 0 ? selectedControlIds : undefined,
       })
       toast.success("Evidence added successfully")
@@ -360,7 +397,7 @@ export default function EvidencePage() {
         description="Add a new evidence item to the store"
         schema={createFormSchema}
         config={formConfig}
-        fields={["title", "description", "type", "collectedAt", "validUntil", "externalUrl", "externalSystem"]}
+        fields={["title", "description", "type", "collectedAt", "validUntil", "fileUrl", "fileName", "fileSize", "mimeType", "externalUrl", "externalSystem"]}
         mode="create"
         onSubmit={handleCreate}
         infoBanner={controlSelectorBanner}

@@ -81,6 +81,7 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   // Documentation
   { slug: MODULES.DOCS_OVERVIEW, name: "Overview", description: "View documentation dashboard", category: "Documentation", icon: "FileText", sortOrder: "500", actions: [ACTIONS.VIEW] },
   { slug: MODULES.DOCS_DOCUMENTS, name: "Document Library", description: "Manage documents and policies", category: "Documentation", icon: "Files", sortOrder: "501", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE, ACTIONS.PRINT, ACTIONS.READ_ALL] },
+  { slug: MODULES.DOCS_INCIDENT_DOCUMENTATION, name: "Incident Documentation", description: "Create and maintain controlled incident documents that feed the incident register", category: "Documentation", icon: "FileWarning", sortOrder: "501.5", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE, ACTIONS.PRINT, ACTIONS.READ_ALL] },
   { slug: MODULES.DOCS_ROLLOUTS, name: "Rollouts", description: "Manage document rollouts", category: "Documentation", icon: "Users", sortOrder: "502", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
   { slug: MODULES.DOCS_ACKNOWLEDGMENTS, name: "Acknowledgments", description: "View document acknowledgments", category: "Documentation", icon: "CheckSquare", sortOrder: "503", actions: [ACTIONS.VIEW] },
   { slug: MODULES.DOCS_SETTINGS, name: "Settings", description: "Configure documentation settings", category: "Documentation", icon: "Settings", sortOrder: "504", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },

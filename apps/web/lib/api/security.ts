@@ -1377,6 +1377,9 @@ export interface SecurityIncident {
   status: "draft" | "reported" | "triaging" | "responding" | "resolved" | "closed"
   publicationStatus: "draft" | "published"
   currentVersion: string
+  documentId?: string | null
+  documentSlug?: string | null
+  documentTitle?: string | null
   ownerId?: string | null
   ownerName?: string | null
   ownerEmail?: string | null

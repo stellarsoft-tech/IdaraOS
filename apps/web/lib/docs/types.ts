@@ -25,6 +25,7 @@ export const documentCategoryEnum = z.enum([
   "manual",
   "template",
   "training",
+  "incident",
   "general",
 ])
 export type DocumentCategory = z.infer<typeof documentCategoryEnum>
@@ -38,6 +39,7 @@ export const documentCategoryLabels: Record<DocumentCategory, string> = {
   manual: "Manual",
   template: "Template",
   training: "Training",
+  incident: "Incident",
   general: "General",
 }
 

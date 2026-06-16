@@ -57,6 +57,20 @@
       "when": 1775200000000,
       "tag": "0007_security_objectives_period",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775200100000,
+      "tag": "0009_security_incidents_nonconformities",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781609400000,
+      "tag": "0010_incident_documentation",
+      "breakpoints": true
     }
   ]
 }

@@ -67,6 +67,7 @@ import { Progress } from "@/components/ui/progress"
 import { MDXRenderer, RolloutDetailDrawer } from "@/components/docs"
 import { useDocument, useUpdateDocument, useDeleteDocument, useRollouts, useAcknowledgments, useDocsSettings } from "@/lib/api/docs"
 import { useFileCategoriesList } from "@/lib/api/file-categories"
+import { useAssignableObjectiveOwners } from "@/lib/api/security"
 import {
   documentCategoryLabels,
   type DocumentCategory,
@@ -122,8 +123,10 @@ export default function DocumentDetailPage() {
   const { data: acksData } = useAcknowledgments({ documentId: doc?.id })
   const { data: docsSettingsData } = useDocsSettings()
   const { data: docsCategoriesData } = useFileCategoriesList({ moduleScope: "docs" })
+  const { data: ownersData } = useAssignableObjectiveOwners()
 
   const docsCategories = docsCategoriesData ?? []
+  const assignableOwners = ownersData?.data ?? []
   const orgStorageMode = docsSettingsData?.data?.contentStorageMode ?? "database"
   
   const rollouts = rolloutsData?.data || []
@@ -136,6 +139,7 @@ export default function DocumentDetailPage() {
         referenceId?: string
         effectiveDate?: string
         ownerRole?: string
+        ownerUserId?: string
         approvedBy?: { name?: string; role?: string }
       }
       setFormData({
@@ -153,6 +157,7 @@ export default function DocumentDetailPage() {
         referenceId: metadata.referenceId || "",
         effectiveDate: metadata.effectiveDate || "",
         ownerRole: metadata.ownerRole || "",
+        incidentOwnerId: metadata.ownerUserId || "__unassigned__",
         approvedByName: metadata.approvedBy?.name || "",
         approvedByRole: metadata.approvedBy?.role || "",
       })
@@ -168,8 +173,10 @@ export default function DocumentDetailPage() {
       const refId = formData.referenceId as string | undefined
       const effDate = formData.effectiveDate as string | undefined
       const ownerRoleVal = formData.ownerRole as string | undefined
+      const incidentOwnerId = formData.incidentOwnerId as string | undefined
       const approvedName = formData.approvedByName as string | undefined
       const approvedRole = formData.approvedByRole as string | undefined
+      const nextCategory = formData.category as string | undefined
       
       // Build metadata object from form fields
       const metadata = {
@@ -177,6 +184,10 @@ export default function DocumentDetailPage() {
         referenceId: refId || undefined,
         effectiveDate: effDate || undefined,
         ownerRole: ownerRoleVal || undefined,
+        ownerUserId:
+          nextCategory === "incident" && incidentOwnerId && incidentOwnerId !== "__unassigned__"
+            ? incidentOwnerId
+            : undefined,
         approvedBy: (approvedName || approvedRole) 
           ? { 
               name: approvedName || undefined, 
@@ -185,7 +196,7 @@ export default function DocumentDetailPage() {
           : undefined,
       }
       
-      const { referenceId, effectiveDate, ownerRole, approvedByName, approvedByRole, storageMode, ...restFormData } = formData
+      const { referenceId, effectiveDate, ownerRole, incidentOwnerId: _incidentOwnerId, approvedByName, approvedByRole, storageMode, ...restFormData } = formData
 
       const resolvedStorageMode = parseDocStorageMode(storageMode)
 
@@ -583,6 +594,31 @@ flowchart LR
                     </SelectContent>
                   </Select>
                 </div>
+
+                {formData.category === "incident" && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>Incident Owner</Label>
+                    <Select
+                      value={formData.incidentOwnerId as string || "__unassigned__"}
+                      onValueChange={(value) => setFormData({ ...formData, incidentOwnerId: value })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select owner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                        {assignableOwners.map((owner) => (
+                          <SelectItem key={owner.id} value={owner.id}>
+                            {owner.name || owner.email} ({owner.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Lists platform users and updates the Incident Register owner.
+                    </p>
+                  </div>
+                )}
               </div>
               
               <div className="space-y-2">

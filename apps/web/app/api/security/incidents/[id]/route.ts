@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, or } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import {
@@ -11,7 +11,7 @@ import {
   incidentClassificationValues,
   incidentPublicationStatusValues,
 } from "@/lib/db/schema/security"
-import { users } from "@/lib/db/schema"
+import { documents, users } from "@/lib/db/schema"
 import { getSession } from "@/lib/auth/session"
 import { getAuditLogger } from "@/lib/api/context"
 import { isAssignableObjectiveOwner } from "@/lib/security/objective-owners"
@@ -53,6 +53,23 @@ const VERSIONED_FIELDS = [
   "eradicationActions", "recoveryActions", "rootCauseAnalysis", "lessonsLearned", "notes",
 ] as const
 
+function resolveIncidentLookup(value: string): string {
+  const decoded = decodeURIComponent(value)
+  const separatorIndex = decoded.lastIndexOf("--")
+  return separatorIndex >= 0 ? decoded.slice(separatorIndex + 2) : decoded
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+function incidentIdentifierFilter(lookup: string) {
+  if (isUuid(lookup)) {
+    return or(eq(securityIncidents.id, lookup), eq(securityIncidents.incidentId, lookup))
+  }
+  return eq(securityIncidents.incidentId, lookup)
+}
+
 function hasVersionedChanges(
   existing: typeof securityIncidents.$inferSelect,
   updates: z.infer<typeof updateIncidentSchema>
@@ -76,6 +93,7 @@ export async function GET(
     }
 
     const { id } = await params
+    const lookup = resolveIncidentLookup(id)
     const owner = users
 
     const [incident] = await db
@@ -90,6 +108,9 @@ export async function GET(
         status: securityIncidents.status,
         publicationStatus: securityIncidents.publicationStatus,
         currentVersion: securityIncidents.currentVersion,
+        documentId: securityIncidents.documentId,
+        documentSlug: documents.slug,
+        documentTitle: documents.title,
         ownerId: securityIncidents.ownerId,
         ownerName: owner.name,
         ownerEmail: owner.email,
@@ -114,7 +135,11 @@ export async function GET(
       })
       .from(securityIncidents)
       .leftJoin(owner, eq(securityIncidents.ownerId, owner.id))
-      .where(and(eq(securityIncidents.id, id), eq(securityIncidents.orgId, session.orgId)))
+      .leftJoin(documents, eq(securityIncidents.documentId, documents.id))
+      .where(and(
+        eq(securityIncidents.orgId, session.orgId),
+        incidentIdentifierFilter(lookup)
+      ))
       .limit(1)
 
     if (!incident) {
@@ -124,7 +149,7 @@ export async function GET(
     const versions = await db
       .select()
       .from(securityIncidentVersions)
-      .where(eq(securityIncidentVersions.incidentId, id))
+      .where(eq(securityIncidentVersions.incidentId, incident.id))
       .orderBy(desc(securityIncidentVersions.createdAt))
 
     return NextResponse.json({ data: { ...incident, versions } })
@@ -145,13 +170,17 @@ export async function PATCH(
     }
 
     const { id } = await params
+    const lookup = resolveIncidentLookup(id)
     const body = await request.json()
     const validated = updateIncidentSchema.parse(body)
 
     const [existing] = await db
       .select()
       .from(securityIncidents)
-      .where(and(eq(securityIncidents.id, id), eq(securityIncidents.orgId, session.orgId)))
+      .where(and(
+        eq(securityIncidents.orgId, session.orgId),
+        incidentIdentifierFilter(lookup)
+      ))
       .limit(1)
 
     if (!existing) {
@@ -209,12 +238,12 @@ export async function PATCH(
         }),
         updatedAt: new Date(),
       })
-      .where(eq(securityIncidents.id, id))
+      .where(eq(securityIncidents.id, existing.id))
       .returning()
 
     const audit = await getAuditLogger()
     if (audit) {
-      await audit.logUpdate("security.incidents", "incident", id, updated.title, existing, updated)
+      await audit.logUpdate("security.incidents", "incident", existing.id, updated.title, existing, updated)
     }
 
     return NextResponse.json({ data: updated })
@@ -238,21 +267,25 @@ export async function DELETE(
     }
 
     const { id } = await params
+    const lookup = resolveIncidentLookup(id)
     const [existing] = await db
       .select()
       .from(securityIncidents)
-      .where(and(eq(securityIncidents.id, id), eq(securityIncidents.orgId, session.orgId)))
+      .where(and(
+        eq(securityIncidents.orgId, session.orgId),
+        incidentIdentifierFilter(lookup)
+      ))
       .limit(1)
 
     if (!existing) {
       return NextResponse.json({ error: "Incident not found" }, { status: 404 })
     }
 
-    await db.delete(securityIncidents).where(eq(securityIncidents.id, id))
+    await db.delete(securityIncidents).where(eq(securityIncidents.id, existing.id))
 
     const audit = await getAuditLogger()
     if (audit) {
-      await audit.logDelete("security.incidents", "incident", { id, name: existing.title })
+      await audit.logDelete("security.incidents", "incident", { id: existing.id, name: existing.title })
     }
 
     return NextResponse.json({ success: true })

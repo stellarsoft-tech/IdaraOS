@@ -1,11 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, FileText, Loader2, Save } from "lucide-react"
 
-import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -23,6 +22,7 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MDXRenderer } from "@/components/docs"
 import { useCreateDocument } from "@/lib/api/docs"
+import { useAssignableObjectiveOwners } from "@/lib/api/security"
 import { documentCategoryLabels, type DocumentCategory } from "@/lib/docs/types"
 import { toast } from "sonner"
 
@@ -52,18 +52,81 @@ You can use:
 - External resources
 `
 
+const incidentContent = `# Incident Report
+
+## Summary
+
+Describe what happened, when it was detected, and who reported it.
+
+## Impact
+
+Document affected systems, data, users, services, and business impact.
+
+## Response Actions
+
+### Containment
+
+Describe immediate containment actions.
+
+### Eradication
+
+Describe how the root cause or threat was removed.
+
+### Recovery
+
+Describe service restoration and validation.
+
+## Root Cause
+
+Record the root cause analysis.
+
+## Lessons Learned
+
+Capture improvements required under ISO 27001 A.5.27.
+
+## Linked Evidence
+
+List evidence references, screenshots, files, logs, or external tickets.
+`
+
+const incidentSeverityOptions = [
+  { value: "p1", label: "P1 — Critical" },
+  { value: "p2", label: "P2 — High" },
+  { value: "p3", label: "P3 — Medium" },
+  { value: "p4", label: "P4 — Low" },
+]
+
+const incidentStatusOptions = [
+  { value: "draft", label: "Draft" },
+  { value: "reported", label: "Reported" },
+  { value: "triaging", label: "Triaging" },
+  { value: "responding", label: "Responding" },
+  { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
+]
+
 export default function NewDocumentPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const createDocument = useCreateDocument()
+  const { data: ownersData } = useAssignableObjectiveOwners()
+  const initialCategory =
+    searchParams.get("category") === "incident" ? "incident" : "general"
   
   const [title, setTitle] = React.useState("")
   const [slug, setSlug] = React.useState("")
   const [description, setDescription] = React.useState("")
-  const [category, setCategory] = React.useState<DocumentCategory>("general")
-  const [content, setContent] = React.useState(defaultContent)
+  const [category, setCategory] = React.useState<DocumentCategory>(initialCategory)
+  const [content, setContent] = React.useState(initialCategory === "incident" ? incidentContent : defaultContent)
   const [showHeader, setShowHeader] = React.useState(true)
   const [showFooter, setShowFooter] = React.useState(true)
   const [showVersionHistory, setShowVersionHistory] = React.useState(true)
+  const [incidentId, setIncidentId] = React.useState("")
+  const [incidentClassification, setIncidentClassification] = React.useState<"event" | "incident">("incident")
+  const [incidentSeverity, setIncidentSeverity] = React.useState("p3")
+  const [incidentStatus, setIncidentStatus] = React.useState("draft")
+  const [incidentOwnerId, setIncidentOwnerId] = React.useState("__unassigned__")
+  const assignableOwners = ownersData?.data ?? []
   
   // Auto-generate slug from title
   React.useEffect(() => {
@@ -75,6 +138,17 @@ export default function NewDocumentPage() {
       setSlug(generatedSlug)
     }
   }, [title])
+
+  const handleCategoryChange = (value: string) => {
+    const nextCategory = value as DocumentCategory
+    setCategory(nextCategory)
+    if (nextCategory === "incident" && content === defaultContent) {
+      setContent(incidentContent)
+    }
+    if (nextCategory !== "incident" && content === incidentContent) {
+      setContent(defaultContent)
+    }
+  }
   
   const handleSubmit = async (status: "draft" | "published") => {
     if (!title.trim()) {
@@ -84,6 +158,11 @@ export default function NewDocumentPage() {
     
     if (!slug.trim()) {
       toast.error("Slug is required")
+      return
+    }
+
+    if (category === "incident" && !incidentId.trim()) {
+      toast.error("Incident ID is required for incident documents")
       return
     }
     
@@ -99,11 +178,23 @@ export default function NewDocumentPage() {
         showFooter,
         showVersionHistory,
         currentVersion: "1.0",
+        metadata: category === "incident"
+          ? {
+              referenceId: incidentId,
+              incidentId,
+              classification: incidentClassification,
+              severity: incidentSeverity,
+              status: incidentStatus,
+              ownerUserId: incidentOwnerId === "__unassigned__" ? undefined : incidentOwnerId,
+              confidentiality: "confidential",
+              department: "Security",
+            }
+          : undefined,
       })
       
       toast.success(status === "published" ? "Document published!" : "Document saved as draft")
-      router.push(`/docs/documents/${doc.slug}`)
-    } catch (error) {
+      router.push(category === "incident" ? "/security/incidents" : `/docs/documents/${doc.slug}`)
+    } catch (_error) {
       toast.error("Failed to create document")
     }
   }
@@ -184,7 +275,7 @@ export default function NewDocumentPage() {
               <Label htmlFor="category">Category</Label>
               <Select
                 value={category}
-                onValueChange={(value) => setCategory(value as DocumentCategory)}
+                onValueChange={handleCategoryChange}
               >
                 <SelectTrigger id="category">
                   <SelectValue />
@@ -198,6 +289,97 @@ export default function NewDocumentPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {category === "incident" && (
+              <>
+                <Separator />
+
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm">Incident Register Metadata</h4>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="incident-id">Incident ID *</Label>
+                    <Input
+                      id="incident-id"
+                      value={incidentId}
+                      onChange={(e) => setIncidentId(e.target.value)}
+                      placeholder="e.g., INC-001"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      This ID is used to list the controlled document in Incident Management.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="incident-classification">Classification</Label>
+                    <Select
+                      value={incidentClassification}
+                      onValueChange={(value) => setIncidentClassification(value as "event" | "incident")}
+                    >
+                      <SelectTrigger id="incident-classification">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="event">Event</SelectItem>
+                        <SelectItem value="incident">Incident</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="incident-severity">Severity</Label>
+                    <Select value={incidentSeverity} onValueChange={setIncidentSeverity}>
+                      <SelectTrigger id="incident-severity">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {incidentSeverityOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="incident-status">Register Status</Label>
+                    <Select value={incidentStatus} onValueChange={setIncidentStatus}>
+                      <SelectTrigger id="incident-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {incidentStatusOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="incident-owner">Owner</Label>
+                    <Select value={incidentOwnerId} onValueChange={setIncidentOwnerId}>
+                      <SelectTrigger id="incident-owner">
+                        <SelectValue placeholder="Select owner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                        {assignableOwners.map((owner) => (
+                          <SelectItem key={owner.id} value={owner.id}>
+                            {owner.name || owner.email} ({owner.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Lists platform users and updates the Incident Register owner.
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
             
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>

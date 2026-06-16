@@ -1,36 +1,17 @@
 "use client"
 
-import { useMemo, useState } from "react"
 import Link from "next/link"
-import { Plus, AlertTriangle } from "lucide-react"
-import { z } from "zod"
-import { toast } from "sonner"
+import { AlertTriangle, FileText, Plus } from "lucide-react"
 
 import { DataTableAdvanced as DataTable } from "@/components/primitives/data-table-advanced"
 import { PageShell } from "@/components/primitives/page-shell"
-import { FormDrawer } from "@/components/primitives/form-drawer"
 import { Protected } from "@/components/primitives/protected"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useUser } from "@/lib/rbac/context"
 import {
-  useAssignableObjectiveOwners,
-  useCreateSecurityIncident,
-  useSecurityEvidence,
   useSecurityIncidents,
   type SecurityIncident,
 } from "@/lib/api/security"
-import {
-  buildEvidenceFieldConfig,
-  buildOwnerFieldConfig,
-  objectiveLinkedEvidenceSchema,
-  objectiveOwnerIdSchema,
-} from "@/components/security/objective-form-shared"
-import {
-  incidentClassificationValues,
-  incidentSeverityValues,
-  incidentStatusValues,
-} from "@/lib/db/schema/security"
 
 const severityLabels: Record<string, string> = {
   p1: "P1 — Critical",
@@ -48,56 +29,26 @@ const statusLabels: Record<string, string> = {
   closed: "Closed",
 }
 
-const createSchema = z.object({
-  incidentId: z.string().min(1).max(50),
-  title: z.string().min(1).max(200),
-  description: z.string().optional(),
-  classification: z.enum(incidentClassificationValues),
-  severity: z.enum(incidentSeverityValues),
-  status: z.enum(incidentStatusValues),
-  ownerId: objectiveOwnerIdSchema,
-  linkedEvidenceIds: objectiveLinkedEvidenceSchema,
-  impactDescription: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-const baseFormConfig = {
-  incidentId: { component: "input" as const, label: "Incident ID", required: true, type: "text", placeholder: "INC-001" },
-  title: { component: "input" as const, label: "Title", required: true, type: "text" },
-  description: { component: "textarea" as const, label: "Description" },
-  classification: {
-    component: "select" as const,
-    label: "Classification",
-    options: incidentClassificationValues.map((v) => ({ value: v, label: v === "event" ? "Event" : "Incident" })),
-    required: true,
-  },
-  severity: {
-    component: "select" as const,
-    label: "Severity",
-    options: incidentSeverityValues.map((v) => ({ value: v, label: severityLabels[v] })),
-    required: true,
-  },
-  status: {
-    component: "select" as const,
-    label: "Status",
-    options: incidentStatusValues.map((v) => ({ value: v, label: statusLabels[v] })),
-    required: true,
-  },
-  impactDescription: { component: "textarea" as const, label: "Impact Description" },
-  notes: { component: "textarea" as const, label: "Notes" },
-}
-
 const columns = [
   {
     accessorKey: "incidentId",
     header: "ID",
     cell: ({ row }: { row: { original: SecurityIncident } }) => (
-      <Link href={`/security/incidents/${row.original.id}`} className="font-medium text-primary hover:underline">
+      <Link href={buildIncidentHref(row.original)} className="font-medium text-primary hover:underline">
         {row.original.incidentId}
       </Link>
     ),
   },
-  { accessorKey: "title", header: "Title" },
+  {
+    accessorKey: "title",
+    header: "Title",
+    cell: ({ row }: { row: { original: SecurityIncident } }) => (
+      <div className="flex items-center gap-2">
+        {row.original.documentSlug && <FileText className="h-4 w-4 text-muted-foreground" />}
+        <span>{row.original.title}</span>
+      </div>
+    ),
+  },
   {
     accessorKey: "severity",
     header: "Severity",
@@ -114,9 +65,15 @@ const columns = [
   },
   {
     accessorKey: "publicationStatus",
-    header: "Published",
+    header: "Document",
     cell: ({ row }: { row: { original: SecurityIncident } }) =>
-      row.original.publicationStatus === "published" ? "Yes" : "No",
+      row.original.documentSlug ? (
+        <Link href={`/docs/view/${row.original.documentSlug}`} className="text-primary hover:underline">
+          v{row.original.currentVersion}
+        </Link>
+      ) : (
+        "Register only"
+      ),
   },
   {
     accessorKey: "ownerName",
@@ -130,47 +87,41 @@ const columns = [
   },
 ]
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replaceAll(/[^\w\s-]/g, "")
+    .replaceAll(/[\s_-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+}
+
+function buildIncidentUrlSegment(incident: SecurityIncident): string {
+  const titleSlug = slugify(incident.title) || "incident"
+  return `${titleSlug}--${encodeURIComponent(incident.incidentId)}`
+}
+
+function buildIncidentHref(incident: SecurityIncident): string {
+  return incident.documentSlug
+    ? `/docs/view/${incident.documentSlug}`
+    : `/security/incidents/${buildIncidentUrlSegment(incident)}`
+}
+
 export default function IncidentsPage() {
-  const [createOpen, setCreateOpen] = useState(false)
-  const { hasPermission } = useUser()
-  const canEdit = hasPermission("security.incidents", "edit") || hasPermission("security.incidents", "create")
-
   const { data, isLoading } = useSecurityIncidents({ limit: 500 })
-  const createIncident = useCreateSecurityIncident()
-  const { data: ownersData } = useAssignableObjectiveOwners()
-  const { data: evidenceData } = useSecurityEvidence({ limit: 200 })
-  const assignableOwners = ownersData?.data ?? []
-  const evidenceList = evidenceData?.data ?? []
   const incidents = data?.data ?? []
-
-  const formConfig = useMemo(
-    () => ({
-      ...baseFormConfig,
-      ownerId: buildOwnerFieldConfig(assignableOwners),
-      linkedEvidenceIds: buildEvidenceFieldConfig(evidenceList),
-    }),
-    [assignableOwners, evidenceList]
-  )
-
-  const handleCreate = async (values: z.infer<typeof createSchema>) => {
-    try {
-      await createIncident.mutateAsync(values)
-      toast.success("Incident created")
-      setCreateOpen(false)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create incident")
-    }
-  }
 
   return (
     <PageShell
       title="Incident Management"
       description="Record, respond to, and learn from information security incidents (ISO 27001 A.5.24–A.5.28)."
       action={
-        <Protected module="security.incidents" anyAction={["create", "edit"]}>
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Incident
+        <Protected module="docs.incident-documentation" action="create">
+          <Button asChild>
+            <Link href="/docs/documents/new?category=incident">
+              <Plus className="mr-2 h-4 w-4" />
+              New Incident Document
+            </Link>
           </Button>
         </Protected>
       }
@@ -204,36 +155,6 @@ export default function IncidentsPage() {
         searchPlaceholder="Search incidents..."
         enableSorting
         enableExport
-      />
-
-      <FormDrawer
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        title="Create Incident"
-        description="Log a new information security event or incident"
-        schema={createSchema}
-        config={formConfig}
-        defaultValues={{
-          classification: "incident",
-          severity: "p3",
-          status: "draft",
-          ownerId: "__unassigned__",
-          linkedEvidenceIds: [],
-        }}
-        fields={[
-          "incidentId",
-          "title",
-          "description",
-          "classification",
-          "severity",
-          "status",
-          "ownerId",
-          "impactDescription",
-          "linkedEvidenceIds",
-          "notes",
-        ]}
-        mode="create"
-        onSubmit={handleCreate}
       />
     </PageShell>
   )
