@@ -101,11 +101,7 @@ export default function ObjectiveDetailPage() {
     try {
       await deleteObjective.mutateAsync(id)
       toast.success("Objective deleted")
-      router.push(
-        objective?.frameworkCode === "iso-27001"
-          ? "/security/frameworks/iso-27001/objectives"
-          : "/security/objectives"
-      )
+      router.push("/security/objectives")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete objective")
     }
@@ -167,10 +163,7 @@ export default function ObjectiveDetailPage() {
     )
   }
 
-  const backHref =
-    objective.frameworkCode === "iso-27001"
-      ? "/security/frameworks/iso-27001/objectives"
-      : "/security/objectives"
+  const backHref = "/security/objectives"
 
   return (
     <div className="space-y-6">

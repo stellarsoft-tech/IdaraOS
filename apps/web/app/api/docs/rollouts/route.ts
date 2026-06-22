@@ -14,12 +14,17 @@ import {
   teams,
   roles,
   users,
-  persons,
 } from "@/lib/db/schema"
 import { CreateRolloutSchema } from "@/lib/docs/types"
-import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
+import { requirePermission, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { readContent, getOrgDocsSettings } from "@/lib/docs/storage"
+import {
+  createRolloutAcknowledgments,
+  findUsersAlreadyAssignedToDocumentVersion,
+  partitionRolloutTargetUsers,
+  resolveRolloutTargetUsers,
+} from "@/lib/docs/rollouts"
 
 /**
  * GET /api/docs/rollouts
@@ -185,6 +190,40 @@ export async function POST(request: NextRequest) {
     if (!doc) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 })
     }
+
+    const targetUsers = await resolveRolloutTargetUsers(
+      data.targetType,
+      data.targetType === "organization" ? null : data.targetId ?? null,
+      session.orgId
+    )
+
+    if (targetUsers.length === 0) {
+      return NextResponse.json(
+        { error: "No users match this rollout target" },
+        { status: 400 }
+      )
+    }
+
+    const alreadyAssignedUsers = await findUsersAlreadyAssignedToDocumentVersion(
+      data.documentId,
+      doc.currentVersion,
+      targetUsers.map((user) => user.userId)
+    )
+    const { newUsers } = partitionRolloutTargetUsers(targetUsers, alreadyAssignedUsers)
+
+    if (newUsers.length === 0) {
+      return NextResponse.json(
+        {
+          error: `All selected users already have an active rollout for version ${doc.currentVersion}. Update the document version before rolling out again.`,
+          alreadyAssignedUsers: alreadyAssignedUsers.map((user) => ({
+            id: user.userId,
+            name: user.name,
+            email: user.email,
+          })),
+        },
+        { status: 409 }
+      )
+    }
     
     const orgSettings = await getOrgDocsSettings(session.orgId)
     const contentSnapshot = await readContent(doc, orgSettings)
@@ -232,8 +271,7 @@ export async function POST(request: NextRequest) {
       })
       .returning()
     
-    // Create acknowledgment records for target users
-    await createAcknowledgmentsForRollout(created.id, data.documentId, data.targetType, data.targetId || null, session.orgId)
+    await createRolloutAcknowledgments(created.id, data.documentId, newUsers)
     
     // Audit log
     const audit = await getAuditLogger()
@@ -246,86 +284,26 @@ export async function POST(request: NextRequest) {
       })
     }
     
-    return NextResponse.json({ data: created }, { status: 201 })
+    const skippedUsers = alreadyAssignedUsers.map((user) => ({
+      id: user.userId,
+      name: user.name,
+      email: user.email,
+    }))
+
+    return NextResponse.json(
+      {
+        data: created,
+        assignedUserCount: newUsers.length,
+        skippedUsers,
+        message:
+          skippedUsers.length > 0
+            ? `Rollout created for ${newUsers.length} user(s). ${skippedUsers.length} user(s) already had version ${doc.currentVersion} and were skipped.`
+            : undefined,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Error creating rollout:", error)
     return NextResponse.json({ error: "Failed to create rollout" }, { status: 500 })
   }
 }
-
-/**
- * Helper function to create acknowledgment records for a rollout
- */
-async function createAcknowledgmentsForRollout(
-  rolloutId: string,
-  documentId: string,
-  targetType: string,
-  targetId: string | null,
-  orgId: string
-) {
-  let userRecords: { userId: string; personId: string | null }[] = []
-  
-  switch (targetType) {
-    case "organization":
-      // All users in org
-      const orgUsers = await db
-        .select({ id: users.id, personId: users.personId })
-        .from(users)
-        .where(eq(users.orgId, orgId))
-      userRecords = orgUsers.map((u) => ({ userId: u.id, personId: u.personId }))
-      break
-      
-    case "team":
-      // Users in team (via person -> team relationship)
-      if (targetId) {
-        const teamMembers = await db
-          .select({ userId: users.id, personId: persons.id })
-          .from(persons)
-          .innerJoin(users, eq(users.personId, persons.id))
-          .where(and(eq(persons.teamId, targetId), eq(persons.orgId, orgId)))
-        userRecords = teamMembers.map((m) => ({ userId: m.userId, personId: m.personId }))
-      }
-      break
-      
-    case "role":
-      // Users with this role (via RBAC user_roles)
-      if (targetId) {
-        const roleMembers = await db
-          .select({ id: users.id, personId: users.personId })
-          .from(users)
-          .where(eq(users.orgId, orgId))
-        // Note: In a full implementation, you'd join with user_roles table
-        // For now, we'll create acknowledgments for all users
-        userRecords = roleMembers.map((u) => ({ userId: u.id, personId: u.personId }))
-      }
-      break
-      
-    case "user":
-      // Specific user
-      if (targetId) {
-        const [user] = await db
-          .select({ id: users.id, personId: users.personId })
-          .from(users)
-          .where(eq(users.id, targetId))
-          .limit(1)
-        if (user) {
-          userRecords = [{ userId: user.id, personId: user.personId }]
-        }
-      }
-      break
-  }
-  
-  // Create acknowledgment records
-  if (userRecords.length > 0) {
-    await db.insert(documentAcknowledgments).values(
-      userRecords.map((u) => ({
-        documentId,
-        rolloutId,
-        userId: u.userId,
-        personId: u.personId,
-        status: "pending" as const,
-      }))
-    )
-  }
-}
-

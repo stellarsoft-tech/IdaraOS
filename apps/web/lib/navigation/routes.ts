@@ -164,12 +164,6 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security.frameworks.iso-27001",
     description: "Evidence coverage per SoA item",
   },
-  "security.frameworks.iso-27001.objectives": {
-    path: "/security/frameworks/iso-27001/objectives",
-    label: "Security Objectives",
-    parent: "security.frameworks.iso-27001",
-    description: "Clause 6.2 measurable objectives with periods and evidence",
-  },
   "security.frameworks.soc-2": {
     path: "/security/frameworks/soc-2",
     label: "SOC 2",

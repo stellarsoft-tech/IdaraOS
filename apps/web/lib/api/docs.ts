@@ -145,7 +145,11 @@ async function fetchRollouts(filters?: RolloutFilters): Promise<{ data: RolloutW
   return res.json()
 }
 
-async function createRollout(data: CreateRollout): Promise<RolloutWithTarget> {
+async function createRollout(data: CreateRollout): Promise<{
+  rollout: RolloutWithTarget
+  message?: string
+  skippedUsers?: Array<{ id: string; name: string; email: string }>
+}> {
   const res = await fetch("/api/docs/rollouts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -156,7 +160,11 @@ async function createRollout(data: CreateRollout): Promise<RolloutWithTarget> {
     throw new Error(error.error || "Failed to create rollout")
   }
   const result = await res.json()
-  return result.data
+  return {
+    rollout: result.data,
+    message: result.message,
+    skippedUsers: result.skippedUsers,
+  }
 }
 
 async function updateRollout(id: string, data: UpdateRollout): Promise<RolloutWithTarget> {

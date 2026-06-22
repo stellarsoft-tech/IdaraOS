@@ -1009,7 +1009,7 @@ flowchart LR
                   </CardDescription>
                 </div>
                 <Button asChild>
-                  <Link href={`/docs/documents/${doc.slug}/rollouts/new`}>
+                  <Link href={`/docs/rollouts/new?document=${encodeURIComponent(doc.slug)}`}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Rollout
                   </Link>

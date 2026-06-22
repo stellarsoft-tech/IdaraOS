@@ -133,7 +133,6 @@ const navigationData: NavItem[] = [
             items: [
               { title: "Dashboard", url: "/security/frameworks/iso-27001" },
               { title: "ISMS Clauses (4-10)", url: "/security/frameworks/iso-27001/clauses" },
-              { title: "Security Objectives", url: "/security/frameworks/iso-27001/objectives" },
               { title: "Statement of Applicability", url: "/security/frameworks/iso-27001/soa" },
               { title: "Annex A Controls", url: "/security/frameworks/iso-27001/controls" },
               { title: "Evidence Matrix", url: "/security/frameworks/iso-27001/evidence" },
