@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { SECURITY_CONTROLS_LIST_FETCH_LIMIT } from "@/lib/security/controls"
+import { SECURITY_CONTROLS_LIST_FETCH_LIMIT, SECURITY_CONTROLS_FETCH_ALL_PAGE_SIZE } from "@/lib/security/controls"
 
 // ============================================================================
 // TYPES
@@ -201,6 +201,18 @@ export interface PaginatedResponse<T> {
   }
 }
 
+export interface ControlsSummary {
+  total: number
+  effective: number
+  implemented: number
+  partial: number
+  notImplemented: number
+}
+
+export interface ControlsListResponse extends PaginatedResponse<SecurityControl> {
+  summary?: ControlsSummary
+}
+
 // ============================================================================
 // CONTROLS HOOKS
 // ============================================================================
@@ -213,11 +225,14 @@ interface ControlsQueryParams {
   category?: string
   page?: number
   limit?: number
+  /** Fetch every page until all org controls are loaded (Controls Library). */
+  fetchAll?: boolean
 }
 
-export function useSecurityControls(params: ControlsQueryParams = {}) {
+function buildControlsSearchParams(params: Omit<ControlsQueryParams, "fetchAll">): URLSearchParams {
   const queryParams = new URLSearchParams()
   const resolvedParams = {
+    page: 1,
     limit: SECURITY_CONTROLS_LIST_FETCH_LIMIT,
     ...params,
   }
@@ -228,13 +243,67 @@ export function useSecurityControls(params: ControlsQueryParams = {}) {
     }
   })
 
-  return useQuery<PaginatedResponse<SecurityControl>>({
-    queryKey: ["security-controls", resolvedParams],
+  return queryParams
+}
+
+async function fetchControlsPage(
+  params: Omit<ControlsQueryParams, "fetchAll">
+): Promise<ControlsListResponse> {
+  const res = await fetch(`/api/security/controls?${buildControlsSearchParams(params)}`, {
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error("Failed to fetch controls")
+  return res.json()
+}
+
+export function useSecurityControls(params: ControlsQueryParams = {}) {
+  const { fetchAll = false, ...queryParams } = params
+
+  return useQuery<ControlsListResponse>({
+    queryKey: ["security-controls", { ...queryParams, fetchAll }],
     queryFn: async () => {
-      const res = await fetch(`/api/security/controls?${queryParams}`)
-      if (!res.ok) throw new Error("Failed to fetch controls")
-      return res.json()
+      if (!fetchAll) {
+        return fetchControlsPage(queryParams)
+      }
+
+      const allData: SecurityControl[] = []
+      let page = 1
+      let lastResponse: ControlsListResponse | null = null
+
+      while (page <= 100) {
+        const response = await fetchControlsPage({
+          ...queryParams,
+          page,
+          limit: SECURITY_CONTROLS_FETCH_ALL_PAGE_SIZE,
+        })
+        lastResponse = response
+        allData.push(...response.data)
+
+        const total = response.pagination?.total ?? allData.length
+        if (allData.length >= total || response.data.length === 0) {
+          break
+        }
+
+        page += 1
+      }
+
+      if (!lastResponse) {
+        throw new Error("Failed to fetch controls")
+      }
+
+      return {
+        ...lastResponse,
+        data: allData,
+        pagination: {
+          ...lastResponse.pagination,
+          page: 1,
+          limit: allData.length,
+          total: lastResponse.pagination.total,
+          totalPages: 1,
+        },
+      }
     },
+    staleTime: 0,
   })
 }
 

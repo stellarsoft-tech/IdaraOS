@@ -227,16 +227,17 @@ export default function ControlsPage() {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
   
-  const { data: controlsData, isLoading } = useSecurityControls()
+  const { data: controlsData, isLoading } = useSecurityControls({ fetchAll: true })
   const createControl = useCreateSecurityControl()
   
   const controls = controlsData?.data || []
-  const totalControls = controlsData?.pagination?.total ?? controls.length
+  const summary = controlsData?.summary
+  const totalControls = summary?.total ?? controlsData?.pagination?.total ?? controls.length
   
-  // Calculate stats
-  const effectiveCount = controls.filter(c => c.implementationStatus === "effective").length
-  const implementedCount = controls.filter(c => c.implementationStatus === "implemented").length
-  const partialCount = controls.filter(c => c.implementationStatus === "partially_implemented").length
+  // Calculate stats from API summary when available (accurate across all controls)
+  const effectiveCount = summary?.effective ?? controls.filter(c => c.implementationStatus === "effective").length
+  const implementedCount = summary?.implemented ?? controls.filter(c => c.implementationStatus === "implemented").length
+  const partialCount = summary?.partial ?? controls.filter(c => c.implementationStatus === "partially_implemented").length
   const notImplementedCount = controls.filter(c => c.implementationStatus === "not_implemented").length
   
   const handleCreate = async (values: z.infer<typeof createFormSchema>) => {

@@ -19,6 +19,8 @@ import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
 import { SECURITY_CONTROLS_LIST_FETCH_LIMIT } from "@/lib/security/controls"
 
+export const dynamic = "force-dynamic"
+
 // ============================================================================
 // VALIDATION SCHEMAS
 // ============================================================================
@@ -134,11 +136,19 @@ export async function GET(request: NextRequest) {
       .limit(query.limit)
       .offset(offset)
 
-    // Get total count
-    const [{ total }] = await db
-      .select({ total: count() })
+    // Get total count and implementation summary (org-wide for current filters)
+    const [stats] = await db
+      .select({
+        total: count(),
+        effective: sql<number>`count(*) filter (where ${securityControls.implementationStatus} = 'effective')`,
+        implemented: sql<number>`count(*) filter (where ${securityControls.implementationStatus} = 'implemented')`,
+        partial: sql<number>`count(*) filter (where ${securityControls.implementationStatus} = 'partially_implemented')`,
+        notImplemented: sql<number>`count(*) filter (where ${securityControls.implementationStatus} = 'not_implemented')`,
+      })
       .from(securityControls)
       .where(and(...conditions))
+
+    const total = Number(stats?.total ?? 0)
 
     // Get framework mappings for each control with framework codes
     const controlsWithMappings = await Promise.all(
@@ -169,15 +179,29 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    return NextResponse.json({
-      data: controlsWithMappings,
-      pagination: {
-        page: query.page,
-        limit: query.limit,
-        total,
-        totalPages: Math.ceil(total / query.limit),
+    return NextResponse.json(
+      {
+        data: controlsWithMappings,
+        pagination: {
+          page: query.page,
+          limit: query.limit,
+          total,
+          totalPages: Math.ceil(total / query.limit),
+        },
+        summary: {
+          total,
+          effective: Number(stats?.effective ?? 0),
+          implemented: Number(stats?.implemented ?? 0),
+          partial: Number(stats?.partial ?? 0),
+          notImplemented: Number(stats?.notImplemented ?? 0),
+        },
       },
-    })
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0",
+        },
+      }
+    )
   } catch (error) {
     console.error("Error fetching controls:", error)
     if (error instanceof z.ZodError) {
