@@ -81,6 +81,10 @@ export const documents = pgTable(
     
     // MDX content (used in "database" and "hybrid" storage modes)
     content: text("content"),
+
+    // Pending draft content awaiting approval (published docs keep live content intact)
+    pendingContent: text("pending_content"),
+    pendingVersion: text("pending_version"),
     
     // Per-document storage mode override (null = use org default from docs_settings)
     storageMode: text("storage_mode", { enum: contentStorageModeValues }),

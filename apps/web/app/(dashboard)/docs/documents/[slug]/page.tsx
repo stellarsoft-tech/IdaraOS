@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle,
+  AlertCircle,
   Eye,
   FileText,
   Globe,
@@ -31,6 +32,7 @@ import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -126,7 +128,7 @@ export default function DocumentDetailPage() {
   const router = useRouter()
   const slug = params.slug as string
   
-  const { data, isLoading, error, refetch } = useDocument(slug)
+  const { data, isLoading, error, refetch } = useDocument(slug, { contentMode: "draft" })
   const updateDocument = useUpdateDocument()
   const deleteDocument = useDeleteDocument()
   
@@ -306,7 +308,11 @@ export default function DocumentDetailPage() {
         id: doc.id,
         data: { content },
       })
-      toast.success("Content saved successfully")
+      toast.success(
+        doc.status === "published"
+          ? "Draft saved for approval. Users still see the published version until you approve and publish."
+          : "Content saved successfully"
+      )
       refetch()
     } catch (error: unknown) {
       const err = error as { message?: string; details?: { fieldErrors?: Record<string, string[]> } }
@@ -336,7 +342,11 @@ export default function DocumentDetailPage() {
         id: doc.id,
         data: { status: "published" },
       })
-      toast.success("Document published successfully")
+      toast.success(
+        doc.status === "in_review"
+          ? "New version approved and published"
+          : "Document published successfully"
+      )
       refetch()
     } catch (error) {
       toast.error("Failed to publish document")
@@ -392,7 +402,11 @@ export default function DocumentDetailPage() {
                 <h1 className="text-2xl font-semibold tracking-tight">{doc.title}</h1>
                 <StatusBadge variant={statusCfg.variant}>{statusCfg.label}</StatusBadge>
               </div>
-              <p className="text-sm text-muted-foreground">{`v${doc.currentVersion} • ${documentCategoryLabels[doc.category]}`}</p>
+              <p className="text-sm text-muted-foreground">
+                {doc.hasPendingDraft
+                  ? `Draft v${doc.pendingVersion} pending approval • Published v${doc.publishedVersion ?? doc.currentVersion} • ${documentCategoryLabels[doc.category]}`
+                  : `v${doc.currentVersion} • ${documentCategoryLabels[doc.category]}`}
+              </p>
             </div>
           </div>
         <div className="flex items-center gap-2">
@@ -406,7 +420,7 @@ export default function DocumentDetailPage() {
           {doc.status !== "published" && (
             <Button onClick={handlePublish}>
               <Send className="mr-2 h-4 w-4" />
-              Publish
+              {doc.status === "in_review" ? "Approve & Publish" : "Publish"}
             </Button>
           )}
           
@@ -434,6 +448,18 @@ export default function DocumentDetailPage() {
         </div>
         </div>
       </div>
+
+      {doc.hasPendingDraft && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Pending approval</AlertTitle>
+          <AlertDescription>
+            You are editing draft v{doc.pendingVersion}. Other users still see the approved
+            published version (v{doc.publishedVersion ?? doc.currentVersion}) until you approve
+            and publish this update.
+          </AlertDescription>
+        </Alert>
+      )}
       
       <Tabs defaultValue="content" className="w-full">
         <TabsList>

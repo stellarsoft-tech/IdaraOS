@@ -320,7 +320,7 @@ export default function DocumentViewerPage() {
             <DocumentHeader
               title={doc.title}
               referenceId={referenceId}
-              version={doc.currentVersion}
+              version={doc.displayVersion ?? doc.currentVersion}
               owner={doc.owner ? {
                 name: doc.owner.name,
                 role: doc.metadata?.ownerRole as string | undefined,

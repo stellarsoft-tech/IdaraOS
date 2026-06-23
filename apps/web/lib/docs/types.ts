@@ -208,8 +208,15 @@ export interface DocumentWithRelations {
   publishedAt: string | null
   /** Per-document override; null means inherit org default from docs settings. */
   storageMode?: "database" | "filing" | "hybrid" | null
+  pendingContent?: string | null
+  pendingVersion?: string | null
   // Additional computed fields
   content?: string | null
+  publishedContent?: string | null
+  hasPendingDraft?: boolean
+  publishedVersion?: string
+  displayVersion?: string
+  isRolloutContent?: boolean
   rolloutCount?: number
   versions?: DocumentVersionWithRelations[]
   acknowledgmentStats?: {

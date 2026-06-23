@@ -25,6 +25,8 @@ import {
   getOrgDocsSettings,
 } from "@/lib/docs/storage"
 import { syncIncidentRegisterFromDocument } from "@/lib/security/incident-documents"
+import { bumpPatchVersion, hasPendingDraft } from "@/lib/docs/publishing"
+import { checkUserPermission } from "@/lib/rbac/server"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -49,6 +51,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { id } = await context.params
     const includeContent = request.nextUrl.searchParams.get("content") !== "false"
     const rolloutId = request.nextUrl.searchParams.get("rolloutId")
+    const contentMode = request.nextUrl.searchParams.get("contentMode")
+    const canEditDocument = await checkUserPermission(
+      session.userId,
+      ...P.docs.documents.edit()
+    )
 
     const [doc] = await db
       .select({
@@ -58,6 +65,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
         title: documents.title,
         description: documents.description,
         content: documents.content,
+        pendingContent: documents.pendingContent,
+        pendingVersion: documents.pendingVersion,
         storageMode: documents.storageMode,
         fileId: documents.fileId,
         category: documents.category,
@@ -133,6 +142,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     let content: string | null = null
     let rolloutVersion: string | null = null
+    const orgSettings = await getOrgDocsSettings(session.orgId)
+    const publishedContent = includeContent ? await readContent(doc, orgSettings) : null
+    const pendingDraft = hasPendingDraft(doc.status, doc.pendingContent)
 
     if (includeContent) {
       if (rolloutId) {
@@ -157,8 +169,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
       }
 
       if (!content) {
-        const orgSettings = await getOrgDocsSettings(session.orgId)
-        content = await readContent(doc, orgSettings)
+        const wantsDraft =
+          contentMode === "draft" &&
+          canEditDocument &&
+          pendingDraft &&
+          doc.pendingContent
+
+        content = wantsDraft
+          ? doc.pendingContent ?? publishedContent
+          : publishedContent
       }
     }
 
@@ -168,8 +187,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
         ? { id: doc.ownerId, name: doc.ownerName, email: doc.ownerEmail }
         : null,
       content,
+      publishedContent: includeContent ? publishedContent : undefined,
+      hasPendingDraft: pendingDraft,
+      publishedVersion: doc.currentVersion,
+      pendingVersion: doc.pendingVersion,
       currentVersion: rolloutVersion || doc.currentVersion,
-      displayVersion: rolloutVersion || doc.currentVersion,
+      displayVersion:
+        rolloutVersion ||
+        (pendingDraft && contentMode === "draft" && doc.pendingVersion
+          ? doc.pendingVersion
+          : doc.currentVersion),
       isRolloutContent: !!rolloutVersion,
       versions: versions.map((v) => ({
         ...v,
@@ -188,17 +215,6 @@ export async function GET(request: NextRequest, context: RouteContext) {
       { status: 500 }
     )
   }
-}
-
-function bumpPatchVersion(version: string): string {
-  const parts = version.split(".")
-  if (parts.length === 2) {
-    return `${parts[0]}.${parts[1]}.1`
-  } else if (parts.length >= 3) {
-    const patch = parseInt(parts[2], 10) || 0
-    return `${parts[0]}.${parts[1]}.${patch + 1}`
-  }
-  return `${version}.1`
 }
 
 /**
@@ -269,50 +285,149 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
 
-    // Read existing content via storage resolver to detect changes
+    // Read existing published content via storage resolver to detect changes
     const orgSettings = await getOrgDocsSettings(session.orgId)
-    const existingContent = await readContent(existing, orgSettings)
+    const existingPublishedContent = await readContent(existing, orgSettings)
+    const existingDraftContent = existing.pendingContent ?? null
+    const baselineContent =
+      existing.status === "in_review" && existingDraftContent !== null
+        ? existingDraftContent
+        : existingPublishedContent
     const contentChanged =
-      data.content !== undefined && data.content !== existingContent
+      data.content !== undefined && data.content !== baselineContent
 
-    // Write content via storage resolver if provided
+    const isPublishing =
+      data.status === "published" &&
+      (existing.status === "in_review" || existing.status === "draft")
+    const isRepublishingPending =
+      data.status === "published" && existing.status === "in_review"
+
     let fileId = existing.fileId
+
     if (data.content !== undefined) {
-      try {
-        const result = await writeContent(
-          existing,
-          orgSettings,
-          data.content || "",
-          session.userId
-        )
-        fileId = result.fileId
-      } catch (err) {
-        console.error("[Docs] Content write failed:", err)
-        return NextResponse.json(
-          {
-            error:
-              err instanceof Error
-                ? err.message
-                : "Failed to write document content",
-          },
-          { status: 500 }
-        )
+      if (existing.status === "published" && contentChanged) {
+        // Keep published content live; store edits as a pending draft
+      } else if (existing.status === "in_review") {
+        // Continue editing the pending draft without touching published content
+      } else {
+        try {
+          const result = await writeContent(
+            existing,
+            orgSettings,
+            data.content || "",
+            session.userId
+          )
+          fileId = result.fileId
+        } catch (err) {
+          console.error("[Docs] Content write failed:", err)
+          return NextResponse.json(
+            {
+              error:
+                err instanceof Error
+                  ? err.message
+                  : "Failed to write document content",
+            },
+            { status: 500 }
+          )
+        }
       }
     }
 
-    const isPublishing =
-      data.status === "published" && existing.status !== "published"
-
     const updateData: Record<string, unknown> = {
       ...data,
-      content: undefined, // content is persisted by writeContent above
+      content: undefined,
       fileId,
       updatedAt: new Date(),
       nextReviewAt: data.nextReviewAt || existing.nextReviewAt,
     }
 
-    if (isPublishing) {
+    if (data.content !== undefined) {
+      if (existing.status === "published" && contentChanged) {
+        updateData.pendingContent = data.content
+        updateData.pendingVersion =
+          existing.pendingVersion ?? bumpPatchVersion(existing.currentVersion)
+        updateData.status = "in_review"
+      } else if (existing.status === "in_review") {
+        updateData.pendingContent = data.content
+        updateData.pendingVersion =
+          existing.pendingVersion ?? bumpPatchVersion(existing.currentVersion)
+        updateData.status = "in_review"
+      }
+    }
+
+    if (isRepublishingPending) {
+      const contentToPublish =
+        (updateData.pendingContent as string | undefined) ??
+        existing.pendingContent ??
+        data.content ??
+        existingPublishedContent
+
+      if (!contentToPublish) {
+        return NextResponse.json(
+          { error: "No pending draft content to publish" },
+          { status: 400 }
+        )
+      }
+
+      try {
+        const result = await writeContent(
+          existing,
+          orgSettings,
+          contentToPublish,
+          session.userId
+        )
+        fileId = result.fileId
+        updateData.fileId = fileId
+      } catch (err) {
+        console.error("[Docs] Content publish failed:", err)
+        return NextResponse.json(
+          {
+            error:
+              err instanceof Error
+                ? err.message
+                : "Failed to publish document content",
+          },
+          { status: 500 }
+        )
+      }
+
+      const nextVersion =
+        (updateData.pendingVersion as string | undefined) ??
+        existing.pendingVersion ??
+        bumpPatchVersion(existing.currentVersion)
+
+      updateData.currentVersion = nextVersion
+      updateData.pendingContent = null
+      updateData.pendingVersion = null
+      updateData.status = "published"
       updateData.publishedAt = new Date()
+
+      await db.insert(documentVersions).values({
+        documentId: existing.id,
+        version: nextVersion,
+        changeDescription:
+          body.changeDescription || `Approved and published version ${nextVersion}`,
+        changeSummary:
+          body.changeSummary || "Pending draft approved and published",
+        contentSnapshot: contentToPublish,
+        approvedAt: new Date(),
+        createdById: session.userId,
+      })
+    } else if (isPublishing && existing.status === "draft") {
+      updateData.publishedAt = new Date()
+      updateData.status = "published"
+
+      if (data.content || existingPublishedContent) {
+        await db.insert(documentVersions).values({
+          documentId: existing.id,
+          version: existing.currentVersion,
+          changeDescription: body.changeDescription || "Initial publication",
+          changeSummary: body.changeSummary || "Document published",
+          contentSnapshot: data.content || existingPublishedContent || undefined,
+          approvedAt: new Date(),
+          createdById: session.userId,
+        })
+      }
     } else if (data.publishedAt) {
       updateData.publishedAt = new Date(data.publishedAt)
     } else {
@@ -320,12 +435,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     const isManualVersionBump =
-      data.currentVersion && data.currentVersion !== existing.currentVersion
-    const shouldAutoVersion =
-      existing.status === "published" && contentChanged && !isManualVersionBump
+      !isRepublishingPending &&
+      data.currentVersion &&
+      data.currentVersion !== existing.currentVersion
 
-    if (shouldAutoVersion) {
-      updateData.currentVersion = bumpPatchVersion(existing.currentVersion)
+    if (isManualVersionBump) {
+      updateData.currentVersion = data.currentVersion
     }
 
     const [updated] = await db
@@ -342,17 +457,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           body.changeDescription ||
           `Updated to version ${data.currentVersion}`,
         changeSummary: body.changeSummary,
-        contentSnapshot: data.content || existingContent || undefined,
-        createdById: session.userId,
-      })
-    } else if (shouldAutoVersion) {
-      await db.insert(documentVersions).values({
-        documentId: existing.id,
-        version: updated.currentVersion,
-        changeDescription: body.changeDescription || "Content updated",
-        changeSummary:
-          body.changeSummary || "Automatic version from content update",
-        contentSnapshot: data.content || undefined,
+        contentSnapshot: data.content || baselineContent || undefined,
         createdById: session.userId,
       })
     }

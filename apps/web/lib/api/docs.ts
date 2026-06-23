@@ -75,9 +75,21 @@ async function fetchDocuments(filters?: DocumentFilters): Promise<DocumentListRe
   return res.json()
 }
 
-async function fetchDocument(idOrSlug: string, rolloutId?: string): Promise<{ data: DocumentWithRelations }> {
+export interface DocumentFetchOptions {
+  rolloutId?: string
+  contentMode?: "draft" | "published"
+}
+
+async function fetchDocument(
+  idOrSlug: string,
+  options?: DocumentFetchOptions | string
+): Promise<{ data: DocumentWithRelations }> {
+  const resolved =
+    typeof options === "string" ? { rolloutId: options } : options
+
   const params = new URLSearchParams()
-  if (rolloutId) params.set("rolloutId", rolloutId)
+  if (resolved?.rolloutId) params.set("rolloutId", resolved.rolloutId)
+  if (resolved?.contentMode) params.set("contentMode", resolved.contentMode)
   
   const url = `/api/docs/documents/${idOrSlug}${params.toString() ? `?${params}` : ""}`
   const res = await fetch(url)
@@ -290,12 +302,18 @@ export function useDocuments(filters?: DocumentFilters) {
   })
 }
 
-export function useDocument(idOrSlug: string | undefined, rolloutId?: string) {
+export function useDocument(
+  idOrSlug: string | undefined,
+  options?: DocumentFetchOptions | string
+) {
+  const resolved =
+    typeof options === "string" ? { rolloutId: options } : options
+
   return useQuery({
-    queryKey: rolloutId 
-      ? [...docsKeys.documentDetail(idOrSlug!), "rollout", rolloutId]
-      : docsKeys.documentDetail(idOrSlug!),
-    queryFn: () => fetchDocument(idOrSlug!, rolloutId),
+    queryKey: resolved?.rolloutId
+      ? [...docsKeys.documentDetail(idOrSlug!), "rollout", resolved.rolloutId, resolved.contentMode]
+      : [...docsKeys.documentDetail(idOrSlug!), resolved?.contentMode],
+    queryFn: () => fetchDocument(idOrSlug!, resolved),
     enabled: !!idOrSlug,
   })
 }
