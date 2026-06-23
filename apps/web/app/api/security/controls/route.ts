@@ -17,6 +17,7 @@ import { persons } from "@/lib/db/schema/people"
 import { getSession } from "@/lib/auth/session"
 import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm"
 import { getAuditLogger } from "@/lib/api/context"
+import { SECURITY_CONTROLS_LIST_FETCH_LIMIT } from "@/lib/security/controls"
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -48,7 +49,7 @@ const querySchema = z.object({
   ownerId: z.string().uuid().optional(),
   category: z.string().optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  limit: z.coerce.number().int().min(1).max(SECURITY_CONTROLS_LIST_FETCH_LIMIT).optional().default(SECURITY_CONTROLS_LIST_FETCH_LIMIT),
 })
 
 // ============================================================================

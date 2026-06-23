@@ -231,6 +231,7 @@ export default function ControlsPage() {
   const createControl = useCreateSecurityControl()
   
   const controls = controlsData?.data || []
+  const totalControls = controlsData?.pagination?.total ?? controls.length
   
   // Calculate stats
   const effectiveCount = controls.filter(c => c.implementationStatus === "effective").length
@@ -289,7 +290,7 @@ export default function ControlsPage() {
             <FileCheck className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Total Controls</span>
           </div>
-          <p className="text-2xl font-bold mt-1">{controls.length}</p>
+          <p className="text-2xl font-bold mt-1">{totalControls}</p>
         </div>
       </div>
       

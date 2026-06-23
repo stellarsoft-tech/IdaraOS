@@ -4,6 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { SECURITY_CONTROLS_LIST_FETCH_LIMIT } from "@/lib/security/controls"
 
 // ============================================================================
 // TYPES
@@ -216,14 +217,19 @@ interface ControlsQueryParams {
 
 export function useSecurityControls(params: ControlsQueryParams = {}) {
   const queryParams = new URLSearchParams()
-  Object.entries(params).forEach(([key, value]) => {
+  const resolvedParams = {
+    limit: SECURITY_CONTROLS_LIST_FETCH_LIMIT,
+    ...params,
+  }
+
+  Object.entries(resolvedParams).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
       queryParams.set(key, String(value))
     }
   })
 
   return useQuery<PaginatedResponse<SecurityControl>>({
-    queryKey: ["security-controls", params],
+    queryKey: ["security-controls", resolvedParams],
     queryFn: async () => {
       const res = await fetch(`/api/security/controls?${queryParams}`)
       if (!res.ok) throw new Error("Failed to fetch controls")
@@ -285,6 +291,8 @@ export function useUpdateSecurityControl() {
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: ["security-controls"] })
       queryClient.invalidateQueries({ queryKey: ["security-control", id] })
+      queryClient.invalidateQueries({ queryKey: ["soa-items"] })
+      queryClient.invalidateQueries({ queryKey: ["security-frameworks"] })
     },
   })
 }
@@ -1006,6 +1014,8 @@ export function useUpdateSoaItem() {
     },
     onSuccess: (_, { frameworkId }) => {
       queryClient.invalidateQueries({ queryKey: ["soa-items", frameworkId] })
+      queryClient.invalidateQueries({ queryKey: ["security-controls"] })
+      queryClient.invalidateQueries({ queryKey: ["security-frameworks"] })
     },
   })
 }

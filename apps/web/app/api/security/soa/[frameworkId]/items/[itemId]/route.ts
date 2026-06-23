@@ -123,6 +123,42 @@ export async function PATCH(
       .where(eq(securitySoaItems.id, itemId))
       .returning()
 
+    const linkedControlId =
+      data.controlId !== undefined ? data.controlId : existing.controlId
+
+    // Mapped SoA items derive their displayed status from the linked org control.
+    // Keep both records in sync so updates persist in production environments
+    // where controls were created from standard controls.
+    if (data.implementationStatus !== undefined && linkedControlId) {
+      const controlUpdate: {
+        implementationStatus: typeof data.implementationStatus
+        updatedAt: Date
+        implementedAt?: Date | null
+      } = {
+        implementationStatus: data.implementationStatus,
+        updatedAt: new Date(),
+      }
+
+      if (
+        data.implementationStatus === "implemented" ||
+        data.implementationStatus === "effective"
+      ) {
+        controlUpdate.implementedAt = new Date()
+      } else if (data.implementationStatus === "not_implemented") {
+        controlUpdate.implementedAt = null
+      }
+
+      await db
+        .update(securityControls)
+        .set(controlUpdate)
+        .where(
+          and(
+            eq(securityControls.id, linkedControlId),
+            eq(securityControls.orgId, session.orgId)
+          )
+        )
+    }
+
     // Audit log
     const audit = await getAuditLogger()
     if (audit) {

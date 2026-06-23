@@ -10,6 +10,7 @@ import {
   securityControls, 
   securityControlMappings,
   securityStandardControls,
+  securitySoaItems,
   controlStatusValues,
   controlImplementationStatusValues
 } from "@/lib/db/schema/security"
@@ -207,6 +208,16 @@ export async function PATCH(
       .set(updateData)
       .where(eq(securityControls.id, id))
       .returning()
+
+    if (data.implementationStatus !== undefined) {
+      await db
+        .update(securitySoaItems)
+        .set({
+          implementationStatus: data.implementationStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(securitySoaItems.controlId, id))
+    }
 
     // Audit log
     const audit = await getAuditLogger()
