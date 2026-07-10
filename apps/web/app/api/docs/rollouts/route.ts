@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
     if (newUsers.length === 0) {
       return NextResponse.json(
         {
-          error: `All selected users already have an active rollout for version ${doc.currentVersion}. Update the document version before rolling out again.`,
+          error: `All selected users already have a pending rollout for version ${doc.currentVersion}. Wait for them to complete it, or update the document version before rolling out again.`,
           alreadyAssignedUsers: alreadyAssignedUsers.map((user) => ({
             id: user.userId,
             name: user.name,
@@ -297,7 +297,7 @@ export async function POST(request: NextRequest) {
         skippedUsers,
         message:
           skippedUsers.length > 0
-            ? `Rollout created for ${newUsers.length} user(s). ${skippedUsers.length} user(s) already had version ${doc.currentVersion} and were skipped.`
+            ? `Rollout created for ${newUsers.length} user(s). ${skippedUsers.length} user(s) already have a pending assignment for version ${doc.currentVersion} and were skipped.`
             : undefined,
       },
       { status: 201 }

@@ -75,7 +75,8 @@ export async function GET(request: NextRequest) {
         statusConditions.length > 0 ? or(...statusConditions) : undefined
       ))
       .orderBy(
-        // Order by: overdue first, then by due date
+        // Incomplete assignments first, then overdue, then due date
+        sql`CASE WHEN ${documentAcknowledgments.status} IN ('pending', 'viewed') THEN 0 ELSE 1 END`,
         sql`CASE WHEN ${documentRollouts.dueDate} < CURRENT_DATE THEN 0 ELSE 1 END`,
         documentRollouts.dueDate
       )

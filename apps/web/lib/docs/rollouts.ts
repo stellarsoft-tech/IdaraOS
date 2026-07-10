@@ -102,7 +102,9 @@ export async function resolveRolloutTargetUsers(
 }
 
 /**
- * Users who already have an active rollout acknowledgment for the same document version.
+ * Users who already have an incomplete (pending/viewed) acknowledgment on an active
+ * rollout for the same document version. Completed (acknowledged/signed) users are
+ * eligible for a new rollout so they can review and sign again.
  */
 export async function findUsersAlreadyAssignedToDocumentVersion(
   documentId: string,
@@ -131,7 +133,8 @@ export async function findUsersAlreadyAssignedToDocumentVersion(
     .where(
       and(
         eq(documentAcknowledgments.documentId, documentId),
-        inArray(documentAcknowledgments.userId, userIds)
+        inArray(documentAcknowledgments.userId, userIds),
+        inArray(documentAcknowledgments.status, ["pending", "viewed"])
       )
     )
 }

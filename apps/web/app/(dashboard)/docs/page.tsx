@@ -221,7 +221,7 @@ export default function DocsOverviewPage() {
                   </p>
                 </div>
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/docs/view/${doc.documentSlug}`}>
+                  <Link href={`/docs/view/${doc.documentSlug}?rolloutId=${doc.rolloutId}`}>
                     Review
                   </Link>
                 </Button>

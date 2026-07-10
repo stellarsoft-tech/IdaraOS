@@ -55,8 +55,18 @@ export default function DocumentViewerPage() {
   const { data: myDocsData, refetch: refetchMyDocs } = useMyDocuments({ status: "all", includeOptional: true })
   const myDocs = myDocsData?.data || []
   
-  // Find if this document is in the user's pending list
-  const myDocRecord = myDocs.find((d) => d.documentSlug === slug)
+  // Resolve the assignment for this document/rollout.
+  // Prefer URL rolloutId; otherwise prefer an incomplete (pending/viewed) assignment
+  // so a new rollout is not shadowed by an older signed acknowledgment for the same slug.
+  const docsForSlug = myDocs.filter((d) => d.documentSlug === slug)
+  const myDocRecord =
+    (urlRolloutId
+      ? docsForSlug.find((d) => d.rolloutId === urlRolloutId)
+      : undefined) ??
+    docsForSlug.find((d) =>
+      ["pending", "viewed"].includes(d.acknowledgmentStatus)
+    ) ??
+    docsForSlug[0]
   
   // Determine which rolloutId to use: URL param > myDocRecord rollout
   const effectiveRolloutId = urlRolloutId || myDocRecord?.rolloutId
@@ -119,7 +129,7 @@ export default function DocumentViewerPage() {
         id: myDocRecord.acknowledgmentId,
         data: {
           status: "acknowledged",
-          versionAcknowledged: doc?.currentVersion,
+          versionAcknowledged: doc?.displayVersion ?? doc?.currentVersion,
         },
       })
       toast.success("Document acknowledged successfully")
@@ -138,7 +148,7 @@ export default function DocumentViewerPage() {
         id: myDocRecord.acknowledgmentId,
         data: {
           status: "signed",
-          versionAcknowledged: doc?.currentVersion,
+          versionAcknowledged: doc?.displayVersion ?? doc?.currentVersion,
           signatureData: {
             method: "typed",
             value: typedSignature,
@@ -387,7 +397,7 @@ export default function DocumentViewerPage() {
             <AlertDialogTitle>Acknowledge Document</AlertDialogTitle>
             <AlertDialogDescription>
               By clicking acknowledge, you confirm that you have read and understood
-              the contents of &quot;{doc.title}&quot; (v{doc.currentVersion}).
+              the contents of &quot;{doc.title}&quot; (v{doc.displayVersion ?? doc.currentVersion}).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -408,7 +418,7 @@ export default function DocumentViewerPage() {
             <AlertDialogDescription>
               This document requires your electronic signature. Please type your full name
               below to confirm you have read and agree to the contents of &quot;{doc.title}&quot;
-              (v{doc.currentVersion}).
+              (v{doc.displayVersion ?? doc.currentVersion}).
             </AlertDialogDescription>
           </AlertDialogHeader>
           
