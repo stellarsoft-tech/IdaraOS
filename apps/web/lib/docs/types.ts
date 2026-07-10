@@ -306,8 +306,11 @@ export interface PendingDocument {
   documentDescription: string | null
   documentCategory: DocumentCategory
   documentVersion: string
+  latestDocumentVersion?: string
   rolloutId: string
   rolloutName: string | null
+  rolloutVersion?: string | null
+  rolloutCreatedAt?: string | null
   requirement: RolloutRequirement
   dueDate: string | null
   acknowledgmentId: string | null

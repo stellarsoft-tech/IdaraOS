@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         requirement: documentRollouts.requirement,
         dueDate: documentRollouts.dueDate,
         rolloutVersion: documentRollouts.versionAtRollout,
+        rolloutCreatedAt: documentRollouts.createdAt,
         // Acknowledgment info
         acknowledgmentId: documentAcknowledgments.id,
         acknowledgmentStatus: documentAcknowledgments.status,
@@ -75,8 +76,9 @@ export async function GET(request: NextRequest) {
         statusConditions.length > 0 ? or(...statusConditions) : undefined
       ))
       .orderBy(
-        // Incomplete assignments first, then overdue, then due date
+        // Incomplete first, then newest rollout (so completed reopen shows latest version)
         sql`CASE WHEN ${documentAcknowledgments.status} IN ('pending', 'viewed') THEN 0 ELSE 1 END`,
+        sql`${documentRollouts.createdAt} DESC`,
         sql`CASE WHEN ${documentRollouts.dueDate} < CURRENT_DATE THEN 0 ELSE 1 END`,
         documentRollouts.dueDate
       )
@@ -97,6 +99,7 @@ export async function GET(request: NextRequest) {
       rolloutId: doc.rolloutId,
       rolloutName: doc.rolloutName,
       rolloutVersion: doc.rolloutVersion,
+      rolloutCreatedAt: doc.rolloutCreatedAt,
       requirement: doc.requirement,
       dueDate: doc.dueDate,
       acknowledgmentId: doc.acknowledgmentId,

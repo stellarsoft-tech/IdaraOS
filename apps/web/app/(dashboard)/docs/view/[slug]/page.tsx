@@ -55,30 +55,48 @@ export default function DocumentViewerPage() {
   const { data: myDocsData, refetch: refetchMyDocs } = useMyDocuments({ status: "all", includeOptional: true })
   const myDocs = myDocsData?.data || []
   
+  // Permission checks (needed before content resolution)
+  const canPrint = usePermission("docs.documents", "print")
+  const canEdit = usePermission("docs.documents", "edit")
+  const canViewAll = usePermission("docs.documents", "read_all")
+  
   // Resolve the assignment for this document/rollout.
-  // Prefer URL rolloutId; otherwise prefer an incomplete (pending/viewed) assignment
-  // so a new rollout is not shadowed by an older signed acknowledgment for the same slug.
+  // Prefer URL rolloutId; otherwise prefer incomplete; otherwise the newest rollout.
   const docsForSlug = myDocs.filter((d) => d.documentSlug === slug)
+  const pendingRecord = docsForSlug.find((d) =>
+    ["pending", "viewed"].includes(d.acknowledgmentStatus)
+  )
+  const latestRecord = docsForSlug.reduce<(typeof docsForSlug)[number] | undefined>((latest, doc) => {
+    if (!latest) return doc
+    const latestTime = new Date(
+      latest.rolloutCreatedAt || latest.signedAt || latest.acknowledgedAt || 0
+    ).getTime()
+    const docTime = new Date(
+      doc.rolloutCreatedAt || doc.signedAt || doc.acknowledgedAt || 0
+    ).getTime()
+    return docTime > latestTime ? doc : latest
+  }, undefined)
+  
   const myDocRecord =
     (urlRolloutId
       ? docsForSlug.find((d) => d.rolloutId === urlRolloutId)
       : undefined) ??
-    docsForSlug.find((d) =>
-      ["pending", "viewed"].includes(d.acknowledgmentStatus)
-    ) ??
-    docsForSlug[0]
+    pendingRecord ??
+    latestRecord
   
-  // Determine which rolloutId to use: URL param > myDocRecord rollout
-  const effectiveRolloutId = urlRolloutId || myDocRecord?.rolloutId
+  // Content source:
+  // - Explicit rolloutId from URL (My Documents) → that rollout snapshot
+  // - Pending assignment → that rollout snapshot (so user can sign the new version)
+  // - Catalog / All Documents (read_all, no rolloutId) → live published content
+  // - Otherwise → newest assignment's rollout snapshot
+  const effectiveRolloutId =
+    urlRolloutId ||
+    pendingRecord?.rolloutId ||
+    (canViewAll ? undefined : latestRecord?.rolloutId)
   
   // Fetch document with rollout-specific content if applicable
   const { data: docData, isLoading: docLoading } = useDocument(slug, effectiveRolloutId || undefined)
   const updateAcknowledgment = useUpdateAcknowledgment()
-  
-  // Permission checks
-  const canPrint = usePermission("docs.documents", "print")
-  const canEdit = usePermission("docs.documents", "edit")
-  const canViewAll = usePermission("docs.documents", "read_all")
   
   const [showAckDialog, setShowAckDialog] = React.useState(false)
   const [showSignDialog, setShowSignDialog] = React.useState(false)
