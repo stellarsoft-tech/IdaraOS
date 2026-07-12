@@ -119,6 +119,7 @@ const navigationData: NavItem[] = [
       { title: "Evidence Store", url: "/security/evidence", module: "security.evidence" },
       { title: "Audits", url: "/security/audits", module: "security.audits" },
       { title: "Objectives", url: "/security/objectives", module: "security.objectives" },
+      { title: "Achievements", url: "/security/achievements", module: "security.achievements" },
       { title: "Incident Management", url: "/security/incidents", module: "security.incidents" },
       { title: "Nonconformity & CA", url: "/security/nonconformities", module: "security.nonconformities" },
       { 

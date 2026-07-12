@@ -1268,6 +1268,125 @@ export function useDeleteSecurityObjective() {
 }
 
 // ============================================================================
+// ACHIEVEMENTS HOOKS
+// ============================================================================
+
+export interface SecurityAchievement {
+  id: string
+  name: string
+  description?: string | null
+  achievementDate: string
+  periodLabel?: string | null
+  periodStart?: string | null
+  periodEnd?: string | null
+  evidenceRequired: boolean
+  linkedEvidenceIds?: string[] | null
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+interface AchievementsQueryParams {
+  search?: string
+  periodLabel?: string
+  page?: number
+  limit?: number
+}
+
+export function useSecurityAchievements(params: AchievementsQueryParams = {}) {
+  const queryParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      queryParams.set(key, String(value))
+    }
+  })
+
+  return useQuery<PaginatedResponse<SecurityAchievement>>({
+    queryKey: ["security-achievements", params],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/achievements?${queryParams}`)
+      if (!res.ok) throw new Error("Failed to fetch achievements")
+      return res.json()
+    },
+  })
+}
+
+export function useCreateSecurityAchievement() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: Partial<SecurityAchievement>) => {
+      const res = await fetch("/api/security/achievements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to create achievement")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-achievements"] })
+    },
+  })
+}
+
+export function useSecurityAchievement(id: string | undefined) {
+  return useQuery<{ data: SecurityAchievement }>({
+    queryKey: ["security-achievement", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/security/achievements/${id}`, { cache: "no-store" })
+      if (!res.ok) throw new Error("Failed to fetch achievement")
+      return res.json()
+    },
+    enabled: !!id,
+  })
+}
+
+export function useUpdateSecurityAchievement() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SecurityAchievement> }) => {
+      const res = await fetch(`/api/security/achievements/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update achievement")
+      }
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["security-achievements"] })
+      queryClient.invalidateQueries({ queryKey: ["security-achievement", variables.id] })
+    },
+  })
+}
+
+export function useDeleteSecurityAchievement() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/security/achievements/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to delete achievement")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-achievements"] })
+    },
+  })
+}
+
+// ============================================================================
 // ISMS CLAUSE TYPES
 // ============================================================================
 

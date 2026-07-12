@@ -110,6 +110,12 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security",
     description: "Security objectives and improvement plans",
   },
+  "security.achievements": {
+    path: "/security/achievements",
+    label: "Achievements",
+    parent: "security",
+    description: "Security achievements by reporting year",
+  },
   "security.incidents": {
     path: "/security/incidents",
     label: "Incident Management",

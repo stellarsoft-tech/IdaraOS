@@ -81,6 +81,7 @@ const SYSTEM_ROLES: Record<string, {
       "security.evidence": { view: true, write: true, create: true, edit: true, delete: true },
       "security.audits": { view: true, write: true, create: true, edit: true, delete: true },
       "security.objectives": { view: true, write: true, create: true, edit: true, delete: true },
+      "security.achievements": { view: true, write: true, create: true, edit: true, delete: true },
       "security.frameworks": { view: true, write: true, create: true, edit: true, delete: true },
       "security.soa": { view: true, write: true, create: true, edit: true, delete: true },
       "security.settings": { view: true, write: true, create: true, edit: true, delete: true },

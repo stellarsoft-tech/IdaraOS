@@ -25,6 +25,7 @@ graph TB
             Evidence[Evidence Store]
             Audits[Audits]
             Objectives[Objectives]
+            Achievements[Achievements]
             Incidents[Incident Management]
             Nonconformities[Nonconformity & CA]
         end
@@ -67,6 +68,7 @@ graph LR
     Security --> EvidenceStore[Evidence Store]
     Security --> Audits[Audits]
     Security --> Objectives[Objectives]
+    Security --> Achievements[Achievements]
     Security --> Incidents[Incident Management]
     Security --> Nonconformities[Nonconformity & CA]
     Security --> Frameworks[Frameworks]
@@ -331,6 +333,7 @@ sequenceDiagram
 | `security_audits` | Internal/external audit records |
 | `security_audit_findings` | Findings and NCRs from audits |
 | `security_objectives` | Security objectives with reporting periods, achievement status, and evidence links (ISO 27001 Clause 6.2) |
+| `security_achievements` | Security achievements by year with optional/required evidence links |
 | `security_incidents` | Information security incidents (Annex A A.5.24–A.5.28) with owner, severity, response fields, publication status |
 | `security_incident_versions` | Version snapshots when published incidents are edited |
 | `security_nonconformities` | Nonconformities and corrective actions (Clause 10.2) with document linkage and evidence |
