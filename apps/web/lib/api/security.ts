@@ -170,10 +170,41 @@ export interface SecurityAudit {
   scope?: string | null
   objectives?: string | null
   leadAuditor?: string | null
+  auditTeam?: string[] | null
   auditBody?: string | null
+  summary?: string | null
+  conclusion?: string | null
   findingsCount: number
   majorFindingsCount: number
   minorFindingsCount: number
+  observationCount?: number
+  nonconformityCount?: number
+  findings?: SecurityAuditFinding[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type AuditFindingSeverity = "observation" | "nonconformity" | "minor" | "major" | "critical"
+export type AuditFindingStatus = "open" | "in_progress" | "resolved" | "verified" | "closed"
+
+export interface SecurityAuditFinding {
+  id: string
+  auditId: string
+  controlId?: string | null
+  findingId: string
+  title: string
+  description?: string | null
+  severity: AuditFindingSeverity
+  status: AuditFindingStatus
+  evidence?: string | null
+  linkedEvidenceIds?: string[] | null
+  recommendation?: string | null
+  responsiblePersonId?: string | null
+  dueDate?: string | null
+  resolution?: string | null
+  resolvedAt?: string | null
+  verifiedAt?: string | null
+  closedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -997,7 +1028,7 @@ export function useSecurityAudit(id: string | undefined) {
   return useQuery<{ data: SecurityAudit }>({
     queryKey: ["security-audit", id],
     queryFn: async () => {
-      const res = await fetch(`/api/security/audits/${id}`)
+      const res = await fetch(`/api/security/audits/${id}`, { cache: "no-store" })
       if (!res.ok) throw new Error("Failed to fetch audit")
       return res.json()
     },
@@ -1023,6 +1054,120 @@ export function useCreateSecurityAudit() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["security-audits"] })
+    },
+  })
+}
+
+export function useUpdateSecurityAudit() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<SecurityAudit> }) => {
+      const res = await fetch(`/api/security/audits/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update audit")
+      }
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["security-audits"] })
+      queryClient.invalidateQueries({ queryKey: ["security-audit", variables.id] })
+    },
+  })
+}
+
+export function useDeleteSecurityAudit() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/security/audits/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to delete audit")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-audits"] })
+    },
+  })
+}
+
+export function useCreateSecurityAuditFinding(auditId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: Partial<SecurityAuditFinding> & { title: string; severity: AuditFindingSeverity }) => {
+      const res = await fetch(`/api/security/audits/${auditId}/findings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to create finding")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-audits"] })
+      queryClient.invalidateQueries({ queryKey: ["security-audit", auditId] })
+    },
+  })
+}
+
+export function useUpdateSecurityAuditFinding(auditId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      findingId,
+      data,
+    }: {
+      findingId: string
+      data: Partial<SecurityAuditFinding>
+    }) => {
+      const res = await fetch(`/api/security/audits/${auditId}/findings/${findingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to update finding")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-audits"] })
+      queryClient.invalidateQueries({ queryKey: ["security-audit", auditId] })
+    },
+  })
+}
+
+export function useDeleteSecurityAuditFinding(auditId: string | undefined) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (findingId: string) => {
+      const res = await fetch(`/api/security/audits/${auditId}/findings/${findingId}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to delete finding")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["security-audits"] })
+      queryClient.invalidateQueries({ queryKey: ["security-audit", auditId] })
     },
   })
 }

@@ -14,6 +14,7 @@ import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/con
 import { P } from "@/lib/rbac/resources"
 
 const UpdateAssignmentSchema = z.object({
+  accessGroupId: z.string().uuid().optional(),
   reviewDueAt: z.string().datetime().nullable().optional(),
   lastReviewedAt: z.string().datetime().nullable().optional(),
   reviewStatus: z.enum(["not_reviewed", "approved", "changes_required", "revoked"]).optional(),
@@ -131,10 +132,39 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const body = await request.json()
     const data = UpdateAssignmentSchema.parse(body)
 
+    if (data.accessGroupId !== undefined && data.accessGroupId !== existing.assignment.accessGroupId) {
+      const [group] = await db
+        .select({ id: accessGroups.id })
+        .from(accessGroups)
+        .where(and(eq(accessGroups.id, data.accessGroupId), eq(accessGroups.orgId, orgId)))
+        .limit(1)
+
+      if (!group) {
+        return NextResponse.json({ error: "Access group not found" }, { status: 400 })
+      }
+
+      const [duplicate] = await db
+        .select({ id: accessGroupAssignments.id })
+        .from(accessGroupAssignments)
+        .where(
+          and(
+            eq(accessGroupAssignments.orgId, orgId),
+            eq(accessGroupAssignments.accessGroupId, data.accessGroupId),
+            eq(accessGroupAssignments.userId, existing.assignment.userId)
+          )
+        )
+        .limit(1)
+
+      if (duplicate) {
+        return NextResponse.json({ error: "This user already has this access group" }, { status: 409 })
+      }
+    }
+
     const updateData: Partial<typeof accessGroupAssignments.$inferInsert> = {
       updatedAt: new Date(),
     }
 
+    if (data.accessGroupId !== undefined) updateData.accessGroupId = data.accessGroupId
     if (data.reviewDueAt !== undefined) updateData.reviewDueAt = data.reviewDueAt ? new Date(data.reviewDueAt) : null
     if (data.lastReviewedAt !== undefined) updateData.lastReviewedAt = data.lastReviewedAt ? new Date(data.lastReviewedAt) : null
     if (data.reviewStatus !== undefined) updateData.reviewStatus = data.reviewStatus

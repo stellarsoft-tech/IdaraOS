@@ -89,6 +89,7 @@ export interface CreateAccessRegisterEntry {
 }
 
 export interface UpdateAccessRegisterEntry {
+  accessGroupId?: string
   reviewDueAt?: string | null
   lastReviewedAt?: string | null
   reviewStatus?: AccessRegisterEntry["reviewStatus"]

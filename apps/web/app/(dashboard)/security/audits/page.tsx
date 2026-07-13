@@ -178,8 +178,8 @@ export default function AuditsPage() {
     },
     type: {
       component: "select" as const,
-      label: "Type",
-      placeholder: "Select type",
+      label: "Audit Type",
+      placeholder: "Select Internal or External",
       options: [
         { value: "internal", label: "Internal Audit" },
         { value: "external", label: "External Audit" },
@@ -188,6 +188,7 @@ export default function AuditsPage() {
         { value: "recertification", label: "Recertification Audit" },
       ],
       required: true,
+      helpText: "ISO 27001:2022 — choose Internal or External audit",
     },
     status: {
       component: "select" as const,
@@ -243,12 +244,16 @@ export default function AuditsPage() {
   
   const handleCreate = async (values: z.infer<typeof createFormSchema>) => {
     try {
-      await createAudit.mutateAsync({
+      const result = await createAudit.mutateAsync({
         ...values,
         frameworkId: values.frameworkId || undefined,
       })
       toast.success("Audit created successfully")
       setCreateOpen(false)
+      const createdId = result?.data?.id
+      if (createdId) {
+        router.push(`/security/audits/${createdId}`)
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create audit")
     }
@@ -257,9 +262,9 @@ export default function AuditsPage() {
   return (
     <PageShell
       title="Audits"
-      description="Track internal and external security audits."
+      description="Track internal and external security audits and ISO 27001:2022 findings."
       action={
-        <Protected module="security.audits" action="write">
+        <Protected module="security.audits" anyAction={["create", "edit"]}>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             New Audit
@@ -340,6 +345,10 @@ export default function AuditsPage() {
         description="Schedule a new security audit"
         schema={createFormSchema}
         config={formConfig}
+        defaultValues={{
+          type: "internal",
+          status: "planned",
+        }}
         fields={["auditId", "title", "type", "status", "frameworkId", "startDate", "endDate", "scope", "objectives", "leadAuditor", "auditBody"]}
         mode="create"
         onSubmit={handleCreate}

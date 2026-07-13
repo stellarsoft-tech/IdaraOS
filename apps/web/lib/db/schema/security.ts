@@ -103,9 +103,14 @@ export const auditStatusValues = ["planned", "in_progress", "completed", "cancel
 export type AuditStatus = (typeof auditStatusValues)[number]
 
 /**
- * Finding severity values
+ * Finding severity / classification values (ISO 27001:2022 audit findings)
+ * - observation: opportunity for improvement / observation
+ * - nonconformity: general nonconformity (when not graded minor/major)
+ * - minor: minor nonconformity
+ * - major: major nonconformity
+ * - critical: retained for legacy / highest severity
  */
-export const findingSeverityValues = ["observation", "minor", "major", "critical"] as const
+export const findingSeverityValues = ["observation", "nonconformity", "minor", "major", "critical"] as const
 export type FindingSeverity = (typeof findingSeverityValues)[number]
 
 /**
@@ -647,8 +652,9 @@ export const securityAuditFindings = pgTable(
     severity: text("severity", { enum: findingSeverityValues }).notNull().default("minor"),
     status: text("status", { enum: findingStatusValues }).notNull().default("open"),
     
-    // Evidence
+    // Evidence (free-text notes + optional Evidence Store links)
     evidence: text("evidence"),
+    linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
     
     // Remediation
     recommendation: text("recommendation"),
@@ -659,6 +665,7 @@ export const securityAuditFindings = pgTable(
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

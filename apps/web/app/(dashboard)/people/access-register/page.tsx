@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { CheckCircle2, KeyRound, MoreHorizontal, Plus, RotateCcw, Trash2, UserCheck } from "lucide-react"
+import { CheckCircle2, KeyRound, MoreHorizontal, Pencil, Plus, RotateCcw, Trash2, UserCheck } from "lucide-react"
 import { toast } from "sonner"
 import type { ColumnDef } from "@tanstack/react-table"
 
@@ -65,13 +65,22 @@ const reviewVariants: Record<AccessRegisterEntry["reviewStatus"], "default" | "s
   revoked: "secondary",
 }
 
+const reviewStatusOptions: { value: AccessRegisterEntry["reviewStatus"]; label: string }[] = [
+  { value: "not_reviewed", label: "Not reviewed" },
+  { value: "approved", label: "Approved" },
+  { value: "changes_required", label: "Changes required" },
+  { value: "revoked", label: "Revoked" },
+]
+
 function formatDate(value: string | null) {
   if (!value) return "Not set"
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value))
 }
 
-function toDateInputValue(value: Date) {
-  return value.toISOString().slice(0, 10)
+function toDateInputValue(value: Date | string | null | undefined) {
+  if (!value) return ""
+  const date = typeof value === "string" ? new Date(value) : value
+  return date.toISOString().slice(0, 10)
 }
 
 function toIsoDate(value: string) {
@@ -131,11 +140,13 @@ export default function AccessRegisterPage() {
   const canDelete = usePermission("people.access-register", "delete")
 
   const [assignOpen, setAssignOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [selectedEntry, setSelectedEntry] = useState<AccessRegisterEntry | null>(null)
   const [userId, setUserId] = useState("")
   const [accessGroupId, setAccessGroupId] = useState("")
   const [reviewDueAt, setReviewDueAt] = useState(getDefaultReviewDate())
+  const [reviewStatus, setReviewStatus] = useState<AccessRegisterEntry["reviewStatus"]>("not_reviewed")
   const [notes, setNotes] = useState("")
 
   const { data: register = [], isLoading } = useAccessRegisterList()
@@ -146,6 +157,13 @@ export default function AccessRegisterPage() {
   const deleteMutation = useDeleteAccessRegisterEntry()
 
   const activeGroups = useMemo(() => groups.filter((group) => group.status === "active"), [groups])
+
+  const editGroupOptions = useMemo(() => {
+    if (!selectedEntry) return activeGroups
+    const current = groups.find((group) => group.id === selectedEntry.accessGroupId)
+    if (!current || activeGroups.some((group) => group.id === current.id)) return activeGroups
+    return [current, ...activeGroups]
+  }, [activeGroups, groups, selectedEntry])
 
   const stats = useMemo(() => {
     const today = new Date()
@@ -160,6 +178,15 @@ export default function AccessRegisterPage() {
     setAccessGroupId("")
     setReviewDueAt(getDefaultReviewDate())
     setNotes("")
+  }
+
+  const openEditDialog = (entry: AccessRegisterEntry) => {
+    setSelectedEntry(entry)
+    setAccessGroupId(entry.accessGroupId)
+    setReviewDueAt(toDateInputValue(entry.reviewDueAt))
+    setReviewStatus(entry.reviewStatus)
+    setNotes(entry.notes ?? "")
+    setEditOpen(true)
   }
 
   const handleAssign = async () => {
@@ -183,12 +210,39 @@ export default function AccessRegisterPage() {
     }
   }
 
-  const handleReviewStatus = async (entry: AccessRegisterEntry, reviewStatus: AccessRegisterEntry["reviewStatus"]) => {
+  const handleEdit = async () => {
+    if (!selectedEntry || !accessGroupId) {
+      toast.error("Select an access group")
+      return
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        id: selectedEntry.id,
+        data: {
+          accessGroupId,
+          reviewDueAt: toIsoDate(reviewDueAt),
+          reviewStatus,
+          notes: notes || null,
+          ...(reviewStatus !== selectedEntry.reviewStatus
+            ? { lastReviewedAt: new Date().toISOString() }
+            : {}),
+        },
+      })
+      toast.success("Access register entry updated")
+      setEditOpen(false)
+      setSelectedEntry(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update access register entry")
+    }
+  }
+
+  const handleReviewStatus = async (entry: AccessRegisterEntry, nextStatus: AccessRegisterEntry["reviewStatus"]) => {
     try {
       await updateMutation.mutateAsync({
         id: entry.id,
         data: {
-          reviewStatus,
+          reviewStatus: nextStatus,
           lastReviewedAt: new Date().toISOString(),
         },
       })
@@ -308,6 +362,10 @@ export default function AccessRegisterPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <Protected module="people.access-register" action="edit" fallback={null}>
+                <DropdownMenuItem onClick={() => openEditDialog(entry)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleReviewStatus(entry, "approved")}>
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   Approve Review
@@ -455,6 +513,101 @@ export default function AccessRegisterPage() {
             <Button onClick={handleAssign} disabled={!canCreate || createMutation.isPending}>
               <UserCheck className="mr-2 h-4 w-4" />
               {createMutation.isPending ? "Assigning..." : "Assign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open)
+          if (!open) setSelectedEntry(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Access Register Entry</DialogTitle>
+            <DialogDescription>
+              Update the access group, review schedule, and review status for {selectedEntry?.user.name}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>User</Label>
+              <Input
+                value={selectedEntry ? `${selectedEntry.user.name} (${selectedEntry.user.email})` : ""}
+                disabled
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Access Group</Label>
+              <Select value={accessGroupId} onValueChange={setAccessGroupId} disabled={!canEdit}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select access group" />
+                </SelectTrigger>
+                <SelectContent>
+                  {editGroupOptions.map((group) => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name} ({group.riskLevel})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editReviewDueAt">Review Due Date</Label>
+              <Input
+                id="editReviewDueAt"
+                type="date"
+                value={reviewDueAt}
+                onChange={(event) => setReviewDueAt(event.target.value)}
+                disabled={!canEdit}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Review Status</Label>
+              <Select
+                value={reviewStatus}
+                onValueChange={(value) => setReviewStatus(value as AccessRegisterEntry["reviewStatus"])}
+                disabled={!canEdit}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select review status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {reviewStatusOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editNotes">Notes</Label>
+              <Textarea
+                id="editNotes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Optional approval notes or constraints"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEdit} disabled={!canEdit || updateMutation.isPending}>
+              <Pencil className="mr-2 h-4 w-4" />
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
