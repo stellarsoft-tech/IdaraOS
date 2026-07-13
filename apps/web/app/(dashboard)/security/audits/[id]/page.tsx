@@ -93,6 +93,53 @@ const findingFormSchema = z.object({
   resolution: z.string().optional(),
 })
 
+const editAuditSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  scope: z.string().optional(),
+  objectives: z.string().optional(),
+  leadAuditor: z.string().optional(),
+  auditBody: z.string().optional(),
+  summary: z.string().optional(),
+  conclusion: z.string().optional(),
+})
+
+const editAuditFormConfig: FormConfig = {
+  title: {
+    component: "input",
+    label: "Title",
+    required: true,
+    type: "text",
+  },
+  scope: {
+    component: "textarea",
+    label: "Scope",
+  },
+  objectives: {
+    component: "textarea",
+    label: "Objectives",
+  },
+  leadAuditor: {
+    component: "input",
+    label: "Lead Auditor",
+    type: "text",
+  },
+  auditBody: {
+    component: "input",
+    label: "Audit Body/Firm",
+    type: "text",
+  },
+  summary: {
+    component: "textarea",
+    label: "Summary",
+    placeholder: "Audit summary",
+  },
+  conclusion: {
+    component: "textarea",
+    label: "Conclusion",
+    placeholder: "Overall audit conclusion",
+  },
+}
+
 function buildEvidenceFieldConfig(evidenceList: SecurityEvidence[]): FieldConfig {
   return {
     component: "custom",
@@ -155,6 +202,7 @@ export default function AuditDetailPage() {
 
   const [createFindingOpen, setCreateFindingOpen] = useState(false)
   const [editingFinding, setEditingFinding] = useState<SecurityAuditFinding | null>(null)
+  const [editAuditOpen, setEditAuditOpen] = useState(false)
   const [deleteAuditOpen, setDeleteAuditOpen] = useState(false)
   const [deleteFinding, setDeleteFinding] = useState<SecurityAuditFinding | null>(null)
   const [defaultSeverity, setDefaultSeverity] = useState<AuditFindingSeverity>("observation")
@@ -254,6 +302,27 @@ export default function AuditDetailPage() {
     }
   }
 
+  const handleEditAudit = async (values: z.infer<typeof editAuditSchema>) => {
+    try {
+      await updateAudit.mutateAsync({
+        id,
+        data: {
+          title: values.title,
+          scope: values.scope || null,
+          objectives: values.objectives || null,
+          leadAuditor: values.leadAuditor || null,
+          auditBody: values.auditBody || null,
+          summary: values.summary || null,
+          conclusion: values.conclusion || null,
+        },
+      })
+      toast.success("Audit updated")
+      setEditAuditOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update audit")
+    }
+  }
+
   const handleUpdateFinding = async (values: z.infer<typeof findingFormSchema>) => {
     if (!editingFinding) return
     try {
@@ -339,6 +408,12 @@ export default function AuditDetailPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={audit.title} description={`${audit.auditId} · ISO 27001:2022 audit findings`}>
+        {canEdit && (
+          <Button variant="outline" size="sm" onClick={() => setEditAuditOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        )}
         {canEdit && (
           <Select value={audit.status} onValueChange={(v) => handleAuditStatus(v as typeof audit.status)}>
             <SelectTrigger className="w-[160px]">
@@ -449,6 +524,18 @@ export default function AuditDetailPage() {
                 <p className="text-muted-foreground whitespace-pre-wrap">{audit.objectives}</p>
               </div>
             )}
+            {audit.summary && (
+              <div>
+                <p className="text-muted-foreground">Summary</p>
+                <p className="text-muted-foreground whitespace-pre-wrap">{audit.summary}</p>
+              </div>
+            )}
+            <div>
+              <p className="text-muted-foreground">Conclusion</p>
+              <p className="whitespace-pre-wrap">
+                {audit.conclusion || <span className="text-muted-foreground">No conclusion recorded yet.</span>}
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -626,6 +713,27 @@ export default function AuditDetailPage() {
         ]}
         mode="create"
         onSubmit={handleCreateFinding}
+      />
+
+      <FormDrawer
+        open={editAuditOpen}
+        onOpenChange={setEditAuditOpen}
+        title="Edit Audit"
+        description={audit.auditId}
+        schema={editAuditSchema}
+        config={editAuditFormConfig}
+        defaultValues={{
+          title: audit.title,
+          scope: audit.scope ?? "",
+          objectives: audit.objectives ?? "",
+          leadAuditor: audit.leadAuditor ?? "",
+          auditBody: audit.auditBody ?? "",
+          summary: audit.summary ?? "",
+          conclusion: audit.conclusion ?? "",
+        }}
+        fields={["title", "scope", "objectives", "leadAuditor", "auditBody", "summary", "conclusion"]}
+        mode="edit"
+        onSubmit={handleEditAudit}
       />
 
       <FormDrawer

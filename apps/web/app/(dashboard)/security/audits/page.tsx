@@ -141,6 +141,7 @@ const createFormSchema = z.object({
   objectives: z.string().optional(),
   leadAuditor: z.string().optional(),
   auditBody: z.string().optional(),
+  conclusion: z.string().optional(),
 })
 
 export default function AuditsPage() {
@@ -239,6 +240,11 @@ export default function AuditsPage() {
       label: "Audit Body/Firm",
       placeholder: "Enter audit body (for external audits)",
       type: "text",
+    },
+    conclusion: {
+      component: "textarea" as const,
+      label: "Conclusion",
+      placeholder: "Overall audit conclusion",
     },
   }
   
@@ -349,7 +355,7 @@ export default function AuditsPage() {
           type: "internal",
           status: "planned",
         }}
-        fields={["auditId", "title", "type", "status", "frameworkId", "startDate", "endDate", "scope", "objectives", "leadAuditor", "auditBody"]}
+        fields={["auditId", "title", "type", "status", "frameworkId", "startDate", "endDate", "scope", "objectives", "leadAuditor", "auditBody", "conclusion"]}
         mode="create"
         onSubmit={handleCreate}
       />
