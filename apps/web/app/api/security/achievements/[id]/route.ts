@@ -127,28 +127,38 @@ export async function PATCH(
       )
     }
 
+    let achievementDateUpdate: string | undefined
+    if (validatedData.achievementDate !== undefined) {
+      const parsed = toDateString(validatedData.achievementDate)
+      if (!parsed) {
+        return NextResponse.json(
+          { error: "Achievement date is required" },
+          { status: 400 }
+        )
+      }
+      achievementDateUpdate = parsed
+    }
+
     const [updated] = await db
       .update(securityAchievements)
       .set({
-        ...validatedData.name !== undefined && { name: validatedData.name },
-        ...validatedData.description !== undefined && { description: validatedData.description },
-        ...validatedData.achievementDate !== undefined && {
-          achievementDate: toDateString(validatedData.achievementDate),
-        },
-        ...validatedData.periodLabel !== undefined && { periodLabel: validatedData.periodLabel },
-        ...validatedData.periodStart !== undefined && {
+        ...(validatedData.name !== undefined && { name: validatedData.name }),
+        ...(validatedData.description !== undefined && { description: validatedData.description }),
+        ...(achievementDateUpdate !== undefined && { achievementDate: achievementDateUpdate }),
+        ...(validatedData.periodLabel !== undefined && { periodLabel: validatedData.periodLabel }),
+        ...(validatedData.periodStart !== undefined && {
           periodStart: toDateString(validatedData.periodStart),
-        },
-        ...validatedData.periodEnd !== undefined && {
+        }),
+        ...(validatedData.periodEnd !== undefined && {
           periodEnd: toDateString(validatedData.periodEnd),
-        },
-        ...validatedData.evidenceRequired !== undefined && {
+        }),
+        ...(validatedData.evidenceRequired !== undefined && {
           evidenceRequired: validatedData.evidenceRequired,
-        },
-        ...validatedData.linkedEvidenceIds !== undefined && {
+        }),
+        ...(validatedData.linkedEvidenceIds !== undefined && {
           linkedEvidenceIds: validatedData.linkedEvidenceIds,
-        },
-        ...validatedData.notes !== undefined && { notes: validatedData.notes },
+        }),
+        ...(validatedData.notes !== undefined && { notes: validatedData.notes }),
         updatedAt: new Date(),
       })
       .where(eq(securityAchievements.id, id))
