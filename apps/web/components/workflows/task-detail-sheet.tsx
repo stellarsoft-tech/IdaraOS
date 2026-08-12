@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format, formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import {
@@ -110,18 +110,21 @@ export function TaskDetailSheet({
   const [activeTab, setActiveTab] = useState("details")
   
   const updateStepMutation = useUpdateWorkflowStep()
-  
-  // Sync state when step changes
-  if (step && step.notes !== notes && !updateStepMutation.isPending) {
+
+  const stepId = step?.id
+  // Re-sync editable fields whenever a different step is opened, or when the
+  // selected step's server data changes (e.g. after a save + refetch). Using an
+  // effect (rather than syncing during render) avoids clobbering in-progress
+  // edits and prevents render-phase setState issues.
+  useEffect(() => {
+    if (!step) return
     setNotes(step.notes || "")
-  }
-  if (step && step.assignedPersonId !== assigneeId && !updateStepMutation.isPending) {
     setAssigneeId(step.assignedPersonId || null)
-  }
-  if (step && step.status !== status && !updateStepMutation.isPending) {
     setStatus(step.status)
-  }
-  
+    setActiveTab("details")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepId, step?.notes, step?.assignedPersonId, step?.status])
+
   const isStepReadOnly = readOnly || instanceStatus === "completed" || instanceStatus === "cancelled"
   const isStepCompleted = step?.status === "completed"
   
@@ -166,6 +169,12 @@ export function TaskDetailSheet({
   const attachmentsEnabled = step.templateStep?.attachmentsEnabled ?? true
   const fileCategoryId = step.templateStep?.fileCategoryId
   const filePathPrefix = step.templateStep?.filePathPrefix
+
+  // Fall back gracefully if the step ever has an unmapped status.
+  const stepStatusConfig = statusConfig[step.status] ?? {
+    color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    label: step.status,
+  }
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -182,8 +191,8 @@ export function TaskDetailSheet({
                 </SheetDescription>
               )}
             </div>
-            <Badge className={statusConfig[step.status].color}>
-              {statusConfig[step.status].label}
+            <Badge className={stepStatusConfig.color}>
+              {stepStatusConfig.label}
             </Badge>
           </div>
         </SheetHeader>

@@ -1,7 +1,8 @@
 "use client"
 
-import { use, useState, useMemo, useCallback } from "react"
+import { use, useEffect, useRef, useState, useMemo, useCallback } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { 
   ArrowLeft,
   CheckCircle,
@@ -168,6 +169,20 @@ export default function WorkflowInstanceDetailPage({ params }: PageProps) {
   const handleStepClick = (step: WorkflowInstanceStep) => {
     setSelectedStep(step)
   }
+
+  // Auto-open a task when linked via ?step=<id> (e.g. from the My Tasks page).
+  const searchParams = useSearchParams()
+  const stepParam = searchParams.get("step")
+  const handledStepParamRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!instance || !stepParam) return
+    if (handledStepParamRef.current === stepParam) return
+    const target = instance.steps.find((s) => s.id === stepParam)
+    if (target) {
+      setSelectedStep(target)
+      handledStepParamRef.current = stepParam
+    }
+  }, [instance, stepParam])
   
   if (!canAccess) {
     return (
@@ -675,7 +690,11 @@ const statusColors: Record<WorkflowInstanceStep["status"], { bg: string; border:
 // Custom node component for instance steps
 function InstanceStepNode({ data }: { data: { step: WorkflowInstanceStep; onClick?: boolean } }) {
   const { step, onClick } = data
-  const colors = statusColors[step.status]
+  const colors = statusColors[step.status] ?? {
+    bg: "bg-muted",
+    border: "border-muted-foreground/30",
+    text: "text-muted-foreground",
+  }
   const assigneeName = step.assignedPerson?.name || step.assignee?.name
   
   return (

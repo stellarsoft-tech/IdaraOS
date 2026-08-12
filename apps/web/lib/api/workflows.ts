@@ -173,6 +173,23 @@ export interface WorkflowInstanceDetail extends WorkflowInstance {
   steps: WorkflowInstanceStep[]
 }
 
+/** A single workflow step assigned to the current user (for the My Tasks page). */
+export interface MyWorkflowTask {
+  id: string
+  instanceId: string
+  instanceName: string
+  instanceStatus: WorkflowInstance["status"]
+  entityName?: string | null
+  name: string
+  description?: string
+  status: WorkflowInstanceStep["status"]
+  dueAt?: string
+  startedAt?: string
+  completedAt?: string
+  assigneeId?: string
+  assignedPersonId?: string
+}
+
 // Create/Update types
 
 export interface CreateTemplate {
@@ -240,6 +257,8 @@ export interface CreateInstance {
   entityId: string
   name?: string
   dueAt?: string
+  /** Optional person to assign otherwise-unassigned steps to at instantiation. */
+  assigneePersonId?: string | null
   metadata?: Record<string, unknown>
 }
 
@@ -302,6 +321,10 @@ export const workflowStepsKeys = {
   detail: (id: string) => [...workflowStepsKeys.details(), id] as const,
 }
 
+export const workflowMyTasksKeys = {
+  all: ["workflow-my-tasks"] as const,
+}
+
 // ============================================================================
 // API Functions
 // ============================================================================
@@ -309,6 +332,17 @@ export const workflowStepsKeys = {
 const TEMPLATES_BASE = "/api/workflows/templates"
 const INSTANCES_BASE = "/api/workflows/instances"
 const STEPS_BASE = "/api/workflows/steps"
+const MY_TASKS_BASE = "/api/workflows/my-tasks"
+
+async function fetchMyTasks(): Promise<MyWorkflowTask[]> {
+  const res = await fetch(MY_TASKS_BASE)
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch tasks")
+  }
+
+  return res.json()
+}
 
 // Templates
 
@@ -546,6 +580,14 @@ export function useWorkflowInstanceDetail(id: string) {
   })
 }
 
+/** Workflow steps assigned to the currently authenticated user. */
+export function useMyWorkflowTasks() {
+  return useQuery({
+    queryKey: workflowMyTasksKeys.all,
+    queryFn: fetchMyTasks,
+  })
+}
+
 export function useCreateWorkflowInstance() {
   const queryClient = useQueryClient()
   
@@ -553,6 +595,7 @@ export function useCreateWorkflowInstance() {
     mutationFn: createInstance,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workflowInstancesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: workflowMyTasksKeys.all })
     },
   })
 }
@@ -600,6 +643,7 @@ export function useUpdateWorkflowStep() {
       queryClient.invalidateQueries({ queryKey: workflowStepsKeys.detail(step.id) })
       queryClient.invalidateQueries({ queryKey: workflowInstancesKeys.detail(step.instanceId) })
       queryClient.invalidateQueries({ queryKey: workflowInstancesKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: workflowMyTasksKeys.all })
     },
   })
 }

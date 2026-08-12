@@ -75,6 +75,7 @@ export function CreateInstanceDialog({
   const [name, setName] = useState("")
   const [entityType, setEntityType] = useState("")
   const [entityId, setEntityId] = useState("")
+  const [assigneeId, setAssigneeId] = useState<string>("__unassigned__")
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined)
   
   // Get entity options based on module scope
@@ -100,6 +101,7 @@ export function CreateInstanceDialog({
     if (open) {
       setName(`${template.name} - ${new Date().toLocaleDateString()}`)
       setEntityId("")
+      setAssigneeId("__unassigned__")
       setDueDate(template.defaultDueDays 
         ? new Date(Date.now() + template.defaultDueDays * 24 * 60 * 60 * 1000)
         : undefined
@@ -140,6 +142,14 @@ export function CreateInstanceDialog({
   const isLoadingEntities = 
     (entityType === "person" && isLoadingPeople) ||
     (entityType === "asset" && isLoadingAssets)
+
+  // When the workflow subject is a person, default the task assignee to that
+  // same person so their tasks show up in their "My Tasks" (creator can change).
+  useEffect(() => {
+    if (entityType === "person" && entityId) {
+      setAssigneeId((prev) => (prev === "__unassigned__" ? entityId : prev))
+    }
+  }, [entityType, entityId])
   
   // Handle submit
   const handleSubmit = async () => {
@@ -165,6 +175,7 @@ export function CreateInstanceDialog({
         entityId,
         name: name.trim(),
         dueAt: dueDate?.toISOString(),
+        assigneePersonId: assigneeId === "__unassigned__" ? null : assigneeId,
       })
       
       toast.success("Workflow instance created successfully")
@@ -268,6 +279,32 @@ export function CreateInstanceDialog({
             </div>
           )}
           
+          {/* Assign tasks to */}
+          <div className="space-y-2">
+            <Label>Assign tasks to</Label>
+            <Select value={assigneeId} onValueChange={setAssigneeId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a person" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                {people.map((person) => (
+                  <SelectItem key={person.id} value={person.id}>
+                    <div className="flex flex-col">
+                      <span>{person.name}</span>
+                      {person.email && (
+                        <span className="text-xs text-muted-foreground">{person.email}</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Steps without a specific assignee in the template will be assigned to this person and appear in their My Tasks.
+            </p>
+          </div>
+
           {/* Due Date */}
           <div className="space-y-2">
             <Label>Due Date</Label>

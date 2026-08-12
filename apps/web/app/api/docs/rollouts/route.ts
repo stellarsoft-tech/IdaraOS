@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
 
     if (targetUsers.length === 0) {
       return NextResponse.json(
-        { error: "No users match this rollout target" },
+        { error: "No active users match this rollout target" },
         { status: 400 }
       )
     }
