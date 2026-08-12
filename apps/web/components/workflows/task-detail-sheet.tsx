@@ -93,6 +93,8 @@ interface TaskDetailSheetProps {
   readOnly?: boolean
   instanceStatus: "pending" | "in_progress" | "completed" | "cancelled" | "on_hold"
   people?: PersonOption[]
+  /** Module scope of the parent workflow (drives which file categories show). */
+  moduleScope?: string
 }
 
 export function TaskDetailSheet({
@@ -103,6 +105,7 @@ export function TaskDetailSheet({
   readOnly = false,
   instanceStatus,
   people = [],
+  moduleScope,
 }: TaskDetailSheetProps) {
   const [notes, setNotes] = useState(step?.notes || "")
   const [assigneeId, setAssigneeId] = useState<string | null>(step?.assignedPersonId || null)
@@ -197,7 +200,7 @@ export function TaskDetailSheet({
           </div>
         </SheetHeader>
         
-        <div className="flex-1 overflow-y-auto py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="details">Details</TabsTrigger>
@@ -348,6 +351,7 @@ export function TaskDetailSheet({
                   stepId={step.id}
                   categoryId={fileCategoryId}
                   pathPrefix={filePathPrefix}
+                  moduleScope={moduleScope}
                   readOnly={isStepReadOnly || isStepCompleted}
                 />
               ) : (
@@ -402,10 +406,11 @@ interface TaskAttachmentsProps {
   stepId: string
   categoryId?: string | null
   pathPrefix?: string | null
+  moduleScope?: string
   readOnly?: boolean
 }
 
-function TaskAttachments({ stepId, categoryId, pathPrefix, readOnly }: TaskAttachmentsProps) {
+function TaskAttachments({ stepId, categoryId, pathPrefix, moduleScope, readOnly }: TaskAttachmentsProps) {
   const [showUpload, setShowUpload] = useState(false)
   const [deletingFile, setDeletingFile] = useState<FileRecord | null>(null)
   
@@ -463,7 +468,7 @@ function TaskAttachments({ stepId, categoryId, pathPrefix, readOnly }: TaskAttac
           {showUpload ? (
             <div className="border rounded-lg p-4 bg-muted/30">
               <CompactFileUpload
-                moduleScope="workflows"
+                moduleScope={moduleScope ?? "all"}
                 entityType="workflow_step"
                 entityId={stepId}
                 defaultCategoryId={categoryId ?? undefined}

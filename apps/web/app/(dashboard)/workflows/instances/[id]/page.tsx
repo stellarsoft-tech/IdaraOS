@@ -546,6 +546,7 @@ export default function WorkflowInstanceDetailPage({ params }: PageProps) {
         onOpenChange={(open) => !open && setSelectedStep(null)}
         instanceStatus={instance.status}
         people={people}
+        moduleScope={instance.template?.moduleScope ?? undefined}
         readOnly={isReadOnly}
       />
     </PageShell>
