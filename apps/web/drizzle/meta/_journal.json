@@ -85,6 +85,13 @@
       "when": 1782000000000,
       "tag": "0012_security_training",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782100000000,
+      "tag": "0013_endpoint_elevation",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,7 @@ interface IntuneDevice {
   userDisplayName?: string
   managedDeviceOwnerType?: string
   deviceEnrollmentType?: string
+  azureADDeviceId?: string
 }
 
 interface GraphResponse {
@@ -111,7 +112,7 @@ async function fetchManagedDevices(
   
   const filterQuery = filterParts.length > 0 ? `&$filter=${encodeURIComponent(filterParts.join(" and "))}` : ""
   
-  let url = `https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$select=id,deviceName,serialNumber,manufacturer,model,operatingSystem,osVersion,complianceState,enrolledDateTime,lastSyncDateTime,userPrincipalName,userDisplayName,managedDeviceOwnerType,deviceEnrollmentType${filterQuery}`
+  let url = `https://graph.microsoft.com/v1.0/deviceManagement/managedDevices?$select=id,deviceName,serialNumber,manufacturer,model,operatingSystem,osVersion,complianceState,enrolledDateTime,lastSyncDateTime,userPrincipalName,userDisplayName,managedDeviceOwnerType,deviceEnrollmentType,azureADDeviceId${filterQuery}`
   
   while (url) {
     const response = await fetch(url, {
@@ -129,6 +130,14 @@ async function fetchManagedDevices(
   }
   
   return devices
+}
+
+/**
+ * Intune reports an all-zero azureADDeviceId for devices that are not Entra-registered
+ */
+function normalizeEntraDeviceId(id: string | undefined): string | null {
+  if (!id || /^0{8}-0{4}-0{4}-0{4}-0{12}$/.test(id)) return null
+  return id
 }
 
 /**
@@ -164,6 +173,7 @@ function mapDeviceToAsset(
     purchaseDate: device.enrolledDateTime ? device.enrolledDateTime.split("T")[0] : null,
     source: "intune_sync" as const,
     intuneDeviceId: device.id,
+    entraDeviceId: normalizeEntraDeviceId(device.azureADDeviceId),
     intuneComplianceState: device.complianceState || null,
     intuneEnrollmentType: device.deviceEnrollmentType || null,
     intuneLastSyncAt: device.lastSyncDateTime ? new Date(device.lastSyncDateTime) : null,

@@ -109,6 +109,7 @@ const publicRoutes = [
   "/api/scim", // SCIM endpoints have their own bearer token auth
   "/api/health",
   "/api/public", // Public branding endpoints (app name, logo only)
+  "/api/internal", // Scheduled jobs - protected by INTERNAL_CRON_SECRET header
   "/registration-incomplete",
   "/set-password",
 ]

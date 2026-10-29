@@ -38,6 +38,10 @@ export async function GET(request: NextRequest) {
   authUrl.searchParams.set("response_mode", "query")
   authUrl.searchParams.set("scope", "openid profile email User.Read")
   authUrl.searchParams.set("state", state)
+  // Force a fresh Microsoft sign-in (used before revealing admin credentials)
+  if (request.nextUrl.searchParams.get("reauth") === "1") {
+    authUrl.searchParams.set("prompt", "login")
+  }
 
   return NextResponse.redirect(authUrl.toString())
 }

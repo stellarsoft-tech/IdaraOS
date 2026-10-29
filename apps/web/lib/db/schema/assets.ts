@@ -152,6 +152,8 @@ export const assets = pgTable(
     // Sync tracking
     source: text("source", { enum: assetSourceValues }).notNull().default("manual"),
     intuneDeviceId: text("intune_device_id"),
+    // Entra (Azure AD) device ID - used for Windows LAPS lookups via Microsoft Graph
+    entraDeviceId: text("entra_device_id"),
     intuneComplianceState: text("intune_compliance_state"),
     intuneEnrollmentType: text("intune_enrollment_type"),
     intuneLastSyncAt: timestamp("intune_last_sync_at", { withTimezone: true }),
@@ -173,6 +175,7 @@ export const assets = pgTable(
     index("idx_assets_assets_assigned_to").on(table.assignedToId),
     index("idx_assets_assets_source").on(table.source),
     index("idx_assets_assets_intune_id").on(table.intuneDeviceId),
+    index("idx_assets_assets_entra_device_id").on(table.entraDeviceId),
   ]
 )
 
