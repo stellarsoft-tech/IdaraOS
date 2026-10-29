@@ -1,0 +1,104 @@
+{
+  "social-engineering": {
+    "voice": "chatterbox:default",
+    "scenes": [
+      {
+        "narrationHash": "d9c8958a",
+        "file": "scene-01-d9c8958a-e5ca7461.mp3",
+        "durationMs": 17369,
+        "sentenceStartsMs": [
+          250,
+          2784,
+          5514,
+          11226,
+          15220
+        ]
+      },
+      {
+        "narrationHash": "927b4434",
+        "file": "scene-02-927b4434-0082536a.mp3",
+        "durationMs": 18470,
+        "sentenceStartsMs": [
+          250,
+          1306,
+          4308,
+          9268,
+          11160,
+          13828
+        ]
+      },
+      {
+        "narrationHash": "e19d598e",
+        "file": "scene-03-e19d598e-01d0183d.mp3",
+        "durationMs": 21966,
+        "sentenceStartsMs": [
+          250,
+          3784,
+          9918,
+          13549,
+          16416
+        ]
+      },
+      {
+        "narrationHash": "3b465054",
+        "file": "scene-04-3b465054-c9841b7a.mp3",
+        "durationMs": 14715,
+        "sentenceStartsMs": [
+          250,
+          1783,
+          4384,
+          8327,
+          10179
+        ]
+      },
+      {
+        "narrationHash": "23cee0b4",
+        "file": "scene-05-23cee0b4-c3751e81.mp3",
+        "durationMs": 17800,
+        "sentenceStartsMs": [
+          250,
+          5168,
+          8144,
+          8984,
+          14129
+        ]
+      },
+      {
+        "narrationHash": "4513b487",
+        "file": "scene-06-4513b487-799cfe18.mp3",
+        "durationMs": 20305,
+        "sentenceStartsMs": [
+          250,
+          2869,
+          8357,
+          13142,
+          17096
+        ]
+      },
+      {
+        "narrationHash": "e2eab97d",
+        "file": "scene-07-e2eab97d-afa6e0fa.mp3",
+        "durationMs": 19447,
+        "sentenceStartsMs": [
+          250,
+          2201,
+          6132,
+          9481,
+          12609
+        ]
+      },
+      {
+        "narrationHash": "a962bbbd",
+        "file": "scene-08-a962bbbd-6b24cca1.mp3",
+        "durationMs": 16363,
+        "sentenceStartsMs": [
+          250,
+          2232,
+          9449,
+          12172,
+          14595
+        ]
+      }
+    ]
+  }
+}

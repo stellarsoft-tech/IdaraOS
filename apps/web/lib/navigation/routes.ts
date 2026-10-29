@@ -122,6 +122,18 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security",
     description: "Nonconformities, root cause analysis, and corrective actions",
   },
+  "security.training": {
+    path: "/security/training",
+    label: "Training Courses",
+    parent: "security",
+    description: "Security awareness courses, assignments, and scores",
+  },
+  "security.my-training": {
+    path: "/security/my-training",
+    label: "My Training",
+    parent: "security",
+    description: "Security courses assigned to you",
+  },
   "security.frameworks": {
     path: "/security/frameworks",
     label: "Frameworks (IMS)",

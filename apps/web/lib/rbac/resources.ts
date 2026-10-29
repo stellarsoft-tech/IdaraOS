@@ -59,6 +59,8 @@ export const MODULES = {
   SECURITY_FRAMEWORKS: "security.frameworks",
   SECURITY_SOA: "security.soa",
   SECURITY_CLAUSES: "security.clauses",
+  SECURITY_TRAINING: "security.training",
+  SECURITY_MY_TRAINING: "security.my-training",
   SECURITY_AUDITLOG: "security.auditlog",
 
   // Documentation
@@ -277,6 +279,15 @@ export const P = {
       create: (): PermissionTuple => [MODULES.SECURITY_CLAUSES, ACTIONS.CREATE],
       edit: (): PermissionTuple => [MODULES.SECURITY_CLAUSES, ACTIONS.EDIT],
       delete: (): PermissionTuple => [MODULES.SECURITY_CLAUSES, ACTIONS.DELETE],
+    },
+    training: {
+      view: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.DELETE],
+    },
+    myTraining: {
+      view: (): PermissionTuple => [MODULES.SECURITY_MY_TRAINING, ACTIONS.VIEW],
     },
     auditlog: {
       view: (): PermissionTuple => [MODULES.SECURITY_AUDITLOG, ACTIONS.VIEW],

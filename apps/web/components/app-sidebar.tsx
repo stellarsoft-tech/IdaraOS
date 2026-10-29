@@ -121,6 +121,8 @@ const navigationData: NavItem[] = [
       { title: "Objectives", url: "/security/objectives", module: "security.objectives" },
       { title: "Incident Management", url: "/security/incidents", module: "security.incidents" },
       { title: "Nonconformity & CA", url: "/security/nonconformities", module: "security.nonconformities" },
+      { title: "Training Courses", url: "/security/training", module: "security.training" },
+      { title: "My Training", url: "/security/my-training", module: "security.my-training" },
       { 
         title: "Frameworks", 
         url: "/security/frameworks", 
