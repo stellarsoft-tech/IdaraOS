@@ -12,6 +12,7 @@ import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/con
 import { P } from "@/lib/rbac/resources"
 import { rotationStatusAfterEnd } from "@/lib/security/elevation"
 import { expireDueGrants, rotateGrantPassword } from "@/lib/security/elevation-server"
+import { cancelInstall } from "@/lib/security/software-server"
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -73,8 +74,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
         entityId: id,
         entityName: row.request.deviceName,
         current: { reason },
-        description: `Revoked admin access on ${row.request.deviceName}`,
+        description:
+          revoked.mode === "app_install"
+            ? `Cancelled install of ${row.request.app?.name ?? "app"} on ${row.request.deviceName}`
+            : `Revoked admin access on ${row.request.deviceName}`,
       })
+    }
+
+    // An install not done yet is cancelled: the device leaves the install group
+    if (revoked.mode === "app_install") {
+      await cancelInstall(revoked.id, now)
     }
 
     // Rotate straight away rather than waiting for the next sweep

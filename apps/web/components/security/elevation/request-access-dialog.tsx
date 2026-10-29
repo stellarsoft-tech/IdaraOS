@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -31,12 +32,14 @@ export function RequestAccessDialog({ open, onOpenChange, devices, options }: Re
   const [assetId, setAssetId] = useState("")
   const [minutes, setMinutes] = useState("")
   const [reason, setReason] = useState("")
+  const [appName, setAppName] = useState("")
 
   useEffect(() => {
     if (open) {
       setAssetId(devices.length === 1 ? devices[0].id : "")
       setMinutes(options.durationOptions[0]?.toString() ?? "")
       setReason("")
+      setAppName("")
     }
   }, [open, devices, options.durationOptions])
 
@@ -44,7 +47,12 @@ export function RequestAccessDialog({ open, onOpenChange, devices, options }: Re
 
   const handleSubmit = async () => {
     try {
-      await create.mutateAsync({ assetId, minutes: Number(minutes), reason: reason.trim() || null })
+      await create.mutateAsync({
+        assetId,
+        minutes: Number(minutes),
+        appName: appName.trim() || null,
+        reason: reason.trim() || null,
+      })
       toast.success("Request sent. You'll see it here once an approver decides.")
       onOpenChange(false)
     } catch (error) {
@@ -94,6 +102,20 @@ export function RequestAccessDialog({ open, onOpenChange, devices, options }: Re
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="elevation-app">What do you need admin for? (optional)</Label>
+            <Input
+              id="elevation-app"
+              value={appName}
+              onChange={(e) => setAppName(e.target.value)}
+              maxLength={200}
+              placeholder="e.g. VPN client update"
+            />
+            <p className="text-xs text-muted-foreground">
+              If it&apos;s listed under Install software, request it there instead - no password needed.
+            </p>
           </div>
 
           <div className="space-y-2">

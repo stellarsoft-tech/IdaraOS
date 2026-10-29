@@ -83,6 +83,8 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { slug: MODULES.SECURITY_ELEVATION_CREDENTIALS, name: "Admin Access - Reveal Credentials", description: "Approve requests by revealing the device's LAPS password to the requester", category: "Security", icon: "KeyRound", sortOrder: "308.8", actions: [ACTIONS.EDIT] },
   { slug: MODULES.SECURITY_ELEVATION_SETTINGS, name: "Admin Access Settings", description: "Configure durations, credential mode and notifications for admin access", category: "Security", icon: "Settings", sortOrder: "308.9", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
   { slug: MODULES.SECURITY_MY_ELEVATION, name: "My Admin Access", description: "Request temporary local admin access for your devices", category: "Security", icon: "KeyRound", sortOrder: "308.95", actions: [ACTIONS.VIEW, ACTIONS.CREATE] },
+  { slug: MODULES.SECURITY_SOFTWARE, name: "Approved Software", description: "Manage the approved software catalog and its Intune install groups", category: "Security", icon: "PackageCheck", sortOrder: "308.96", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_SOFTWARE_UPDATES, name: "Software Updates", description: "Schedule and trigger winget updates on devices and review per-device update logs", category: "Security", icon: "RefreshCw", sortOrder: "308.97", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
   { slug: MODULES.SECURITY_AUDITLOG, name: "Audit Log", description: "View audit trail for Security module", category: "Security", icon: "ScrollText", sortOrder: "309", actions: [ACTIONS.VIEW] },
   
   // Documentation

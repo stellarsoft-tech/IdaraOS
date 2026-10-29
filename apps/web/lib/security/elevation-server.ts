@@ -9,6 +9,8 @@ import { elevationGrants, elevationRequests, elevationSettings, type ElevationSe
 import { createAuditLog } from "@/lib/audit"
 import { MAX_ROTATION_ATTEMPTS, isRotationVerified } from "./elevation"
 import { getLapsLastBackupAt, requestLapsRotation } from "./elevation-laps"
+import { RUN_TIMEOUT_MINUTES } from "./software"
+import { expireStaleRuns, processInstalls } from "./software-server"
 
 const SYSTEM_ACTOR = { id: null, email: "system", name: "System", ip: null, userAgent: null }
 
@@ -56,6 +58,8 @@ export async function expireDueGrants(now: Date = new Date(), orgId?: string): P
       updatedAt: now,
     })
     .where(and(
+      // App installs end on install or deadline - see processInstalls
+      eq(elevationGrants.mode, "credentials"),
       eq(elevationGrants.status, "active"),
       lte(elevationGrants.expiresAt, now),
       orgId ? eq(elevationGrants.orgId, orgId) : undefined
@@ -198,5 +202,7 @@ export async function processRotations(now: Date = new Date(), limit = 25): Prom
 export async function runElevationSweep(now: Date = new Date()) {
   const expired = await expireDueGrants(now)
   const rotations = await processRotations(now)
-  return { expired, ...rotations }
+  const installs = await processInstalls(now)
+  const staleUpdateRuns = await expireStaleRuns(now, RUN_TIMEOUT_MINUTES)
+  return { expired, ...rotations, installs, staleUpdateRuns }
 }

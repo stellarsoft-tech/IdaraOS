@@ -110,6 +110,7 @@ const publicRoutes = [
   "/api/health",
   "/api/public", // Public branding endpoints (app name, logo only)
   "/api/internal", // Scheduled jobs - protected by INTERNAL_CRON_SECRET header
+  "/api/updater", // IdaraOS Updater on devices - enrollment token / per-device secret auth
   "/registration-incomplete",
   "/set-password",
 ]

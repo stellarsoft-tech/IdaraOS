@@ -1002,6 +1002,23 @@ export default function IntegrationsPage() {
                               </Badge>
                               <span className="text-xs text-muted-foreground">Read Intune config</span>
                             </div>
+                            <p className="pt-2 text-xs font-medium text-muted-foreground">
+                              Admin access and approved software (Security module)
+                            </p>
+                            {[
+                              ["DeviceLocalCredential.Read.All", "Read LAPS passwords"],
+                              ["DeviceManagementManagedDevices.PrivilegedOperations.All", "Rotate LAPS passwords, sync devices"],
+                              ["DeviceManagementApps.Read.All", "Read Intune apps and install status"],
+                              ["Device.Read.All", "Find devices in Entra ID"],
+                              ["GroupMember.ReadWrite.All", "Add devices to app install groups"],
+                            ].map(([permission, purpose]) => (
+                              <div key={permission} className="flex items-center gap-2">
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {permission}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">{purpose}</span>
+                              </div>
+                            ))}
                           </CardContent>
                         </Card>
 

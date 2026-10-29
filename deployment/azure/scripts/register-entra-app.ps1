@@ -149,11 +149,15 @@ function Add-GraphAppRolesByName {
     }
 }
 
-# Endpoint elevation (just-in-time admin): Intune device sync, Windows LAPS read and rotation
+# Endpoint elevation (just-in-time admin): Intune device sync, Windows LAPS read and rotation,
+# and approved app installs (list Intune apps, resolve devices, add devices to install groups)
 $elevationPermissions = @(
     "DeviceManagementManagedDevices.Read.All",
     "DeviceLocalCredential.Read.All",
-    "DeviceManagementManagedDevices.PrivilegedOperations.All"
+    "DeviceManagementManagedDevices.PrivilegedOperations.All",
+    "DeviceManagementApps.Read.All",
+    "Device.Read.All",
+    "GroupMember.ReadWrite.All"
 )
 
 # =============================================================================

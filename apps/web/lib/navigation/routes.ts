@@ -158,6 +158,18 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security",
     description: "Request temporary local admin access for your devices",
   },
+  "security.software": {
+    path: "/security/software",
+    label: "Approved Software",
+    parent: "security",
+    description: "Apps users can request, and how Intune installs and updates them",
+  },
+  "security.software-updates": {
+    path: "/security/software-updates",
+    label: "Software Updates",
+    parent: "security",
+    description: "Winget update schedule, run now, and per-device update logs",
+  },
   "security.frameworks": {
     path: "/security/frameworks",
     label: "Frameworks (IMS)",

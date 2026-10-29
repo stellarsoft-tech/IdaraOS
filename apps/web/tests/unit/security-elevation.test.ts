@@ -84,8 +84,21 @@ describe("checkApproval", () => {
     ).toMatchObject({ ok: false, status: 400 })
   })
 
-  it("rejects elevate-app until the agent exists", () => {
-    expect(checkApproval({ ...base, mode: "elevate_app" })).toMatchObject({ ok: false, status: 400 })
+  it("approves installs only for a ready catalog app", () => {
+    expect(checkApproval({ ...base, mode: "app_install" })).toMatchObject({ ok: false, status: 400 })
+    expect(
+      checkApproval({ ...base, mode: "app_install", installTarget: { ready: false, error: "Not set up" } })
+    ).toMatchObject({ ok: false, error: "Not set up" })
+    // Installs need neither the credentials permission nor a duration
+    expect(
+      checkApproval({ ...base, mode: "app_install", minutes: 0, canUseCredentials: false, installTarget: { ready: true } })
+    ).toEqual({ ok: true })
+  })
+
+  it("caps credentials for install requests (no requested duration) at the org maximum", () => {
+    const installRequest = { ...base.request, requestedMinutes: null }
+    expect(checkApproval({ ...base, request: installRequest, minutes: 240 }).ok).toBe(true)
+    expect(checkApproval({ ...base, request: installRequest, minutes: 241 }).ok).toBe(false)
   })
 
   it("lets approvers shorten but never extend", () => {
@@ -125,7 +138,7 @@ describe("grants", () => {
   it("only lets the grantee reveal, while live, under the limit", () => {
     expect(checkReveal(grant, "requester", NOW, 5)).toEqual({ ok: true })
     expect(checkReveal(grant, "someone-else", NOW, 5)).toMatchObject({ ok: false, status: 404 })
-    expect(checkReveal({ ...grant, mode: "elevate_app" }, "requester", NOW, 5)).toMatchObject({ ok: false, status: 400 })
+    expect(checkReveal({ ...grant, mode: "app_install" }, "requester", NOW, 5)).toMatchObject({ ok: false, status: 400 })
     expect(checkReveal({ ...grant, status: "expired" }, "requester", NOW, 5)).toMatchObject({ ok: false, status: 410 })
     expect(checkReveal({ ...grant, revealCount: 5 }, "requester", NOW, 5)).toMatchObject({ ok: false, status: 429 })
   })
@@ -142,7 +155,7 @@ describe("grants", () => {
   it("rotates only passwords that were revealed", () => {
     expect(rotationStatusAfterEnd({ mode: "credentials", revealCount: 0 })).toBe("not_required")
     expect(rotationStatusAfterEnd({ mode: "credentials", revealCount: 2 })).toBe("pending")
-    expect(rotationStatusAfterEnd({ mode: "elevate_app", revealCount: 0 })).toBe("not_required")
+    expect(rotationStatusAfterEnd({ mode: "app_install", revealCount: 0 })).toBe("not_required")
   })
 
   it("verifies rotation once a newer LAPS backup exists", () => {

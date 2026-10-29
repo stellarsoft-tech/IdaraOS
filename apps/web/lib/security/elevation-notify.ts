@@ -5,13 +5,13 @@
  */
 
 import { decrypt } from "@/lib/encryption"
-import { formatMinutes } from "./elevation"
 
 export interface NewRequestNotification {
   requesterName: string
   requesterEmail: string
   deviceName: string
-  requestedMinutes: number
+  // What was asked for, e.g. "Install Git" or "Admin access for 30 min"
+  summary: string
   reason: string | null
   reviewUrl: string
 }
@@ -27,13 +27,13 @@ export function buildNewRequestCard(n: NewRequestNotification) {
           type: "AdaptiveCard",
           version: "1.4",
           body: [
-            { type: "TextBlock", size: "Medium", weight: "Bolder", text: "Admin access requested" },
+            { type: "TextBlock", size: "Medium", weight: "Bolder", text: "Admin access request" },
             {
               type: "FactSet",
               facts: [
                 { title: "Requester", value: `${n.requesterName} (${n.requesterEmail})` },
                 { title: "Device", value: n.deviceName },
-                { title: "Duration", value: formatMinutes(n.requestedMinutes) },
+                { title: "Request", value: n.summary },
                 ...(n.reason ? [{ title: "Reason", value: n.reason }] : []),
               ],
             },

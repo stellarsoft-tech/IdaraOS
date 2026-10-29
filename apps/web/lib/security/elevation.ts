@@ -40,11 +40,12 @@ export const elevationGrantStatusLabels: Record<ElevationGrantStatus, string> = 
   active: "Active",
   expired: "Expired",
   revoked: "Revoked",
+  completed: "Completed",
 }
 
 export const elevationGrantModeLabels: Record<ElevationGrantMode, string> = {
   credentials: "Reveal LAPS password",
-  elevate_app: "Elevate one app",
+  app_install: "Install app via Intune",
 }
 
 export const elevationRotationStatusLabels: Record<ElevationRotationStatus, string> = {
@@ -116,13 +117,16 @@ export function checkRequestedMinutes(minutes: number, settings: DurationSetting
 }
 
 export interface ApprovalInput {
-  request: { status: ElevationRequestStatus; requesterId: string; requestedMinutes: number }
+  request: { status: ElevationRequestStatus; requesterId: string; requestedMinutes: number | null }
   deciderId: string
   mode: ElevationGrantMode
+  /** Credentials only */
   minutes: number
   settings: { credentialModeEnabled: boolean; maxMinutes: number }
   /** Decider holds security.elevation-credentials:edit */
   canUseCredentials: boolean
+  /** App installs: whether the catalog app and device are ready for an Intune install */
+  installTarget?: { ready: boolean; error?: string }
 }
 
 /**
@@ -132,21 +136,23 @@ export function checkApproval(input: ApprovalInput): CheckResult {
   const decide = checkCanDecide(input.request, input.deciderId)
   if (!decide.ok) return decide
 
-  if (input.mode === "elevate_app") {
-    return fail(400, "Elevate-app mode needs the endpoint agent, which is not available yet")
+  if (input.mode === "app_install") {
+    if (!input.installTarget?.ready) {
+      return fail(400, input.installTarget?.error ?? "This request isn't for an approved catalog app")
+    }
+    return OK
   }
-  if (input.mode === "credentials") {
-    if (!input.settings.credentialModeEnabled) {
-      return fail(400, "Credential mode is turned off in admin access settings")
-    }
-    if (!input.canUseCredentials) {
-      return fail(403, "You don't have permission to approve with credentials")
-    }
+
+  if (!input.settings.credentialModeEnabled) {
+    return fail(400, "Credential mode is turned off in admin access settings")
+  }
+  if (!input.canUseCredentials) {
+    return fail(403, "You don't have permission to approve with credentials")
   }
   if (!Number.isInteger(input.minutes) || input.minutes < 1) {
     return fail(400, "Duration must be at least 1 minute")
   }
-  if (input.minutes > input.request.requestedMinutes) {
+  if (input.request.requestedMinutes !== null && input.minutes > input.request.requestedMinutes) {
     return fail(400, "You can shorten the requested duration, not extend it")
   }
   if (input.minutes > input.settings.maxMinutes) {

@@ -4,6 +4,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import type { SoftwareAccess, SoftwareInstallStatus } from "@/lib/db/schema/security-software"
 import type {
   ElevationGrantMode,
   ElevationGrantStatus,
@@ -26,17 +27,25 @@ export interface ElevationGrantSummary {
   rotationStatus: ElevationRotationStatus
 }
 
+export interface InstallSummary {
+  status: SoftwareInstallStatus
+  installedAt: string | null
+}
+
 export interface MyElevationRequest {
   id: string
   assetId: string | null
   deviceName: string
-  requestedMinutes: number
+  catalogAppId: string | null
+  appName: string | null
+  requestedMinutes: number | null
   reason: string | null
   status: ElevationRequestStatus
   decisionNote: string | null
   decidedAt: string | null
   createdAt: string
   grant: ElevationGrantSummary | null
+  install: InstallSummary | null
 }
 
 export interface MyElevationDevice {
@@ -47,9 +56,20 @@ export interface MyElevationDevice {
   intuneManaged: boolean
 }
 
+export interface MyCatalogApp {
+  id: string
+  name: string
+  publisher: string | null
+  description: string | null
+  access: SoftwareAccess
+  requestable: boolean
+  companyPortalUrl: string | null
+}
+
 export interface MyElevationData {
   data: MyElevationRequest[]
   devices: MyElevationDevice[]
+  catalog: MyCatalogApp[]
   options: {
     durationOptions: number[]
     requireReason: boolean
@@ -71,8 +91,11 @@ export interface ApproverElevationRequest {
   requesterEmail: string
   assetId: string | null
   deviceName: string
+  catalogAppId: string | null
+  appName: string | null
+  installReady: boolean
   intuneManaged: boolean
-  requestedMinutes: number
+  requestedMinutes: number | null
   reason: string | null
   status: ElevationRequestStatus
   decidedByName: string | null
@@ -81,11 +104,20 @@ export interface ApproverElevationRequest {
   createdAt: string
   isOwnRequest: boolean
   grant: ApproverGrantSummary | null
+  install: ApproverInstallSummary | null
+}
+
+export interface ApproverInstallSummary extends InstallSummary {
+  attempts: number
+  groupAddedAt: string | null
+  lastCheckedAt: string | null
+  lastIntuneState: string | null
+  error: string | null
 }
 
 export interface ApproverElevationData {
   data: ApproverElevationRequest[]
-  stats: { pending: number; active: number; rotationIssues: number }
+  stats: { pending: number; active: number; rotationIssues: number; installIssues: number }
   settings: { credentialModeEnabled: boolean; maxMinutes: number }
 }
 
@@ -165,7 +197,13 @@ export function useMyElevation() {
 export function useCreateElevationRequest() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: { assetId: string; minutes: number; reason?: string | null }) =>
+    mutationFn: (data: {
+      assetId: string
+      catalogAppId?: string | null
+      minutes?: number | null
+      appName?: string | null
+      reason?: string | null
+    }) =>
       request("/api/security/my-elevation", { method: "POST", body: JSON.stringify(data) }, "Failed to create request"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.my })
@@ -222,7 +260,7 @@ function useApprovalMutation<TVars>(buildRequest: (vars: TVars) => [string, Requ
 }
 
 export function useApproveElevationRequest() {
-  return useApprovalMutation<{ id: string; mode: ElevationGrantMode; minutes: number; note?: string | null }>(
+  return useApprovalMutation<{ id: string; mode: ElevationGrantMode; minutes?: number | null; note?: string | null }>(
     ({ id, ...body }) => [`/api/security/elevation/requests/${id}/approve`, { method: "POST", body: JSON.stringify(body) }],
     "Failed to approve request"
   )
@@ -246,6 +284,13 @@ export function useRotateElevationGrant() {
   return useApprovalMutation<string>(
     (id) => [`/api/security/elevation/grants/${id}/rotate`, { method: "POST" }],
     "Failed to request rotation"
+  )
+}
+
+export function useRetryInstall() {
+  return useApprovalMutation<string>(
+    (id) => [`/api/security/elevation/grants/${id}/retry-install`, { method: "POST" }],
+    "Failed to retry the install"
   )
 }
 

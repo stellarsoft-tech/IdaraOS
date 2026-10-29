@@ -66,6 +66,8 @@ export const MODULES = {
   SECURITY_ELEVATION_CREDENTIALS: "security.elevation-credentials",
   SECURITY_ELEVATION_SETTINGS: "security.elevation-settings",
   SECURITY_MY_ELEVATION: "security.my-elevation",
+  SECURITY_SOFTWARE: "security.software",
+  SECURITY_SOFTWARE_UPDATES: "security.software-updates",
   SECURITY_AUDITLOG: "security.auditlog",
 
   // Documentation
@@ -314,6 +316,16 @@ export const P = {
     myElevation: {
       view: (): PermissionTuple => [MODULES.SECURITY_MY_ELEVATION, ACTIONS.VIEW],
       create: (): PermissionTuple => [MODULES.SECURITY_MY_ELEVATION, ACTIONS.CREATE],
+    },
+    software: {
+      view: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE, ACTIONS.DELETE],
+    },
+    softwareUpdates: {
+      view: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE_UPDATES, ACTIONS.VIEW],
+      edit: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE_UPDATES, ACTIONS.EDIT],
     },
     auditlog: {
       view: (): PermissionTuple => [MODULES.SECURITY_AUDITLOG, ACTIONS.VIEW],

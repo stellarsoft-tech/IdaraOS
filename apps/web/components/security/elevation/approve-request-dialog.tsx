@@ -26,6 +26,7 @@ interface ApproveRequestDialogProps {
   onOpenChange: (open: boolean) => void
   credentialModeEnabled: boolean
   canUseCredentials: boolean
+  maxMinutes: number
 }
 
 export function ApproveRequestDialog({
@@ -33,6 +34,7 @@ export function ApproveRequestDialog({
   onOpenChange,
   credentialModeEnabled,
   canUseCredentials,
+  maxMinutes,
 }: ApproveRequestDialogProps) {
   const approve = useApproveElevationRequest()
   const [mode, setMode] = useState<ElevationGrantMode>("credentials")
@@ -42,26 +44,38 @@ export function ApproveRequestDialog({
   // Approvers can shorten the requested duration, never extend it
   const durationChoices = useMemo(() => {
     if (!request) return []
-    const shorter = DEFAULT_DURATION_OPTIONS.filter((m) => m < request.requestedMinutes)
-    return [...shorter, request.requestedMinutes]
-  }, [request])
+    const cap = request.requestedMinutes ?? maxMinutes
+    const shorter = DEFAULT_DURATION_OPTIONS.filter((m) => m < cap)
+    return [...shorter, cap]
+  }, [request, maxMinutes])
 
   useEffect(() => {
     if (request) {
-      setMode("credentials")
-      setMinutes(request.requestedMinutes.toString())
+      setMode(request.installReady ? "app_install" : "credentials")
+      setMinutes((request.requestedMinutes ?? durationChoices[0] ?? 15).toString())
       setNote("")
     }
-  }, [request])
+  }, [request, durationChoices])
 
+  const isInstallRequest = !!request?.catalogAppId
   const credentialsAllowed = credentialModeEnabled && canUseCredentials
-  const canSubmit = mode === "credentials" && credentialsAllowed && !!minutes
+  const canSubmit =
+    mode === "app_install" ? !!request?.installReady : credentialsAllowed && !!minutes
 
   const handleApprove = async () => {
     if (!request) return
     try {
-      await approve.mutateAsync({ id: request.id, mode, minutes: Number(minutes), note: note.trim() || null })
-      toast.success(`Approved for ${formatMinutes(Number(minutes))}`)
+      await approve.mutateAsync({
+        id: request.id,
+        mode,
+        minutes: mode === "credentials" ? Number(minutes) : null,
+        note: note.trim() || null,
+      })
+      toast.success(
+        mode === "app_install"
+          ? `Approved. Intune will install ${request.appName ?? "the app"}.`
+          : `Approved for ${formatMinutes(Number(minutes))}`
+      )
       onOpenChange(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to approve request")
@@ -72,7 +86,7 @@ export function ApproveRequestDialog({
     <Dialog open={!!request} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Approve admin access</DialogTitle>
+          <DialogTitle>{isInstallRequest ? `Approve ${request?.appName ?? "app"} install` : "Approve admin access"}</DialogTitle>
           <DialogDescription>
             {request && `${request.requesterName} on ${request.deviceName}`}
           </DialogDescription>
@@ -80,8 +94,21 @@ export function ApproveRequestDialog({
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label>How should access be given?</Label>
+            <Label>How should this be done?</Label>
             <RadioGroup value={mode} onValueChange={(v) => setMode(v as ElevationGrantMode)} className="gap-3">
+              {isInstallRequest && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+                  <RadioGroupItem value="app_install" id="mode-app-install" className="mt-1" disabled={!request?.installReady} />
+                  <div className="space-y-1">
+                    <span className="text-sm font-medium">Install with Intune (recommended)</span>
+                    <p className="text-xs text-muted-foreground">
+                      {request?.installReady
+                        ? "The device joins the app's install group and Intune installs it as SYSTEM. No password is shared."
+                        : "Set up this app's Intune install group in Approved Software first."}
+                    </p>
+                  </div>
+                </label>
+              )}
               <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
                 <RadioGroupItem value="credentials" id="mode-credentials" className="mt-1" disabled={!credentialsAllowed} />
                 <div className="space-y-1">
@@ -95,34 +122,27 @@ export function ApproveRequestDialog({
                   </p>
                 </div>
               </label>
-              <label className="flex cursor-not-allowed items-start gap-3 rounded-md border p-3 opacity-60">
-                <RadioGroupItem value="elevate_app" id="mode-elevate-app" className="mt-1" disabled />
-                <div className="space-y-1">
-                  <span className="text-sm font-medium">Elevate one app</span>
-                  <p className="text-xs text-muted-foreground">
-                    Needs the IdaraOS endpoint agent on the device - coming soon.
-                  </p>
-                </div>
-              </label>
             </RadioGroup>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="approve-duration">Duration</Label>
-            <Select value={minutes} onValueChange={setMinutes}>
-              <SelectTrigger id="approve-duration">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {durationChoices.map((m) => (
-                  <SelectItem key={m} value={m.toString()}>
-                    {formatMinutes(m)}
-                    {m === request?.requestedMinutes ? " (requested)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {mode === "credentials" && (
+            <div className="space-y-2">
+              <Label htmlFor="approve-duration">Duration</Label>
+              <Select value={minutes} onValueChange={setMinutes}>
+                <SelectTrigger id="approve-duration">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {durationChoices.map((m) => (
+                    <SelectItem key={m} value={m.toString()}>
+                      {formatMinutes(m)}
+                      {m === request?.requestedMinutes ? " (requested)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="approve-note">Note to requester (optional)</Label>

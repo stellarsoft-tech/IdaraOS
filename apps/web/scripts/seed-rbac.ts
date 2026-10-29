@@ -91,6 +91,8 @@ const SYSTEM_ROLES: Record<string, {
       "security.elevation-credentials": { edit: true },
       "security.elevation-settings": { view: true, edit: true },
       "security.my-elevation": { view: true, create: true },
+      "security.software": { view: true, create: true, edit: true, delete: true },
+      "security.software-updates": { view: true, edit: true },
       // Workflows - Full access
       "workflows.overview": { view: true, write: true, create: true, edit: true, delete: true },
       "workflows.templates": { view: true, write: true, create: true, edit: true, delete: true },

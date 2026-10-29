@@ -5,6 +5,7 @@
  * - Approvers grant it for a limited time
  * - Credentials mode: the Windows LAPS password is fetched from Entra and revealed to the requester,
  *   then rotated when the grant ends
+ * - App install mode: Intune installs an approved catalog app (see security-software.ts)
  *
  * LAPS passwords are never stored in any table.
  * See docs/modules/security/elevation-architecture.md
@@ -33,15 +34,19 @@ export type ElevationRequestStatus = (typeof elevationRequestStatusValues)[numbe
 /**
  * Grant mode values
  * - credentials: the LAPS password is revealed to the requester
- * - elevate_app: the endpoint agent launches one app elevated (requires the agent - Phase 2)
+ * - app_install: Intune installs an approved catalog app (see security_software_installs)
  */
-export const elevationGrantModeValues = ["credentials", "elevate_app"] as const
+export const elevationGrantModeValues = ["credentials", "app_install"] as const
 export type ElevationGrantMode = (typeof elevationGrantModeValues)[number]
 
 /**
  * Grant status values
+ * - active: credentials usable / install in progress
+ * - expired: the window passed (credentials) or the install deadline passed without an install
+ * - revoked: ended early by an approver
+ * - completed: app_install only - Intune reported the app installed
  */
-export const elevationGrantStatusValues = ["active", "expired", "revoked"] as const
+export const elevationGrantStatusValues = ["active", "expired", "revoked", "completed"] as const
 export type ElevationGrantStatus = (typeof elevationGrantStatusValues)[number]
 
 /**
@@ -115,16 +120,18 @@ export const elevationRequests = pgTable(
     entraDeviceId: text("entra_device_id").notNull(),
     intuneDeviceId: text("intune_device_id"),
 
-    // App the requester needs elevation for (set by the endpoint agent - Phase 2)
+    // Approved software catalog entry for install requests (FK to security_software_catalog in SQL;
+    // not declared here to avoid a circular schema import)
+    catalogAppId: uuid("catalog_app_id"),
+    // What the requester needs admin for (free text for credentials requests, snapshot for installs)
     app: jsonb("app").$type<{
-      path: string
-      sha256: string
-      signer?: string
-      productName?: string
+      name: string
+      publisher?: string
       version?: string
     }>(),
 
-    requestedMinutes: integer("requested_minutes").notNull(),
+    // Credentials requests only - installs have no duration
+    requestedMinutes: integer("requested_minutes"),
     reason: text("reason"),
 
     status: text("status", { enum: elevationRequestStatusValues }).notNull().default("pending"),
@@ -139,6 +146,7 @@ export const elevationRequests = pgTable(
     index("idx_security_elevation_requests_org").on(table.orgId),
     index("idx_security_elevation_requests_requester").on(table.requesterId),
     index("idx_security_elevation_requests_status").on(table.status),
+    index("idx_security_elevation_requests_catalog_app").on(table.catalogAppId),
   ]
 )
 
@@ -160,6 +168,7 @@ export const elevationGrants = pgTable(
 
     mode: text("mode", { enum: elevationGrantModeValues }).notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    // Credentials: end of the access window. App installs: install deadline
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 
     status: text("status", { enum: elevationGrantStatusValues }).notNull().default("active"),
