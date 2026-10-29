@@ -31,6 +31,7 @@
     "db:seed-rbac": "tsx scripts/seed-rbac.ts",
     "db:sync-rbac": "tsx scripts/sync-rbac-permissions.ts",
     "db:post-migrate": "tsx scripts/post-migrate.ts",
+    "db:seed-training": "tsx scripts/seed-security-training.ts",
     "db:migrate-full": "tsx scripts/migrate.ts run && tsx scripts/post-migrate.ts",
     "db:assign-admin-role": "tsx scripts/assign-admin-role.ts",
     "db:create-admin": "tsx scripts/create-admin.ts"

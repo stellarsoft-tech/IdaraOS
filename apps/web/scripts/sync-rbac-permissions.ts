@@ -77,6 +77,12 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { slug: MODULES.SECURITY_FRAMEWORKS, name: "Frameworks", description: "Manage compliance frameworks", category: "Security", icon: "Shield", sortOrder: "306", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
   { slug: MODULES.SECURITY_SOA, name: "Statement of Applicability", description: "Manage SoA for frameworks", category: "Security", icon: "FileCheck", sortOrder: "307", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
   { slug: MODULES.SECURITY_CLAUSES, name: "ISMS Clauses", description: "Manage ISMS clause compliance tracking", category: "Security", icon: "FileCheck2", sortOrder: "308", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_TRAINING, name: "Training Courses", description: "Manage security awareness courses, assign them, and review scores", category: "Security", icon: "GraduationCap", sortOrder: "308.5", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_MY_TRAINING, name: "My Training", description: "Watch assigned security courses and take quizzes", category: "Security", icon: "PlayCircle", sortOrder: "308.6", actions: [ACTIONS.VIEW] },
+  { slug: MODULES.SECURITY_ELEVATION, name: "Admin Access Approvals", description: "Review, approve, deny and revoke just-in-time local admin requests", category: "Security", icon: "ShieldCheck", sortOrder: "308.7", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.SECURITY_ELEVATION_CREDENTIALS, name: "Admin Access - Reveal Credentials", description: "Approve requests by revealing the device's LAPS password to the requester", category: "Security", icon: "KeyRound", sortOrder: "308.8", actions: [ACTIONS.EDIT] },
+  { slug: MODULES.SECURITY_ELEVATION_SETTINGS, name: "Admin Access Settings", description: "Configure durations, credential mode and notifications for admin access", category: "Security", icon: "Settings", sortOrder: "308.9", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.SECURITY_MY_ELEVATION, name: "My Admin Access", description: "Request temporary local admin access for your devices", category: "Security", icon: "KeyRound", sortOrder: "308.95", actions: [ACTIONS.VIEW, ACTIONS.CREATE] },
   { slug: MODULES.SECURITY_AUDITLOG, name: "Audit Log", description: "View audit trail for Security module", category: "Security", icon: "ScrollText", sortOrder: "309", actions: [ACTIONS.VIEW] },
   
   // Documentation

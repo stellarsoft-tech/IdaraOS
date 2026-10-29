@@ -128,6 +128,34 @@ function Add-PermissionIfMissing {
     }
 }
 
+<#
+    .SYNOPSIS
+    Add Microsoft Graph application permissions looked up by name (avoids hard-coded GUIDs)
+#>
+function Add-GraphAppRolesByName {
+    param(
+        [string]$AppId,
+        [string[]]$PermissionNames
+    )
+
+    $graphResourceId = "00000003-0000-0000-c000-000000000000"
+    foreach ($name in $PermissionNames) {
+        $roleId = az ad sp show --id $graphResourceId --query "appRoles[?value=='$name'].id | [0]" -o tsv 2>$null
+        if (-not $roleId) {
+            Write-Host "    ✗ Could not find Graph permission $name" -ForegroundColor Red
+            continue
+        }
+        Add-PermissionIfMissing -AppId $AppId -ResourceId $graphResourceId -PermissionId $roleId -PermissionType "Role" -PermissionName "$name (Application)" | Out-Null
+    }
+}
+
+# Endpoint elevation (just-in-time admin): Intune device sync, Windows LAPS read and rotation
+$elevationPermissions = @(
+    "DeviceManagementManagedDevices.Read.All",
+    "DeviceLocalCredential.Read.All",
+    "DeviceManagementManagedDevices.PrivilegedOperations.All"
+)
+
 # =============================================================================
 # Check Prerequisites
 # =============================================================================
@@ -282,7 +310,11 @@ if ($existingApp -and $existingApp.appId) {
         
         $userReadWriteAll = "741f803b-c850-494e-b5df-cde7c675a1ca"
         Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadWriteAll -PermissionType "Role" -PermissionName "User.ReadWrite.All (Application)"
-        
+
+        Write-Host ""
+        Write-Host "  Application Permissions (Endpoint Elevation / LAPS):" -ForegroundColor Cyan
+        Add-GraphAppRolesByName -AppId $appId -PermissionNames $elevationPermissions
+
         Write-Host ""
         Write-Host "⚠️  IMPORTANT: Admin consent is required for application permissions!" -ForegroundColor Yellow
         Write-Host "   Run: az ad app permission admin-consent --id $appId" -ForegroundColor Cyan
@@ -369,7 +401,15 @@ else {
     # User.ReadWrite.All (Application) - For bidirectional sync (write back to Entra)
     $userReadWriteAll = "741f803b-c850-494e-b5df-cde7c675a1ca"
     Add-PermissionIfMissing -AppId $appId -ResourceId $graphResourceId -PermissionId $userReadWriteAll -PermissionType "Role" -PermissionName "User.ReadWrite.All (Application)"
-    
+
+    Write-Host ""
+
+    # -----------------------------------------------------------------------------
+    # Application Permissions (Endpoint Elevation - Intune devices, Windows LAPS)
+    # -----------------------------------------------------------------------------
+    Write-Host "  Application Permissions (Endpoint Elevation / LAPS):" -ForegroundColor Cyan
+    Add-GraphAppRolesByName -AppId $appId -PermissionNames $elevationPermissions
+
     Write-Host ""
     Write-Host "⚠️  IMPORTANT: Admin consent is required for application permissions!" -ForegroundColor Yellow
     Write-Host "   Run the following command after script completes:" -ForegroundColor Yellow

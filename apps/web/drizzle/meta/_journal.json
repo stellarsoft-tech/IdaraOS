@@ -99,6 +99,20 @@
       "when": 1784000000000,
       "tag": "0014_security_audit_findings_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784100000000,
+      "tag": "0015_security_training",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1784200000000,
+      "tag": "0016_endpoint_elevation",
+      "breakpoints": true
     }
   ]
 }

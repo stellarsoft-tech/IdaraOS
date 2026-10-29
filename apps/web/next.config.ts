@@ -5,8 +5,11 @@ import type { NextConfig } from "next";
 const ContentSecurityPolicy = [
   "default-src 'self'",
   // Scripts: self + unsafe-inline/eval for Next.js hydration + Vercel Analytics + Azure AD
+  // + YouTube IFrame API (security training videos)
   // Note: 'self' covers _vercel paths, but we also allow Vercel domains explicitly
-  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://vercel-insights.com https://*.vercel-insights.com https://*.vercel.com https://login.microsoftonline.com https://*.login.microsoftonline.com",
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://vercel-insights.com https://*.vercel-insights.com https://*.vercel.com https://login.microsoftonline.com https://*.login.microsoftonline.com https://www.youtube.com",
+  // Media: self + HTTPS for security training video files
+  "media-src 'self' https: blob:",
   // Styles: self + unsafe-inline for styled-components/emotion/tailwind
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   // Images: self + data URIs + HTTPS for external images
@@ -15,8 +18,8 @@ const ContentSecurityPolicy = [
   "font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com",
   // Connect: self + Microsoft (Azure AD) + Vercel Analytics + HTTPS for API calls
   "connect-src 'self' https://login.microsoftonline.com https://*.login.microsoftonline.com https://graph.microsoft.com https://vercel-insights.com https://*.vercel-insights.com https://*.vercel.com https://vitals.vercel-insights.com https:",
-  // Frame: Allow Microsoft login popups
-  "frame-src 'self' https://login.microsoftonline.com https://*.login.microsoftonline.com",
+  // Frame: Allow Microsoft login popups + YouTube/Vimeo players (security training videos)
+  "frame-src 'self' https://login.microsoftonline.com https://*.login.microsoftonline.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
   // Frame ancestors: Only same origin (prevents clickjacking)
   "frame-ancestors 'self'",
   // Object: Disallow plugins (Flash, Java, etc.)

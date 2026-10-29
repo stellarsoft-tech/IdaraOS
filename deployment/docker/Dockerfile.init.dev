@@ -68,6 +68,10 @@ echo '📋 Running post-migration hooks...'; \
 pnpm db:post-migrate 2>&1 || true; \
 \
 echo ''; \
+echo '📋 Seeding security training courses...'; \
+pnpm db:seed-training 2>&1 || true; \
+\
+echo ''; \
 echo '=========================================='; \
 echo '✅ Database ready!'; \
 echo '=========================================='; \

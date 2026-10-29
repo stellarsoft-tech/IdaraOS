@@ -60,6 +60,12 @@ export const MODULES = {
   SECURITY_FRAMEWORKS: "security.frameworks",
   SECURITY_SOA: "security.soa",
   SECURITY_CLAUSES: "security.clauses",
+  SECURITY_TRAINING: "security.training",
+  SECURITY_MY_TRAINING: "security.my-training",
+  SECURITY_ELEVATION: "security.elevation",
+  SECURITY_ELEVATION_CREDENTIALS: "security.elevation-credentials",
+  SECURITY_ELEVATION_SETTINGS: "security.elevation-settings",
+  SECURITY_MY_ELEVATION: "security.my-elevation",
   SECURITY_AUDITLOG: "security.auditlog",
 
   // Documentation
@@ -284,6 +290,30 @@ export const P = {
       create: (): PermissionTuple => [MODULES.SECURITY_CLAUSES, ACTIONS.CREATE],
       edit: (): PermissionTuple => [MODULES.SECURITY_CLAUSES, ACTIONS.EDIT],
       delete: (): PermissionTuple => [MODULES.SECURITY_CLAUSES, ACTIONS.DELETE],
+    },
+    training: {
+      view: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.SECURITY_TRAINING, ACTIONS.DELETE],
+    },
+    myTraining: {
+      view: (): PermissionTuple => [MODULES.SECURITY_MY_TRAINING, ACTIONS.VIEW],
+    },
+    elevation: {
+      view: (): PermissionTuple => [MODULES.SECURITY_ELEVATION, ACTIONS.VIEW],
+      edit: (): PermissionTuple => [MODULES.SECURITY_ELEVATION, ACTIONS.EDIT],
+    },
+    elevationCredentials: {
+      edit: (): PermissionTuple => [MODULES.SECURITY_ELEVATION_CREDENTIALS, ACTIONS.EDIT],
+    },
+    elevationSettings: {
+      view: (): PermissionTuple => [MODULES.SECURITY_ELEVATION_SETTINGS, ACTIONS.VIEW],
+      edit: (): PermissionTuple => [MODULES.SECURITY_ELEVATION_SETTINGS, ACTIONS.EDIT],
+    },
+    myElevation: {
+      view: (): PermissionTuple => [MODULES.SECURITY_MY_ELEVATION, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_MY_ELEVATION, ACTIONS.CREATE],
     },
     auditlog: {
       view: (): PermissionTuple => [MODULES.SECURITY_AUDITLOG, ACTIONS.VIEW],

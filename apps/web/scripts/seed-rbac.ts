@@ -85,6 +85,12 @@ const SYSTEM_ROLES: Record<string, {
       "security.frameworks": { view: true, write: true, create: true, edit: true, delete: true },
       "security.soa": { view: true, write: true, create: true, edit: true, delete: true },
       "security.settings": { view: true, write: true, create: true, edit: true, delete: true },
+      "security.training": { view: true, write: true, create: true, edit: true, delete: true },
+      "security.my-training": { view: true },
+      "security.elevation": { view: true, edit: true },
+      "security.elevation-credentials": { edit: true },
+      "security.elevation-settings": { view: true, edit: true },
+      "security.my-elevation": { view: true, create: true },
       // Workflows - Full access
       "workflows.overview": { view: true, write: true, create: true, edit: true, delete: true },
       "workflows.templates": { view: true, write: true, create: true, edit: true, delete: true },
@@ -134,6 +140,8 @@ const SYSTEM_ROLES: Record<string, {
       // Security - View only
       "security.overview": { view: true, create: false, edit: false, delete: false },
       "security.risks": { view: true, create: false, edit: false, delete: false },
+      "security.my-training": { view: true },
+      "security.my-elevation": { view: true, create: true },
       // Workflows - View and manage instances/tasks
       "workflows.overview": { view: true, create: false, edit: false, delete: false },
       "workflows.templates": { view: true, create: true, edit: true, delete: false },
@@ -162,6 +170,9 @@ const SYSTEM_ROLES: Record<string, {
       "assets.inventory": { view: true, create: false, edit: false, delete: false },
       "assets.categories": { view: true, create: false, edit: false, delete: false },
       "assets.assignments": { view: true, create: false, edit: false, delete: false },
+      // Security - Take assigned training courses, request temporary admin access
+      "security.my-training": { view: true },
+      "security.my-elevation": { view: true, create: true },
       // Workflows - View and complete own tasks
       "workflows.overview": { view: true, create: false, edit: false, delete: false },
       "workflows.tasks": { view: true, create: false, edit: true, delete: false }, // Can complete assigned tasks
@@ -177,6 +188,7 @@ const SYSTEM_ROLES: Record<string, {
     permissions: {
       "people.overview": { view: true, create: false, edit: false, delete: false },
       "people.directory": { view: true, create: false, edit: false, delete: false },
+      "security.my-training": { view: true },
       "settings.organization": { view: true, create: false, edit: false, delete: false },
     },
   },

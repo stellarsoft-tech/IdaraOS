@@ -128,6 +128,36 @@ export const routes: Record<string, RouteConfig> = {
     parent: "security",
     description: "Nonconformities, root cause analysis, and corrective actions",
   },
+  "security.training": {
+    path: "/security/training",
+    label: "Training Courses",
+    parent: "security",
+    description: "Security awareness courses, assignments, and scores",
+  },
+  "security.my-training": {
+    path: "/security/my-training",
+    label: "My Training",
+    parent: "security",
+    description: "Security courses assigned to you",
+  },
+  "security.elevation": {
+    path: "/security/elevation",
+    label: "Admin Access Approvals",
+    parent: "security",
+    description: "Approve, deny and revoke temporary local admin access",
+  },
+  "security.elevation-settings": {
+    path: "/security/elevation/settings",
+    label: "Settings",
+    parent: "security.elevation",
+    description: "Durations, credential mode and notifications for admin access",
+  },
+  "security.my-elevation": {
+    path: "/security/my-elevation",
+    label: "My Admin Access",
+    parent: "security",
+    description: "Request temporary local admin access for your devices",
+  },
   "security.frameworks": {
     path: "/security/frameworks",
     label: "Frameworks (IMS)",

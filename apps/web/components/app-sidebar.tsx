@@ -122,6 +122,10 @@ const navigationData: NavItem[] = [
       { title: "Achievements", url: "/security/achievements", module: "security.achievements" },
       { title: "Incident Management", url: "/security/incidents", module: "security.incidents" },
       { title: "Nonconformity & CA", url: "/security/nonconformities", module: "security.nonconformities" },
+      { title: "Training Courses", url: "/security/training", module: "security.training" },
+      { title: "My Training", url: "/security/my-training", module: "security.my-training" },
+      { title: "Admin Access Approvals", url: "/security/elevation", module: "security.elevation" },
+      { title: "My Admin Access", url: "/security/my-elevation", module: "security.my-elevation" },
       { 
         title: "Frameworks", 
         url: "/security/frameworks", 
