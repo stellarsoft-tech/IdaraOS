@@ -132,7 +132,7 @@ Prerequisite for strategy 2 and for Mode A: the Intune LAPS policy must manage a
 
 ## 5. Data model
 
-New file `apps/web/lib/db/schema/elevation.ts`, exported from `schema/index.ts`. Migration `apps/web/drizzle/0013_endpoint_elevation.sql` (follow [DATABASE_MIGRATIONS.md](../../DATABASE_MIGRATIONS.md)). All tables have `org_id` → `organizations` with cascade delete, matching existing modules.
+New file `apps/web/lib/db/schema/elevation.ts`, exported from `schema/index.ts`. Migration `apps/web/drizzle/0016_endpoint_elevation.sql` (follow [DATABASE_MIGRATIONS.md](../../DATABASE_MIGRATIONS.md)). All tables have `org_id` → `organizations` with cascade delete, matching existing modules.
 
 | Table | Key columns |
 |---|---|
@@ -318,7 +318,7 @@ LAPS read access is high-value. Recommendation: a **certificate credential** ins
 **Exit:** a written spike result appended to this doc.
 
 ### Phase 1 — Server foundation + Mode A (≈2 weeks)
-- [x] Schema + migration `0013`, RBAC slugs + seed, settings page.
+- [x] Schema + migration `0016`, RBAC slugs + seed, settings page.
 - [x] Asset sync stores `entra_device_id`.
 - [x] LAPS lib, rules, sweep endpoint. *The cron job that calls the sweep is not deployed yet.*
 - [x] Portal request flow at **device level** (pick one of *my assigned assets*), approval queue, approve dialog (Mode A only), reveal card with countdown, Intune-only rotation, Teams card.
@@ -335,7 +335,7 @@ These differences from the design above are deliberate:
   - `elevation-laps.ts` (Graph)
   - `elevation-server.ts` (settings, expiry, rotation)
   - `elevation-notify.ts` (Teams)
-- **Tables:** migration `0013` creates only `security_elevation_settings`, `security_elevation_requests` and `security_elevation_grants`, and adds `assets_assets.entra_device_id`.
+- **Tables:** migration `0016` creates only `security_elevation_settings`, `security_elevation_requests` and `security_elevation_grants`, and adds `assets_assets.entra_device_id`.
   - Requests point at the **asset** and snapshot `entra_device_id` / `intune_device_id`.
   - `devices`, `device_apps`, `rules`, `events` and `nonces` arrive with the agent (Phase 2/3).
   - Portal actions are written to the generic audit log under `security.elevation`.

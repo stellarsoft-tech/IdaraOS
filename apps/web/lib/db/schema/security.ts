@@ -103,9 +103,14 @@ export const auditStatusValues = ["planned", "in_progress", "completed", "cancel
 export type AuditStatus = (typeof auditStatusValues)[number]
 
 /**
- * Finding severity values
+ * Finding severity / classification values (ISO 27001:2022 audit findings)
+ * - observation: opportunity for improvement / observation
+ * - nonconformity: general nonconformity (when not graded minor/major)
+ * - minor: minor nonconformity
+ * - major: major nonconformity
+ * - critical: retained for legacy / highest severity
  */
-export const findingSeverityValues = ["observation", "minor", "major", "critical"] as const
+export const findingSeverityValues = ["observation", "nonconformity", "minor", "major", "critical"] as const
 export type FindingSeverity = (typeof findingSeverityValues)[number]
 
 /**
@@ -647,8 +652,9 @@ export const securityAuditFindings = pgTable(
     severity: text("severity", { enum: findingSeverityValues }).notNull().default("minor"),
     status: text("status", { enum: findingStatusValues }).notNull().default("open"),
     
-    // Evidence
+    // Evidence (free-text notes + optional Evidence Store links)
     evidence: text("evidence"),
+    linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
     
     // Remediation
     recommendation: text("recommendation"),
@@ -659,6 +665,7 @@ export const securityAuditFindings = pgTable(
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -676,6 +683,45 @@ export const securityAuditFindings = pgTable(
 // ============================================================================
 // OBJECTIVES
 // ============================================================================
+
+/**
+ * Security Achievements table
+ * Recorded security achievements by reporting year
+ */
+export const securityAchievements = pgTable(
+  "security_achievements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+
+    // Identification
+    name: text("name").notNull(),
+    description: text("description"),
+
+    // Achievement date
+    achievementDate: date("achievement_date").notNull(),
+
+    // Reporting period (same year-first pattern as objectives)
+    periodLabel: text("period_label"), // e.g., "FY 2026"
+    periodStart: date("period_start"),
+    periodEnd: date("period_end"),
+
+    // Evidence (optional unless evidenceRequired is true)
+    evidenceRequired: boolean("evidence_required").notNull().default(false),
+    linkedEvidenceIds: jsonb("linked_evidence_ids").$type<string[]>(),
+
+    // Notes
+    notes: text("notes"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_security_achievements_org").on(table.orgId),
+    index("idx_security_achievements_date").on(table.achievementDate),
+    index("idx_security_achievements_period_label").on(table.periodLabel),
+  ]
+)
 
 /**
  * Security Objectives table
@@ -895,6 +941,13 @@ export const securityObjectivesRelations = relations(securityObjectives, ({ one 
   }),
 }))
 
+export const securityAchievementsRelations = relations(securityAchievements, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [securityAchievements.orgId],
+    references: [organizations.id],
+  }),
+}))
+
 // ============================================================================
 // TYPE EXPORTS
 // ============================================================================
@@ -934,6 +987,9 @@ export type NewSecurityAuditFinding = typeof securityAuditFindings.$inferInsert
 
 export type SecurityObjective = typeof securityObjectives.$inferSelect
 export type NewSecurityObjective = typeof securityObjectives.$inferInsert
+
+export type SecurityAchievement = typeof securityAchievements.$inferSelect
+export type NewSecurityAchievement = typeof securityAchievements.$inferInsert
 
 // ============================================================================
 // ISMS CLAUSE TRACKING (ISO 27001 Clauses 4-10)

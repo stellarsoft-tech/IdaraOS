@@ -57,23 +57,23 @@ CREATE TABLE IF NOT EXISTS "security_training_attempts" (
 	"submitted_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "security_training_courses" ADD CONSTRAINT "security_training_courses_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_courses" ADD CONSTRAINT "security_training_courses_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_courses" ADD CONSTRAINT "security_training_courses_created_by_id_core_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_courses" ADD CONSTRAINT "security_training_courses_created_by_id_core_users_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_questions" ADD CONSTRAINT "security_training_questions_course_id_security_training_courses_id_fk" FOREIGN KEY ("course_id") REFERENCES "public"."security_training_courses"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_questions" ADD CONSTRAINT "security_training_questions_course_id_security_training_courses_id_fk" FOREIGN KEY ("course_id") REFERENCES "public"."security_training_courses"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_course_id_security_training_courses_id_fk" FOREIGN KEY ("course_id") REFERENCES "public"."security_training_courses"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_course_id_security_training_courses_id_fk" FOREIGN KEY ("course_id") REFERENCES "public"."security_training_courses"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_user_id_core_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_user_id_core_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_assigned_by_id_core_users_id_fk" FOREIGN KEY ("assigned_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_assignments" ADD CONSTRAINT "security_training_assignments_assigned_by_id_core_users_id_fk" FOREIGN KEY ("assigned_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_attempts" ADD CONSTRAINT "security_training_attempts_assignment_id_security_training_assignments_id_fk" FOREIGN KEY ("assignment_id") REFERENCES "public"."security_training_assignments"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_attempts" ADD CONSTRAINT "security_training_attempts_assignment_id_security_training_assignments_id_fk" FOREIGN KEY ("assignment_id") REFERENCES "public"."security_training_assignments"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_training_attempts" ADD CONSTRAINT "security_training_attempts_user_id_core_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_training_attempts" ADD CONSTRAINT "security_training_attempts_user_id_core_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_security_training_courses_org" ON "security_training_courses" USING btree ("org_id");
 --> statement-breakpoint

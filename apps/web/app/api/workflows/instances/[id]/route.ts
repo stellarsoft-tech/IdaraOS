@@ -93,7 +93,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             email: users.email,
           })
           .from(users)
-          .where(eq(users.id, allUserIds[0])) // Simplified - would need inArray for multiple
+          .where(inArray(users.id, allUserIds))
       : []
     
     const userById = new Map<string, { id: string; name: string; email: string }>()

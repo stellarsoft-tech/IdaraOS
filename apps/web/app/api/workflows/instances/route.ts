@@ -26,6 +26,10 @@ const CreateInstanceSchema = z.object({
   entityId: z.string().uuid("Invalid entity ID"),
   name: z.string().optional(), // If not provided, uses template name
   dueAt: z.string().datetime().optional(),
+  // Optional person to assign otherwise-unassigned steps to. Lets the creator
+  // route a workflow's tasks to a specific user at instantiation time so those
+  // tasks show up in that user's "My Tasks".
+  assigneePersonId: z.string().uuid().nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
 })
 
@@ -285,7 +289,26 @@ export async function POST(request: NextRequest) {
     }
     
     const template = templates[0]
-    
+
+    // Validate the optional instantiation-time assignee belongs to this org.
+    if (data.assigneePersonId) {
+      const [assigneePerson] = await db
+        .select({ id: persons.id })
+        .from(persons)
+        .where(and(
+          eq(persons.id, data.assigneePersonId),
+          eq(persons.orgId, orgId)
+        ))
+        .limit(1)
+
+      if (!assigneePerson) {
+        return NextResponse.json(
+          { error: "Assignee not found" },
+          { status: 400 }
+        )
+      }
+    }
+
     // Get template steps
     const templateSteps = await db
       .select()
@@ -353,6 +376,12 @@ export async function POST(request: NextRequest) {
         assigneeId = session.userId
       }
       // TODO: Handle dynamic_manager by looking up the entity's manager
+
+      // Fallback: route otherwise-unassigned steps to the person chosen at
+      // instantiation time so the workflow's tasks land in their "My Tasks".
+      if (!assigneeId && !assignedPersonId && data.assigneePersonId) {
+        assignedPersonId = data.assigneePersonId
+      }
       
       const instanceStepResult = await db
         .insert(workflowInstanceSteps)

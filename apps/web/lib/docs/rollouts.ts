@@ -18,7 +18,15 @@ export interface RolloutTargetUser {
 }
 
 /**
+ * Only active users receive document rollouts. Invited, suspended, and
+ * deactivated users are excluded so they don't get acknowledgment tasks
+ * they can't act on.
+ */
+const ACTIVE_USER_STATUS = "active" as const
+
+/**
  * Resolve platform users included in a rollout target (org, team, role, or individual user).
+ * Only active users are returned.
  */
 export async function resolveRolloutTargetUsers(
   targetType: RolloutTargetType,
@@ -37,7 +45,7 @@ export async function resolveRolloutTargetUsers(
           email: users.email,
         })
         .from(users)
-        .where(eq(users.orgId, orgId))
+        .where(and(eq(users.orgId, orgId), eq(users.status, ACTIVE_USER_STATUS)))
       rows = orgUsers
       break
     }
@@ -53,7 +61,11 @@ export async function resolveRolloutTargetUsers(
         })
         .from(persons)
         .innerJoin(users, eq(users.personId, persons.id))
-        .where(and(eq(persons.teamId, targetId), eq(persons.orgId, orgId)))
+        .where(and(
+          eq(persons.teamId, targetId),
+          eq(persons.orgId, orgId),
+          eq(users.status, ACTIVE_USER_STATUS)
+        ))
       rows = teamMembers
       break
     }
@@ -69,7 +81,11 @@ export async function resolveRolloutTargetUsers(
         })
         .from(userRoles)
         .innerJoin(users, eq(userRoles.userId, users.id))
-        .where(and(eq(userRoles.roleId, targetId), eq(users.orgId, orgId)))
+        .where(and(
+          eq(userRoles.roleId, targetId),
+          eq(users.orgId, orgId),
+          eq(users.status, ACTIVE_USER_STATUS)
+        ))
       rows = roleMembers
       break
     }
@@ -84,7 +100,11 @@ export async function resolveRolloutTargetUsers(
           email: users.email,
         })
         .from(users)
-        .where(and(eq(users.id, targetId), eq(users.orgId, orgId)))
+        .where(and(
+          eq(users.id, targetId),
+          eq(users.orgId, orgId),
+          eq(users.status, ACTIVE_USER_STATUS)
+        ))
         .limit(1)
       if (user) {
         rows = [user]

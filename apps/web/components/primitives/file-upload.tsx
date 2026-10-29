@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  useModuleFileCategories,
+  useFileCategoriesList,
   type FileCategory,
 } from "@/lib/api/file-categories"
 import { cn } from "@/lib/utils"
@@ -47,9 +47,24 @@ export interface UploadedFile {
   createdAt: string
 }
 
+/** Category module scopes that map to a real file-category module. */
+const KNOWN_CATEGORY_SCOPES = new Set([
+  "people",
+  "assets",
+  "workflows",
+  "security",
+  "docs",
+  "vendors",
+])
+
 export interface FileUploadProps {
-  /** Module scope determines which categories are shown */
-  moduleScope: "people" | "assets" | "workflows" | "security" | "docs" | "vendors"
+  /**
+   * Module scope determines which categories are shown. Pass a known module
+   * scope to filter to that module, or "all"/"global"/any unknown value to
+   * show every active category (useful for cross-module surfaces like
+   * workflow tasks that can span modules).
+   */
+  moduleScope: string
   
   /** Entity type and ID for file association */
   entityType: string
@@ -180,7 +195,14 @@ export function FileUpload({
   const pathPrefix = defaultPathPrefix ?? null
   
   const queryClient = useQueryClient()
-  const { data: categories = [], isLoading: categoriesLoading } = useModuleFileCategories(moduleScope)
+  // Only filter by module when the scope maps to a real category module.
+  // Otherwise (e.g. "global"/"all"/unknown) show every active category so
+  // cross-module surfaces like workflow tasks still find their categories.
+  const categoryScopeFilter = KNOWN_CATEGORY_SCOPES.has(moduleScope) ? moduleScope : undefined
+  const { data: categories = [], isLoading: categoriesLoading } = useFileCategoriesList({
+    moduleScope: categoryScopeFilter,
+    activeOnly: true,
+  })
   
   // Get the effective category ID
   const effectiveCategoryId = fixedCategoryId || selectedCategoryId

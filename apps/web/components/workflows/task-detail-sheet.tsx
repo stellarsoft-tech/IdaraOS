@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { format, formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import {
@@ -93,6 +93,8 @@ interface TaskDetailSheetProps {
   readOnly?: boolean
   instanceStatus: "pending" | "in_progress" | "completed" | "cancelled" | "on_hold"
   people?: PersonOption[]
+  /** Module scope of the parent workflow (drives which file categories show). */
+  moduleScope?: string
 }
 
 export function TaskDetailSheet({
@@ -103,6 +105,7 @@ export function TaskDetailSheet({
   readOnly = false,
   instanceStatus,
   people = [],
+  moduleScope,
 }: TaskDetailSheetProps) {
   const [notes, setNotes] = useState(step?.notes || "")
   const [assigneeId, setAssigneeId] = useState<string | null>(step?.assignedPersonId || null)
@@ -110,18 +113,21 @@ export function TaskDetailSheet({
   const [activeTab, setActiveTab] = useState("details")
   
   const updateStepMutation = useUpdateWorkflowStep()
-  
-  // Sync state when step changes
-  if (step && step.notes !== notes && !updateStepMutation.isPending) {
+
+  const stepId = step?.id
+  // Re-sync editable fields whenever a different step is opened, or when the
+  // selected step's server data changes (e.g. after a save + refetch). Using an
+  // effect (rather than syncing during render) avoids clobbering in-progress
+  // edits and prevents render-phase setState issues.
+  useEffect(() => {
+    if (!step) return
     setNotes(step.notes || "")
-  }
-  if (step && step.assignedPersonId !== assigneeId && !updateStepMutation.isPending) {
     setAssigneeId(step.assignedPersonId || null)
-  }
-  if (step && step.status !== status && !updateStepMutation.isPending) {
     setStatus(step.status)
-  }
-  
+    setActiveTab("details")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stepId, step?.notes, step?.assignedPersonId, step?.status])
+
   const isStepReadOnly = readOnly || instanceStatus === "completed" || instanceStatus === "cancelled"
   const isStepCompleted = step?.status === "completed"
   
@@ -166,6 +172,12 @@ export function TaskDetailSheet({
   const attachmentsEnabled = step.templateStep?.attachmentsEnabled ?? true
   const fileCategoryId = step.templateStep?.fileCategoryId
   const filePathPrefix = step.templateStep?.filePathPrefix
+
+  // Fall back gracefully if the step ever has an unmapped status.
+  const stepStatusConfig = statusConfig[step.status] ?? {
+    color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    label: step.status,
+  }
   
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -182,13 +194,13 @@ export function TaskDetailSheet({
                 </SheetDescription>
               )}
             </div>
-            <Badge className={statusConfig[step.status].color}>
-              {statusConfig[step.status].label}
+            <Badge className={stepStatusConfig.color}>
+              {stepStatusConfig.label}
             </Badge>
           </div>
         </SheetHeader>
         
-        <div className="flex-1 overflow-y-auto py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2 mb-4">
               <TabsTrigger value="details">Details</TabsTrigger>
@@ -339,6 +351,7 @@ export function TaskDetailSheet({
                   stepId={step.id}
                   categoryId={fileCategoryId}
                   pathPrefix={filePathPrefix}
+                  moduleScope={moduleScope}
                   readOnly={isStepReadOnly || isStepCompleted}
                 />
               ) : (
@@ -393,10 +406,11 @@ interface TaskAttachmentsProps {
   stepId: string
   categoryId?: string | null
   pathPrefix?: string | null
+  moduleScope?: string
   readOnly?: boolean
 }
 
-function TaskAttachments({ stepId, categoryId, pathPrefix, readOnly }: TaskAttachmentsProps) {
+function TaskAttachments({ stepId, categoryId, pathPrefix, moduleScope, readOnly }: TaskAttachmentsProps) {
   const [showUpload, setShowUpload] = useState(false)
   const [deletingFile, setDeletingFile] = useState<FileRecord | null>(null)
   
@@ -454,7 +468,7 @@ function TaskAttachments({ stepId, categoryId, pathPrefix, readOnly }: TaskAttac
           {showUpload ? (
             <div className="border rounded-lg p-4 bg-muted/30">
               <CompactFileUpload
-                moduleScope="workflows"
+                moduleScope={moduleScope ?? "all"}
                 entityType="workflow_step"
                 entityId={stepId}
                 defaultCategoryId={categoryId ?? undefined}

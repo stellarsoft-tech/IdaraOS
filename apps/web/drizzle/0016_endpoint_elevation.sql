@@ -62,27 +62,27 @@ CREATE TABLE IF NOT EXISTS "security_elevation_grants" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "security_elevation_settings" ADD CONSTRAINT "security_elevation_settings_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_settings" ADD CONSTRAINT "security_elevation_settings_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_settings" ADD CONSTRAINT "security_elevation_settings_updated_by_id_core_users_id_fk" FOREIGN KEY ("updated_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_settings" ADD CONSTRAINT "security_elevation_settings_updated_by_id_core_users_id_fk" FOREIGN KEY ("updated_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_requester_id_core_users_id_fk" FOREIGN KEY ("requester_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_requester_id_core_users_id_fk" FOREIGN KEY ("requester_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_asset_id_assets_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."assets_assets"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_asset_id_assets_assets_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."assets_assets"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_decided_by_id_core_users_id_fk" FOREIGN KEY ("decided_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_requests" ADD CONSTRAINT "security_elevation_requests_decided_by_id_core_users_id_fk" FOREIGN KEY ("decided_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_org_id_core_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."core_organizations"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_request_id_security_elevation_requests_id_fk" FOREIGN KEY ("request_id") REFERENCES "public"."security_elevation_requests"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_request_id_security_elevation_requests_id_fk" FOREIGN KEY ("request_id") REFERENCES "public"."security_elevation_requests"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_user_id_core_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_user_id_core_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."core_users"("id") ON DELETE cascade ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_approved_by_id_core_users_id_fk" FOREIGN KEY ("approved_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_approved_by_id_core_users_id_fk" FOREIGN KEY ("approved_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
-ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_revoked_by_id_core_users_id_fk" FOREIGN KEY ("revoked_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action;
+DO $$ BEGIN ALTER TABLE "security_elevation_grants" ADD CONSTRAINT "security_elevation_grants_revoked_by_id_core_users_id_fk" FOREIGN KEY ("revoked_by_id") REFERENCES "public"."core_users"("id") ON DELETE set null ON UPDATE no action; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_security_elevation_settings_org" ON "security_elevation_settings" USING btree ("org_id");
 --> statement-breakpoint

@@ -94,6 +94,17 @@ jobs:
           echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
           echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
           echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+          # Shared secret for /api/internal/* scheduled jobs (created on first deploy)
+          INTERNAL_CRON_SECRET=$(az keyvault secret show --vault-name $KV_NAME --name internal-cron-secret --query value -o tsv 2>/dev/null || true)
+          if [ -z "$INTERNAL_CRON_SECRET" ]; then
+            INTERNAL_CRON_SECRET=$(openssl rand -hex 32)
+            if ! az keyvault secret set --vault-name $KV_NAME --name internal-cron-secret --value "$INTERNAL_CRON_SECRET" --output none; then
+              echo "::warning::Could not store internal-cron-secret in $KV_NAME - the admin access sweep stays disabled"
+              INTERNAL_CRON_SECRET=""
+            fi
+          fi
+          if [ -n "$INTERNAL_CRON_SECRET" ]; then echo "::add-mask::$INTERNAL_CRON_SECRET"; fi
+          echo "internal_cron_secret=$INTERNAL_CRON_SECRET" >> $GITHUB_OUTPUT
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -306,6 +317,7 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "INTERNAL_CRON_SECRET=${{ steps.secrets.outputs.internal_cron_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
                 "NEXT_PUBLIC_APP_URL=$APP_URL" \
                 "ROOT_DOMAIN=$ROOT_DOMAIN" \
@@ -330,6 +342,7 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "INTERNAL_CRON_SECRET=${{ steps.secrets.outputs.internal_cron_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             # Get FQDN after creation
@@ -421,6 +434,17 @@ jobs:
           echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
           echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
           echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+          # Shared secret for /api/internal/* scheduled jobs (created on first deploy)
+          INTERNAL_CRON_SECRET=$(az keyvault secret show --vault-name $KV_NAME --name internal-cron-secret --query value -o tsv 2>/dev/null || true)
+          if [ -z "$INTERNAL_CRON_SECRET" ]; then
+            INTERNAL_CRON_SECRET=$(openssl rand -hex 32)
+            if ! az keyvault secret set --vault-name $KV_NAME --name internal-cron-secret --value "$INTERNAL_CRON_SECRET" --output none; then
+              echo "::warning::Could not store internal-cron-secret in $KV_NAME - the admin access sweep stays disabled"
+              INTERNAL_CRON_SECRET=""
+            fi
+          fi
+          if [ -n "$INTERNAL_CRON_SECRET" ]; then echo "::add-mask::$INTERNAL_CRON_SECRET"; fi
+          echo "internal_cron_secret=$INTERNAL_CRON_SECRET" >> $GITHUB_OUTPUT
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -624,6 +648,7 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "INTERNAL_CRON_SECRET=${{ steps.secrets.outputs.internal_cron_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
                 "NEXT_PUBLIC_APP_URL=$APP_URL"
           else
@@ -645,6 +670,7 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "INTERNAL_CRON_SECRET=${{ steps.secrets.outputs.internal_cron_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)
@@ -732,6 +758,17 @@ jobs:
           echo "jwt_secret=$JWT_SECRET" >> $GITHUB_OUTPUT
           echo "encryption_key=$ENCRYPTION_KEY" >> $GITHUB_OUTPUT
           echo "pg_password=$PG_PASSWORD" >> $GITHUB_OUTPUT
+          # Shared secret for /api/internal/* scheduled jobs (created on first deploy)
+          INTERNAL_CRON_SECRET=$(az keyvault secret show --vault-name $KV_NAME --name internal-cron-secret --query value -o tsv 2>/dev/null || true)
+          if [ -z "$INTERNAL_CRON_SECRET" ]; then
+            INTERNAL_CRON_SECRET=$(openssl rand -hex 32)
+            if ! az keyvault secret set --vault-name $KV_NAME --name internal-cron-secret --value "$INTERNAL_CRON_SECRET" --output none; then
+              echo "::warning::Could not store internal-cron-secret in $KV_NAME - the admin access sweep stays disabled"
+              INTERNAL_CRON_SECRET=""
+            fi
+          fi
+          if [ -n "$INTERNAL_CRON_SECRET" ]; then echo "::add-mask::$INTERNAL_CRON_SECRET"; fi
+          echo "internal_cron_secret=$INTERNAL_CRON_SECRET" >> $GITHUB_OUTPUT
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -935,6 +972,7 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "INTERNAL_CRON_SECRET=${{ steps.secrets.outputs.internal_cron_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}" \
                 "NEXT_PUBLIC_APP_URL=$APP_URL"
           else
@@ -956,6 +994,7 @@ jobs:
                 "NODE_ENV=production" \
                 "DATABASE_URL=$DATABASE_URL" \
                 "JWT_SECRET=${{ steps.secrets.outputs.jwt_secret }}" \
+                "INTERNAL_CRON_SECRET=${{ steps.secrets.outputs.internal_cron_secret }}" \
                 "ENCRYPTION_KEY=${{ steps.secrets.outputs.encryption_key }}"
             
             FQDN=$(az containerapp show --resource-group $RG --name $APP --query "properties.configuration.ingress.fqdn" -o tsv)

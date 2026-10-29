@@ -33,6 +33,8 @@ const createAuditSchema = z.object({
   leadAuditor: z.string().optional(),
   auditTeam: z.array(z.string()).optional(),
   auditBody: z.string().optional(),
+  summary: z.string().optional(),
+  conclusion: z.string().optional(),
 })
 
 const querySchema = z.object({
@@ -215,6 +217,8 @@ export async function POST(request: NextRequest) {
         leadAuditor: data.leadAuditor,
         auditTeam: data.auditTeam,
         auditBody: data.auditBody,
+        summary: data.summary,
+        conclusion: data.conclusion,
       })
       .returning()
 

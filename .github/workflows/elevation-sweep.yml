@@ -1,0 +1,72 @@
+# =============================================================================
+# IdaraOS - Admin Access Sweep
+# =============================================================================
+# Triggered on: Schedule (every 5 minutes) and manual dispatch
+# Actions: Calls /api/internal/elevation/sweep on each deployed environment to
+#          expire ended admin access grants and request/verify LAPS rotations.
+# The shared secret is created by deploy-azure.yml (Key Vault: internal-cron-secret).
+# =============================================================================
+
+name: Admin Access Sweep
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+env:
+  APP_NAME: idaraos
+  LOCATION: uks
+  SEQUENCE: "001"
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: elevation-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Sweep ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, staging, prod]
+
+    steps:
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Call sweep endpoint
+        run: |
+          ENV="${{ matrix.environment }}"
+          RG="rg-${{ env.APP_NAME }}-${ENV}-${{ env.LOCATION }}-${{ env.SEQUENCE }}"
+          APP="${{ env.APP_NAME }}-${ENV}"
+          KV_NAME="kv-${{ env.APP_NAME }}-${ENV}-${{ env.SEQUENCE }}"
+
+          FQDN=$(az containerapp show --resource-group "$RG" --name "$APP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null || true)
+          if [ -z "$FQDN" ]; then
+            echo "No container app $APP in $RG - skipping"
+            exit 0
+          fi
+
+          SECRET=$(az keyvault secret show --vault-name "$KV_NAME" --name internal-cron-secret --query value -o tsv 2>/dev/null || true)
+          if [ -z "$SECRET" ]; then
+            echo "::warning::internal-cron-secret not found in $KV_NAME - deploy $ENV once to create it"
+            exit 0
+          fi
+          echo "::add-mask::$SECRET"
+
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST \
+            -H "x-internal-secret: $SECRET" \
+            "https://$FQDN/api/internal/elevation/sweep"
+          echo ""
