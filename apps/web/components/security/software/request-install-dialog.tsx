@@ -23,11 +23,12 @@ interface RequestInstallDialogProps {
   onOpenChange: (open: boolean) => void
   devices: MyElevationData["devices"]
   requireReason: boolean
+  isAgent: boolean
 }
 
-export function RequestInstallDialog({ app, onOpenChange, devices, requireReason }: RequestInstallDialogProps) {
+export function RequestInstallDialog({ app, onOpenChange, devices, requireReason, isAgent }: RequestInstallDialogProps) {
   const create = useCreateElevationRequest()
-  const managedDevices = devices.filter((d) => d.intuneManaged)
+  const managedDevices = devices.filter((d) => (isAgent ? d.agentLinked : d.intuneManaged))
   const [assetId, setAssetId] = useState("")
   const [reason, setReason] = useState("")
 
@@ -58,7 +59,7 @@ export function RequestInstallDialog({ app, onOpenChange, devices, requireReason
         <DialogHeader>
           <DialogTitle>Request {app?.name}</DialogTitle>
           <DialogDescription>
-            After approval, Intune installs it on your device for you. You don&apos;t need admin rights.
+            After approval, {isAgent ? "the IdaraOS Agent" : "Intune"} installs it on your device for you. You don&apos;t need admin rights.
           </DialogDescription>
         </DialogHeader>
 
@@ -79,7 +80,9 @@ export function RequestInstallDialog({ app, onOpenChange, devices, requireReason
               </SelectContent>
             </Select>
             {managedDevices.length === 0 && (
-              <p className="text-xs text-amber-600">None of your devices are managed by Intune.</p>
+              <p className="text-xs text-amber-600">
+                {isAgent ? "No devices are linked to you yet. Link your device first." : "None of your devices are managed by Intune."}
+              </p>
             )}
           </div>
 

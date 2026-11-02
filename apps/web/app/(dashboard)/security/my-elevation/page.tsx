@@ -170,6 +170,18 @@ export default function MyElevationPage() {
         </div>
       )}
 
+      {isAgent && devices.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <Laptop className="h-4 w-4" />
+          <span>Linked {devices.length === 1 ? "device" : "devices"}:</span>
+          {devices.map((d) => (
+            <Badge key={d.id} variant="secondary">
+              {d.name} · {d.assetTag}
+            </Badge>
+          ))}
+        </div>
+      )}
+
       {isLoading && (
         <div className="space-y-3">
           {Array.from({ length: 2 }).map((_, i) => (
@@ -295,6 +307,7 @@ export default function MyElevationPage() {
         onOpenChange={(open) => !open && setInstallApp(null)}
         devices={devices}
         requireReason={options.requireReason}
+        isAgent={isAgent}
       />
     </PageShell>
   )
