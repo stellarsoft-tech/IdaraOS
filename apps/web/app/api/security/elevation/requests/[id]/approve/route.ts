@@ -1,7 +1,7 @@
 /**
  * Approve Admin Access Request API
  * POST /api/security/elevation/requests/[id]/approve - Approve with credentials (time-boxed LAPS reveal)
- * or app_install (Intune installs the requested catalog app)
+ * or app_install (Intune or the IdaraOS Agent installs the requested catalog app)
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -14,6 +14,7 @@ import {
   elevationGrantModeValues,
   softwareCatalog,
   softwareInstalls,
+  type ElevationRequest,
   type SoftwareCatalogApp,
 } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
@@ -34,9 +35,15 @@ const approveSchema = z.object({
   note: z.string().trim().max(500, "Note must be 500 characters or fewer").optional().nullable(),
 })
 
-function installTargetFor(app: SoftwareCatalogApp | undefined, intuneDeviceId: string | null) {
+function installTargetFor(app: SoftwareCatalogApp | undefined, request: ElevationRequest) {
   if (!app) return { ready: false, error: "This request isn't for an approved catalog app" }
   if (!app.enabled) return { ready: false, error: `${app.name} is disabled in Approved Software` }
+  // The request records which provider it was made under: agent devices have an agent device ID
+  if (request.agentDeviceId) {
+    if (!app.wingetId) return { ready: false, error: `Add a winget package ID to ${app.name} in Approved Software first` }
+    return { ready: true }
+  }
+  const intuneDeviceId = request.intuneDeviceId
   if (!app.installGroupId) {
     return { ready: false, error: `Link ${app.name} to its Intune install group in Approved Software first` }
   }
@@ -89,10 +96,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
       minutes,
       settings,
       canUseCredentials,
-      installTarget: mode === "app_install" ? installTargetFor(app, existing.intuneDeviceId) : undefined,
+      installTarget: mode === "app_install" ? installTargetFor(app, existing) : undefined,
     })
     if (!check.ok) {
       return NextResponse.json({ error: check.error }, { status: check.status })
+    }
+    if (mode === "credentials" && !existing.entraDeviceId) {
+      return NextResponse.json(
+        { error: "This device isn't joined to Entra, so there's no LAPS password to share. Approve an install instead." },
+        { status: 400 }
+      )
     }
 
     const now = new Date()
@@ -134,11 +147,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
                 catalogAppId: app!.id,
                 appName: app!.name,
                 wingetId: app!.wingetId,
-                intuneAppId: app!.intuneAppId,
-                groupId: app!.installGroupId!,
+                provider: existing.agentDeviceId ? ("agent" as const) : ("intune" as const),
+                intuneAppId: existing.agentDeviceId ? null : app!.intuneAppId,
+                groupId: existing.agentDeviceId ? null : app!.installGroupId,
                 removeFromGroupAfterInstall: app!.removeFromGroupAfterInstall,
                 entraDeviceId: existing.entraDeviceId,
                 intuneDeviceId: existing.intuneDeviceId,
+                agentDeviceId: existing.agentDeviceId,
               })
               .returning()
           : [null]
@@ -165,7 +180,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       })
     }
 
-    // Add the device to the install group now; the sweep retries if Graph fails
+    // Start the install now (Intune group or agent job); the sweep retries if it fails
     const install = result.install ? await startInstall(result.install, now) : null
 
     return NextResponse.json({ data: { ...result, install } })

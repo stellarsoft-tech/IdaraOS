@@ -58,7 +58,9 @@ export function ApproveRequestDialog({
   }, [request, durationChoices])
 
   const isInstallRequest = !!request?.catalogAppId
-  const credentialsAllowed = credentialModeEnabled && canUseCredentials
+  const isAgent = !!request?.agentDevice
+  // Agent devices aren't in Entra, so they have no LAPS password
+  const credentialsAllowed = credentialModeEnabled && canUseCredentials && !isAgent
   const canSubmit =
     mode === "app_install" ? !!request?.installReady : credentialsAllowed && !!minutes
 
@@ -73,7 +75,7 @@ export function ApproveRequestDialog({
       })
       toast.success(
         mode === "app_install"
-          ? `Approved. Intune will install ${request.appName ?? "the app"}.`
+          ? `Approved. ${isAgent ? "The IdaraOS Agent" : "Intune"} will install ${request.appName ?? "the app"}.`
           : `Approved for ${formatMinutes(Number(minutes))}`
       )
       onOpenChange(false)
@@ -100,11 +102,17 @@ export function ApproveRequestDialog({
                 <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
                   <RadioGroupItem value="app_install" id="mode-app-install" className="mt-1" disabled={!request?.installReady} />
                   <div className="space-y-1">
-                    <span className="text-sm font-medium">Install with Intune (recommended)</span>
+                    <span className="text-sm font-medium">
+                      {isAgent ? "Install with the IdaraOS Agent (recommended)" : "Install with Intune (recommended)"}
+                    </span>
                     <p className="text-xs text-muted-foreground">
-                      {request?.installReady
-                        ? "The device joins the app's install group and Intune installs it as SYSTEM. No password is shared."
-                        : "Set up this app's Intune install group in Approved Software first."}
+                      {isAgent
+                        ? request?.installReady
+                          ? "The agent installs it with winget as SYSTEM at its next check-in. No password is shared."
+                          : "Add this app's winget package ID in Approved Software first."
+                        : request?.installReady
+                          ? "The device joins the app's install group and Intune installs it as SYSTEM. No password is shared."
+                          : "Set up this app's Intune install group in Approved Software first."}
                     </p>
                   </div>
                 </label>
@@ -114,7 +122,9 @@ export function ApproveRequestDialog({
                 <div className="space-y-1">
                   <span className="text-sm font-medium">Reveal LAPS password</span>
                   <p className="text-xs text-muted-foreground">
-                    {!credentialModeEnabled
+                    {isAgent
+                      ? "Not available for IdaraOS Agent devices - they have no LAPS password."
+                      : !credentialModeEnabled
                       ? "Turned off in admin access settings."
                       : !canUseCredentials
                         ? "You don't have permission to approve with credentials."

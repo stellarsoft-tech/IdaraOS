@@ -339,7 +339,9 @@ export default function ElevationApprovalsPage() {
         title={revoking?.grant?.mode === "app_install" ? "Cancel install" : "Revoke admin access now"}
         description={
           revoking?.grant?.mode === "app_install"
-            ? "The device leaves the install group so Intune won't install the app. If it's already installed, uninstall it in Intune."
+            ? revoking.agentDevice
+              ? "The agent won't be sent the install. If it already started, it finishes - uninstall the app on the device if needed."
+              : "The device leaves the install group so Intune won't install the app. If it's already installed, uninstall it in Intune."
             : "Access ends immediately. If the password was revealed, a LAPS rotation is requested right away."
         }
         noteLabel="Reason (optional)"

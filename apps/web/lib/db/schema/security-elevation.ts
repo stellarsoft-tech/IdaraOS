@@ -3,11 +3,14 @@
  * Just-in-time local admin access for Windows devices:
  * - Employees request admin access for one of their devices
  * - Approvers grant it for a limited time
- * - Credentials mode: the Windows LAPS password is fetched from Entra and revealed to the requester,
- *   then rotated when the grant ends
- * - App install mode: Intune installs an approved catalog app (see security-software.ts)
+ * - Credentials mode: the device's local admin password is revealed to the requester, then rotated
+ *   when the grant ends
+ * - App install mode: an approved catalog app is installed (see security-software.ts)
  *
- * LAPS passwords are never stored in any table.
+ * Each organization picks a device provider:
+ * - intune: Windows LAPS in Entra and Intune installs
+ * - agent: the IdaraOS Agent installs approved apps with winget (see security-agent.ts); no Intune needed
+ * Admin passwords are never stored in any table.
  * See docs/modules/security/elevation-architecture.md
  */
 
@@ -60,6 +63,14 @@ export type ElevationGrantStatus = (typeof elevationGrantStatusValues)[number]
 export const elevationRotationStatusValues = ["not_required", "pending", "requested", "verified", "failed"] as const
 export type ElevationRotationStatus = (typeof elevationRotationStatusValues)[number]
 
+/**
+ * Where approved installs come from
+ * - intune: Intune Win32 apps via install groups (credentials grants use Windows LAPS in Entra)
+ * - agent: the IdaraOS Agent runs winget as SYSTEM (no Intune or Entra join needed)
+ */
+export const elevationDeviceProviderValues = ["intune", "agent"] as const
+export type ElevationDeviceProvider = (typeof elevationDeviceProviderValues)[number]
+
 // ============================================================================
 // SETTINGS
 // ============================================================================
@@ -89,6 +100,9 @@ export const elevationSettings = pgTable(
     // Teams Workflows webhook for new-request notifications (encrypted)
     teamsWebhookUrlEncrypted: text("teams_webhook_url_encrypted"),
 
+    // Device provider - see elevationDeviceProviderValues
+    deviceProvider: text("device_provider", { enum: elevationDeviceProviderValues }).notNull().default("intune"),
+
     updatedById: uuid("updated_by_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -117,8 +131,12 @@ export const elevationRequests = pgTable(
     // Device
     assetId: uuid("asset_id").references(() => assets.id, { onDelete: "set null" }),
     deviceName: text("device_name").notNull(),
-    entraDeviceId: text("entra_device_id").notNull(),
+    // Intune provider
+    entraDeviceId: text("entra_device_id"),
     intuneDeviceId: text("intune_device_id"),
+    // Agent provider (FK to security_software_update_devices in SQL; not declared here to avoid a
+    // circular schema import)
+    agentDeviceId: uuid("agent_device_id"),
 
     // Approved software catalog entry for install requests (FK to security_software_catalog in SQL;
     // not declared here to avoid a circular schema import)
@@ -147,6 +165,7 @@ export const elevationRequests = pgTable(
     index("idx_security_elevation_requests_requester").on(table.requesterId),
     index("idx_security_elevation_requests_status").on(table.status),
     index("idx_security_elevation_requests_catalog_app").on(table.catalogAppId),
+    index("idx_security_elevation_requests_agent_device").on(table.agentDeviceId),
   ]
 )
 

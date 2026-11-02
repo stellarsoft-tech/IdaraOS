@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
-import { ExternalLink, KeyRound, Laptop, Package, Plus, ShieldCheck } from "lucide-react"
+import { ExternalLink, KeyRound, Laptop, Link2, Package, Plus, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import { PageShell } from "@/components/primitives/page-shell"
@@ -47,10 +48,12 @@ function InstallBadge({ item }: { item: MyElevationRequest }) {
 
 function CatalogCard({
   app,
+  isAgent,
   canRequest,
   onRequest,
 }: {
   app: MyCatalogApp
+  isAgent: boolean
   canRequest: boolean
   onRequest: (app: MyCatalogApp) => void
 }) {
@@ -74,7 +77,9 @@ function CatalogCard({
             </a>
           </Button>
         ) : (
-          <p className="text-xs text-muted-foreground">Install it from Company Portal.</p>
+          <p className="text-xs text-muted-foreground">
+            {isAgent ? "Ask IT to install it for you." : "Install it from Company Portal."}
+          </p>
         ))}
       {app.access === "approval" &&
         (app.requestable ? (
@@ -100,7 +105,14 @@ export default function MyElevationPage() {
   const items = data?.data ?? []
   const devices = data?.devices ?? []
   const catalog = data?.catalog ?? []
-  const options = data?.options ?? { durationOptions: [], requireReason: true, maxRevealsPerGrant: 5 }
+  const options = data?.options ?? {
+    durationOptions: [],
+    requireReason: true,
+    maxRevealsPerGrant: 5,
+    provider: "intune" as const,
+    credentialsAvailable: true,
+  }
+  const isAgent = options.provider === "agent"
   const active = items.filter(isLive)
   const others = items.filter((i) => !isLive(i))
 
@@ -120,17 +132,41 @@ export default function MyElevationPage() {
       icon={KeyRound}
       action={
         <Protected module="security.my-elevation" action="create">
-          <Button variant="outline" onClick={() => setRequestOpen(true)} disabled={devices.length === 0}>
-            <Plus className="mr-2 h-4 w-4" />
-            Request admin access
-          </Button>
+          <div className="flex gap-2">
+            {isAgent && (
+              <Button variant="outline" asChild>
+                <Link href="/security/my-elevation/link">
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Link a device
+                </Link>
+              </Button>
+            )}
+            {options.credentialsAvailable && (
+              <Button variant="outline" onClick={() => setRequestOpen(true)} disabled={devices.length === 0}>
+                <Plus className="mr-2 h-4 w-4" />
+                Request admin access
+              </Button>
+            )}
+          </div>
         </Protected>
       }
     >
       {!isLoading && devices.length === 0 && (
         <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-900/10">
-          No Entra-joined devices are assigned to you in Assets yet. Ask IT to sync devices from Intune and assign
-          your laptop to you.
+          {isAgent ? (
+            <>
+              No devices are linked to you yet. When IT installs the IdaraOS Agent on your laptop it shows a code -{" "}
+              <Link href="/security/my-elevation/link" className="font-medium underline">
+                enter it here
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              No Entra-joined devices are assigned to you in Assets yet. Ask IT to sync devices from Intune and assign
+              your laptop to you.
+            </>
+          )}
         </div>
       )}
 
@@ -161,7 +197,8 @@ export default function MyElevationPage() {
               </div>
               {item.grant!.mode === "app_install" && (
                 <p className="text-sm text-muted-foreground">
-                  Intune is installing it. Keep your device on and connected - it usually takes a few minutes.
+                  {isAgent ? "The IdaraOS Agent" : "Intune"} is installing it. Keep your device on and connected - it
+                  usually takes a few minutes.
                 </p>
               )}
               {item.decisionNote && (
@@ -188,7 +225,7 @@ export default function MyElevationPage() {
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {catalog.map((app) => (
-              <CatalogCard key={app.id} app={app} canRequest={canCreate && devices.length > 0} onRequest={setInstallApp} />
+              <CatalogCard key={app.id} app={app} isAgent={isAgent} canRequest={canCreate && devices.length > 0} onRequest={setInstallApp} />
             ))}
           </div>
         </section>

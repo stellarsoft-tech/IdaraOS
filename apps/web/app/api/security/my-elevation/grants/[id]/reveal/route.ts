@@ -64,6 +64,11 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       )
     }
 
+    // LAPS passwords live in Entra - agent devices without an Entra ID have nothing to reveal
+    if (!row.request.entraDeviceId) {
+      return NextResponse.json({ error: "This device isn't joined to Entra, so it has no LAPS password" }, { status: 409 })
+    }
+
     let credential
     try {
       credential = await getLapsPassword(row.request.entraDeviceId)

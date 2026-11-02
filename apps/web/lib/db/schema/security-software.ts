@@ -1,10 +1,12 @@
 /**
  * Security Software Schema - Drizzle ORM table definitions
  * Approved software and how it reaches Windows devices without local admin rights:
- * - Approved software catalog: apps users can request (installed by Intune as SYSTEM via an install group)
- * - Installs: one per approved app_install grant, tracked until Intune reports the app installed
- * - Software updates: the IdaraOS Updater (scheduled task, SYSTEM) runs `winget upgrade` for catalog apps
- *   and reports a per-device log of every run, including failures
+ * - Approved software catalog: apps users can request (installed as SYSTEM by Intune via an install
+ *   group, or by the IdaraOS Agent with winget)
+ * - Installs: one per approved app_install grant, tracked until the app is reported installed
+ * - Software updates: the IdaraOS Agent (scheduled task, SYSTEM) runs `winget upgrade` for catalog apps
+ *   and reports a per-device log of every run, including failures. With the agent provider, a device
+ *   is linked to the IdaraOS user who signed in to the agent (see security-agent.ts).
  *
  * See docs/modules/security/elevation-architecture.md
  */
@@ -147,13 +149,17 @@ export const softwareInstalls = pgTable(
     // Snapshot from the catalog at approval time
     appName: text("app_name").notNull(),
     wingetId: text("winget_id"),
+    // "intune" (install group) or "agent" (winget install job) - copied from the org setting at approval
+    provider: text("provider", { enum: ["intune", "agent"] }).notNull().default("intune"),
     intuneAppId: text("intune_app_id"),
-    groupId: text("group_id").notNull(),
+    // Intune provider only
+    groupId: text("group_id"),
     removeFromGroupAfterInstall: boolean("remove_from_group_after_install").notNull().default(false),
 
-    // Device
-    entraDeviceId: text("entra_device_id").notNull(),
+    // Device - Entra/Intune IDs for the intune provider, agentDeviceId for the agent
+    entraDeviceId: text("entra_device_id"),
     intuneDeviceId: text("intune_device_id"),
+    agentDeviceId: uuid("agent_device_id").references(() => softwareUpdateDevices.id, { onDelete: "set null" }),
     // Entra directory object ID (what group membership needs)
     deviceObjectId: text("device_object_id"),
 
@@ -227,7 +233,9 @@ export const softwareUpdateDevices = pgTable(
     orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
     assetId: uuid("asset_id").references(() => assets.id, { onDelete: "set null" }),
 
-    entraDeviceId: text("entra_device_id").notNull(),
+    // Intune provider: the Entra device ID. Agent provider: the Windows MachineGuid
+    entraDeviceId: text("entra_device_id"),
+    machineId: text("machine_id"),
     intuneDeviceId: text("intune_device_id"),
     hostname: text("hostname").notNull(),
     serialNumber: text("serial_number"),
@@ -250,12 +258,19 @@ export const softwareUpdateDevices = pgTable(
     runRequestedAt: timestamp("run_requested_at", { withTimezone: true }),
     runRequestedById: uuid("run_requested_by_id").references(() => users.id, { onDelete: "set null" }),
 
+    // Agent provider: the IdaraOS user who signed in to the agent on this device
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    // Windows user signed in at the last check-in
+    lastLoggedOnUser: text("last_logged_on_user"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_security_software_update_devices_org").on(table.orgId),
     uniqueIndex("idx_security_software_update_devices_entra").on(table.orgId, table.entraDeviceId),
+    uniqueIndex("idx_security_software_update_devices_machine").on(table.orgId, table.machineId),
+    index("idx_security_software_update_devices_user").on(table.userId),
   ]
 )
 
@@ -313,6 +328,10 @@ export const softwareInstallsRelations = relations(softwareInstalls, ({ one }) =
   catalogApp: one(softwareCatalog, {
     fields: [softwareInstalls.catalogAppId],
     references: [softwareCatalog.id],
+  }),
+  agentDevice: one(softwareUpdateDevices, {
+    fields: [softwareInstalls.agentDeviceId],
+    references: [softwareUpdateDevices.id],
   }),
 }))
 

@@ -54,7 +54,8 @@ export interface UpdaterDevice {
   assetId: string | null
   assetName: string | null
   assetTag: string | null
-  entraDeviceId: string
+  entraDeviceId: string | null
+  machineId: string | null
   hostname: string
   serialNumber: string | null
   osVersion: string | null
@@ -66,6 +67,9 @@ export interface UpdaterDevice {
   lastRunAt: string | null
   lastRunStatus: SoftwareUpdateRunStatus | null
   lastError: string | null
+  // IdaraOS Agent: the member who linked the device, and the last signed-in Windows user
+  linkedUserName: string | null
+  lastLoggedOnUser: string | null
   runRequestedAt: string | null
   offline: boolean
 }

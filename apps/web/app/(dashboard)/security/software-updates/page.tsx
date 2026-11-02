@@ -111,6 +111,16 @@ function DevicesTab({
                 <div className="text-xs text-muted-foreground">
                   {[d.assetName, d.assetTag, d.serialNumber].filter(Boolean).join(" · ")}
                 </div>
+                {(d.linkedUserName || d.lastLoggedOnUser) && (
+                  <div className="text-xs text-muted-foreground">
+                    {[
+                      d.linkedUserName && `Linked to ${d.linkedUserName}`,
+                      d.lastLoggedOnUser && `Signed in: ${d.lastLoggedOnUser}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                )}
                 {d.status === "revoked" && <Badge variant="outline" className="mt-1">Revoked</Badge>}
               </TableCell>
               <TableCell className="text-xs">

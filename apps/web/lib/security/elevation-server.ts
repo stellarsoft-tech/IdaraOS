@@ -177,6 +177,7 @@ export async function processRotations(now: Date = new Date(), limit = 25): Prom
     .limit(limit)
 
   for (const grant of toVerify) {
+    if (!grant.entraDeviceId) continue
     try {
       const lastBackupAt = await getLapsLastBackupAt(grant.entraDeviceId)
       if (!isRotationVerified(lastBackupAt, grant.lastRevealedAt)) continue

@@ -28,6 +28,7 @@ export async function GET() {
           grant: elevationGrants,
           install: softwareInstalls,
           catalogInstallGroupId: softwareCatalog.installGroupId,
+          catalogWingetId: softwareCatalog.wingetId,
           catalogEnabled: softwareCatalog.enabled,
           requesterName: requester.name,
           requesterEmail: requester.email,
@@ -47,7 +48,7 @@ export async function GET() {
         .limit(200),
     ])
 
-    const data = rows.map(({ request, grant, install, catalogInstallGroupId, catalogEnabled, requesterName, requesterEmail, deciderName }) => ({
+    const data = rows.map(({ request, grant, install, catalogInstallGroupId, catalogWingetId, catalogEnabled, requesterName, requesterEmail, deciderName }) => ({
       id: request.id,
       requesterId: request.requesterId,
       requesterName,
@@ -57,8 +58,13 @@ export async function GET() {
       catalogAppId: request.catalogAppId,
       appName: request.app?.name ?? null,
       // Install requests can be approved as installs once the catalog app has an install group
-      installReady: !!request.catalogAppId && !!catalogEnabled && !!catalogInstallGroupId,
+      // (Intune) or a winget ID (IdaraOS Agent)
+      installReady:
+        !!request.catalogAppId &&
+        !!catalogEnabled &&
+        (request.agentDeviceId ? !!catalogWingetId : !!catalogInstallGroupId),
       intuneManaged: !!request.intuneDeviceId,
+      agentDevice: !!request.agentDeviceId,
       requestedMinutes: request.requestedMinutes,
       reason: request.reason,
       status: request.status,

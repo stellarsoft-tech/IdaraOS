@@ -120,6 +120,13 @@
       "when": 1784300000000,
       "tag": "0017_software_catalog_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784400000000,
+      "tag": "0018_idaraos_agent",
+      "breakpoints": true
     }
   ]
 }

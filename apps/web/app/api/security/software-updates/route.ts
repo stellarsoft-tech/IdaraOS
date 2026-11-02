@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server"
 import { asc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { assets, softwareUpdateDevices } from "@/lib/db/schema"
+import { assets, softwareUpdateDevices, users } from "@/lib/db/schema"
 import { requirePermission, handleApiError } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { nextScheduledRun } from "@/lib/security/software"
@@ -26,9 +26,11 @@ export async function GET() {
           device: softwareUpdateDevices,
           assetName: assets.name,
           assetTag: assets.assetTag,
+          linkedUserName: users.name,
         })
         .from(softwareUpdateDevices)
         .leftJoin(assets, eq(softwareUpdateDevices.assetId, assets.id))
+        .leftJoin(users, eq(softwareUpdateDevices.userId, users.id))
         .where(eq(softwareUpdateDevices.orgId, session.orgId))
         .orderBy(asc(softwareUpdateDevices.hostname)),
     ])
@@ -36,12 +38,13 @@ export async function GET() {
     const now = new Date()
     const offlineAfterMs = Math.max(settings.checkInMinutes * 4, 24 * 60) * 60_000
 
-    const data = devices.map(({ device, assetName, assetTag }) => {
+    const data = devices.map(({ device, assetName, assetTag, linkedUserName }) => {
       const { secretHash: _s, ...rest } = device
       return {
         ...rest,
         assetName,
         assetTag,
+        linkedUserName,
         offline: !device.lastSeenAt || now.getTime() - device.lastSeenAt.getTime() > offlineAfterMs,
       }
     })

@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { elevationSettings, type ElevationSettings } from "@/lib/db/schema"
+import { elevationDeviceProviderValues, elevationSettings, type ElevationSettings } from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { encrypt } from "@/lib/encryption"
@@ -23,6 +23,7 @@ const updateSettingsSchema = z.object({
   requireRecentAuth: z.boolean().optional(),
   recentAuthMinutes: z.number().int().min(1).max(120).optional(),
   maxRevealsPerGrant: z.number().int().min(1).max(20).optional(),
+  deviceProvider: z.enum(elevationDeviceProviderValues).optional(),
   // null clears the webhook; omit to keep it
   teamsWebhookUrl: z
     .string()

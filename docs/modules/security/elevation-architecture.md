@@ -1,6 +1,6 @@
 # Security › Endpoint Elevation (Just-in-Time Admin) — Implementation Plan
 
-> Status: **Phase 1 live** (credentials mode) · **Phase 2 built, not deployed** (approved software, Intune installs, IdaraOS Updater) · Owner: Security module · Target: Windows 11, Autopilot Entra-joined, Intune-managed, Windows LAPS backed up to Entra ID · Licensing: Microsoft 365 Business Premium (Intune Plan 1, Entra ID P1) — no add-ons
+> Status: **Phase 1 live** (credentials mode) · **Phase 2 built, not deployed** (approved software, Intune installs, IdaraOS Updater) · **IdaraOS Agent provider built, not deployed** (no Intune) · Owner: Security module · Target: Windows 11, Autopilot Entra-joined, Intune-managed, Windows LAPS backed up to Entra ID · Licensing: Microsoft 365 Business Premium (Intune Plan 1, Entra ID P1) — no add-ons
 
 ## 1. Goal
 
@@ -29,6 +29,12 @@ Standard users never hold permanent local admin rights. When they need admin to 
 - IT already uses `winget upgrade`. It only prompts for admin because it runs in a user session.
 - A scheduled task as SYSTEM runs the same command silently. Intune Remediations would be the built-in option, but they need Windows Enterprise licences.
 - The package list comes from Approved Software, so apps added later are updated without redeploying anything.
+
+**2026-11-02 — Added an IdaraOS Agent provider for organizations without Intune (built, not deployed).**
+- Our own organization is dropping Intune for cost reasons. Intune mode stays in the app for clients who have it.
+- Each organization picks a **device provider** in admin access settings: `intune` (LAPS + Intune installs) or `agent`.
+- The agent covers approved installs and winget updates as SYSTEM, links each device to the member who signed in to it, and reports the signed-in Windows user. BitLocker recovery key backup comes after that.
+- **Out of scope for the agent:** creating or managing local admin accounts, removing users from Administrators, or storing admin passwords. For now IT does this by hand on each laptop: one local admin account with a unique password per device, kept in the IT password manager, and users made standard.
 
 ## 2. Architecture
 
@@ -402,6 +408,69 @@ Application permissions on the IdaraOS app registration, with admin consent. Kep
   - approval with Graph unavailable (`pending` + error), retry, cancel;
   - credentials approval and revoke.
 - **Not tested yet:** a real device, real Intune and real Graph.
+
+### Agent provider — IdaraOS Agent without Intune (built, not deployed)
+
+Scripts and IT setup: [`deployment/agent/README.md`](../../../deployment/agent/README.md).
+
+**Schema (migration `0018_idaraos_agent.sql`):**
+- `security_elevation_settings.device_provider`: `intune` (default) or `agent`. Set it in **Admin Access → Settings → Device management**.
+- `security_software_update_devices`:
+  - `entra_device_id` is now nullable;
+  - new `machine_id` (Windows MachineGuid, unique per org);
+  - new `user_id` (the member who linked the device);
+  - new `last_logged_on_user`.
+- `security_elevation_requests.agent_device_id` (and `entra_device_id` nullable).
+- `security_software_installs`: `provider`, `agent_device_id`; `group_id` and `entra_device_id` nullable.
+- New `security_agent_pairings` (sign-in codes) and `security_agent_jobs` (install jobs).
+
+**Linking a device to a member (device-code style):**
+1. IT runs `Install-IdaraOSAgent.ps1 -ServerUrl …` once, from an admin PowerShell. It registers the SYSTEM task `\IdaraOS\IdaraOS Agent`. No enrollment token is needed.
+2. The installer runs the agent with `-Pair`, which calls `POST /api/updater/v1/pair`. That returns:
+   - a user code such as `KFJD-7QWX`;
+   - a secret device code (only its hash is stored);
+   - `verificationPath`.
+
+   The code is valid for 15 minutes and is shown in the admin console.
+3. The member opens `/security/my-elevation/link` on any device, signs in, and enters the code. This calls `POST /api/security/my-elevation/link` (needs `security.my-elevation` create) → `linkPairing`, which:
+   - requires the org to use the `agent` provider;
+   - refuses revoked devices;
+   - links the asset with the same serial number, and refuses if it's assigned to someone else;
+   - or creates an `AGT-…` asset assigned to the member's person, and records the assignment history;
+   - creates or updates the device with `user_id`.
+4. The agent polls `POST /api/updater/v1/pair/poll` every 5 s:
+   - **202** while it's waiting for the code;
+   - **200** with `deviceId` and `deviceSecret`, issued once when the agent claims the approved pairing;
+   - **410** when the code has expired or was already used.
+
+   From then on the agent authenticates like the updater (`Bearer <deviceId>.<secret>`).
+5. The device shows under **My Admin Access** for that member only, and in **Software Updates → Devices** with "Linked to" and "Signed in".
+
+Wrong codes are rate-limited per user, 10 per 15 minutes per app instance.
+
+**Install jobs:**
+- Approval with `app_install` on an agent request creates the install with `provider = agent`. `startInstall` then queues one `install` job (payload `{ wingetId, name }`).
+- `POST /api/updater/v1/check-in` returns `jobs` next to `run`:
+  - a job is marked `sent` with a conditional update;
+  - it's sent again after 90 minutes without a result;
+  - after 3 sends it's failed.
+- The agent runs `winget install --id <id> --exact --silent --scope machine --source winget` and reports `POST /api/updater/v1/jobs/[id]` with `{ exitCode, message?, log? }`.
+  - **Success** (0, already installed, or a restart needed) → install `installed`, grant `completed`.
+  - **Failure** → install goes back to `pending` with the error. The sweep queues another attempt, up to `MAX_INSTALL_ATTEMPTS`, until the deadline.
+- Cancelling the grant cancels open jobs. The deadline fails the install with the last error.
+- A later update run that sees the package installed also marks the install done.
+
+**Not available for agent devices:**
+- Credentials grants: no LAPS without Entra. Requests, approvals and reveals are refused, and the UI hides them.
+- Self-service (Company Portal) apps. Members see "Ask IT to install it".
+
+**Out of scope:** local admin accounts and passwords. IT does these by hand; see the decision log.
+
+**Still to do:**
+- BitLocker recovery key backup (encrypted, revealed only on approval, every reveal audited).
+- A way for IT to restore a revoked agent device.
+- A small tray helper so members can re-link without an admin console.
+- Test on a real device.
 
 ### Phase 3 — Self-service catalog & insights (≈1 week)
 - [x] `self_service` apps with an **Open in Company Portal** link (built in Phase 2).

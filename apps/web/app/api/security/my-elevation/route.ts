@@ -6,9 +6,18 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { and, asc, desc, eq, gt, isNotNull, isNull, or } from "drizzle-orm"
+import { and, asc, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { assets, elevationGrants, elevationRequests, softwareCatalog, softwareInstalls, users } from "@/lib/db/schema"
+import {
+  assets,
+  elevationGrants,
+  elevationRequests,
+  softwareCatalog,
+  softwareInstalls,
+  softwareUpdateDevices,
+  users,
+  type ElevationDeviceProvider,
+} from "@/lib/db/schema"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { allowedDurations, checkRequestedMinutes, formatMinutes } from "@/lib/security/elevation"
@@ -26,10 +35,42 @@ const createRequestSchema = z.object({
   reason: z.string().trim().max(500, "Reason must be 500 characters or fewer").optional().nullable(),
 })
 
+interface MyDevice {
+  id: string // asset ID
+  name: string
+  assetTag: string
+  model: string | null
+  entraDeviceId: string | null
+  intuneDeviceId: string | null
+  agentDeviceId: string | null
+}
+
 /**
- * Devices assigned to the user (via their linked person) that Entra knows about
+ * My devices: intune provider - assets assigned to me (via my person) that Entra knows about;
+ * agent provider - devices I linked by signing in to the IdaraOS Agent
  */
-async function getMyDevices(userId: string, orgId: string) {
+async function getMyDevices(userId: string, orgId: string, provider: ElevationDeviceProvider): Promise<MyDevice[]> {
+  if (provider === "agent") {
+    return db
+      .select({
+        id: assets.id,
+        name: assets.name,
+        assetTag: assets.assetTag,
+        model: assets.model,
+        entraDeviceId: softwareUpdateDevices.entraDeviceId,
+        intuneDeviceId: softwareUpdateDevices.intuneDeviceId,
+        agentDeviceId: softwareUpdateDevices.id,
+      })
+      .from(softwareUpdateDevices)
+      .innerJoin(assets, eq(softwareUpdateDevices.assetId, assets.id))
+      .where(and(
+        eq(softwareUpdateDevices.orgId, orgId),
+        eq(softwareUpdateDevices.userId, userId),
+        eq(softwareUpdateDevices.status, "active")
+      ))
+      .orderBy(asc(assets.name))
+  }
+
   const [user] = await db
     .select({ personId: users.personId })
     .from(users)
@@ -45,6 +86,7 @@ async function getMyDevices(userId: string, orgId: string) {
       model: assets.model,
       entraDeviceId: assets.entraDeviceId,
       intuneDeviceId: assets.intuneDeviceId,
+      agentDeviceId: sql<string | null>`NULL`,
     })
     .from(assets)
     .where(and(
@@ -61,9 +103,10 @@ export async function GET() {
     await expireDueGrants(new Date(), session.orgId)
     await ensureDefaultCatalog(session.orgId)
 
-    const [settings, devices, rows, catalog] = await Promise.all([
-      getElevationSettings(session.orgId),
-      getMyDevices(session.userId, session.orgId),
+    const settings = await getElevationSettings(session.orgId)
+    const provider = settings.deviceProvider
+    const [devices, rows, catalog] = await Promise.all([
+      getMyDevices(session.userId, session.orgId, provider),
       db
         .select({ request: elevationRequests, grant: elevationGrants, install: softwareInstalls })
         .from(elevationRequests)
@@ -84,6 +127,7 @@ export async function GET() {
           access: softwareCatalog.access,
           intuneAppId: softwareCatalog.intuneAppId,
           installGroupId: softwareCatalog.installGroupId,
+          wingetId: softwareCatalog.wingetId,
         })
         .from(softwareCatalog)
         .where(and(eq(softwareCatalog.orgId, session.orgId), eq(softwareCatalog.enabled, true)))
@@ -120,21 +164,27 @@ export async function GET() {
 
     return NextResponse.json({
       data,
-      devices: devices.map(({ entraDeviceId: _e, intuneDeviceId, ...d }) => ({
+      devices: devices.map(({ entraDeviceId: _e, intuneDeviceId, agentDeviceId, ...d }) => ({
         ...d,
         intuneManaged: !!intuneDeviceId,
+        agentLinked: !!agentDeviceId,
       })),
-      catalog: catalog.map(({ intuneAppId, installGroupId, ...app }) => ({
+      catalog: catalog.map(({ intuneAppId, installGroupId, wingetId, ...app }) => ({
         ...app,
-        // Requests are only possible once IT linked the app to an Intune install group
-        requestable: app.access === "approval" && !!installGroupId,
+        // Requests need an Intune install group, or a winget ID for the agent
+        requestable: app.access === "approval" && (provider === "agent" ? !!wingetId : !!installGroupId),
         companyPortalUrl:
-          app.access === "self_service" && intuneAppId ? `companyportal:ApplicationId=${intuneAppId}` : null,
+          provider === "intune" && app.access === "self_service" && intuneAppId
+            ? `companyportal:ApplicationId=${intuneAppId}`
+            : null,
       })),
       options: {
         durationOptions: allowedDurations(settings),
         requireReason: settings.requireReason,
         maxRevealsPerGrant: settings.maxRevealsPerGrant,
+        provider,
+        // LAPS passwords come from Entra, so admin access requests need the Intune provider
+        credentialsAvailable: provider === "intune" && settings.credentialModeEnabled,
       },
     })
   } catch (error) {
@@ -165,10 +215,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Tell the approver why you need this" }, { status: 400 })
     }
 
-    const device = (await getMyDevices(session.userId, session.orgId)).find((d) => d.id === assetId)
-    if (!device?.entraDeviceId) {
+    const provider = settings.deviceProvider
+    const device = (await getMyDevices(session.userId, session.orgId, provider)).find((d) => d.id === assetId)
+    if (!device || (provider === "agent" ? !device.agentDeviceId : !device.entraDeviceId)) {
       return NextResponse.json(
-        { error: "Device not found, not assigned to you, or not joined to Entra" },
+        {
+          error:
+            provider === "agent"
+              ? "Device not found or not linked to you. Sign in to the IdaraOS Agent on the device first."
+              : "Device not found, not assigned to you, or not joined to Entra",
+        },
         { status: 404 }
       )
     }
@@ -185,17 +241,29 @@ export async function POST(request: NextRequest) {
       if (!app || !app.enabled || app.access !== "approval") {
         return NextResponse.json({ error: "This app can't be requested" }, { status: 400 })
       }
-      if (!app.installGroupId) {
-        return NextResponse.json(
-          { error: "IT hasn't set up this app in Intune yet - try again later" },
-          { status: 400 }
-        )
-      }
-      if (!device.intuneDeviceId) {
-        return NextResponse.json({ error: "This device isn't managed by Intune" }, { status: 400 })
+      if (provider === "agent") {
+        if (!app.wingetId) {
+          return NextResponse.json({ error: "IT hasn't set up this app yet - try again later" }, { status: 400 })
+        }
+      } else {
+        if (!app.installGroupId) {
+          return NextResponse.json(
+            { error: "IT hasn't set up this app in Intune yet - try again later" },
+            { status: 400 }
+          )
+        }
+        if (!device.intuneDeviceId) {
+          return NextResponse.json({ error: "This device isn't managed by Intune" }, { status: 400 })
+        }
       }
       catalogApp = { id: app.id, name: app.name, publisher: app.publisher }
     } else {
+      if (provider === "agent") {
+        return NextResponse.json(
+          { error: "Admin access requests aren't available for IdaraOS Agent devices. Ask IT for help, or request an approved app." },
+          { status: 400 }
+        )
+      }
       minutes = parsed.data.minutes ?? null
       if (minutes === null) {
         return NextResponse.json({ error: "Choose how long you need admin access" }, { status: 400 })
@@ -242,6 +310,7 @@ export async function POST(request: NextRequest) {
         deviceName: device.name,
         entraDeviceId: device.entraDeviceId,
         intuneDeviceId: device.intuneDeviceId,
+        agentDeviceId: device.agentDeviceId,
         catalogAppId: catalogApp?.id ?? null,
         app: catalogApp
           ? { name: catalogApp.name, ...(catalogApp.publisher && { publisher: catalogApp.publisher }) }

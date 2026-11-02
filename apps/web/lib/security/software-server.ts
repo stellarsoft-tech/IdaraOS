@@ -1,11 +1,13 @@
 /**
  * Security Software - server-side helpers
- * Approved software catalog and Intune installs for approved app_install grants (database + Graph access)
+ * Approved software catalog and installs for approved app_install grants: Intune install groups (Graph) or
+ * IdaraOS Agent install jobs (see agent-server.ts)
  */
 
 import { and, desc, eq, inArray, isNull, lt, lte, sql } from "drizzle-orm"
 import { db } from "@/lib/db"
 import {
+  agentJobs,
   elevationGrants,
   softwareCatalog,
   softwareInstalls,
@@ -101,12 +103,61 @@ export async function getUpdatePackages(orgId: string): Promise<Array<{ wingetId
 // ============================================================================
 
 /**
- * Add the device to the app's install group and ask Intune to sync it.
+ * Queue a winget install job for the IdaraOS Agent (agent provider).
+ * The agent picks it up at its next check-in; see agent-server.ts for dispatch and results.
+ */
+async function startAgentInstall(install: SoftwareInstall, attempts: number, now: Date): Promise<SoftwareInstall> {
+  if (!install.agentDeviceId || !install.wingetId) {
+    const message = !install.agentDeviceId
+      ? "The device is no longer linked to the IdaraOS Agent"
+      : "The app has no winget package ID"
+    const [updated] = await db
+      .update(softwareInstalls)
+      .set({ attempts, error: message, updatedAt: now })
+      .where(eq(softwareInstalls.id, install.id))
+      .returning()
+    await logSystem(install.orgId, install.id, "install_assign_failed", `Install of ${install.appName} not queued: ${message}`)
+    return updated
+  }
+
+  // One open job per install
+  const [open] = await db
+    .select({ id: agentJobs.id })
+    .from(agentJobs)
+    .where(and(eq(agentJobs.installId, install.id), inArray(agentJobs.status, ["pending", "sent"])))
+    .limit(1)
+  if (!open) {
+    await db.insert(agentJobs).values({
+      orgId: install.orgId,
+      deviceId: install.agentDeviceId,
+      type: "install",
+      installId: install.id,
+      payload: { wingetId: install.wingetId, name: install.appName },
+    })
+  }
+
+  const [updated] = await db
+    .update(softwareInstalls)
+    .set({ status: "assigned", attempts, groupAddedAt: now, error: null, updatedAt: now })
+    .where(eq(softwareInstalls.id, install.id))
+    .returning()
+  await logSystem(install.orgId, install.id, "install_assigned", `Sent install of ${install.appName} to the IdaraOS Agent`)
+  return updated
+}
+
+/**
+ * Start an approved install: queue an agent job (agent provider), or add the device to the app's
+ * install group and ask Intune to sync it (intune provider).
  * Failures are recorded on the install; the sweep retries pending installs.
  */
 export async function startInstall(install: SoftwareInstall, now: Date = new Date()): Promise<SoftwareInstall> {
   const attempts = install.attempts + 1
+  if (install.provider === "agent") return startAgentInstall(install, attempts, now)
+
   try {
+    if (!install.groupId || !install.entraDeviceId) {
+      throw new Error("This install has no Intune install group or Entra device")
+    }
     const deviceObjectId = install.deviceObjectId ?? (await resolveDeviceObjectId(install.entraDeviceId))
     await addDeviceToGroup(install.groupId, deviceObjectId)
 
@@ -149,7 +200,7 @@ export async function startInstall(install: SoftwareInstall, now: Date = new Dat
 }
 
 async function removeFromGroupQuietly(install: SoftwareInstall, now: Date): Promise<Date | null> {
-  if (!install.deviceObjectId || !install.groupAddedAt) return null
+  if (!install.groupId || !install.deviceObjectId || !install.groupAddedAt) return null
   try {
     await removeDeviceFromGroup(install.groupId, install.deviceObjectId)
     return now
@@ -159,7 +210,7 @@ async function removeFromGroupQuietly(install: SoftwareInstall, now: Date): Prom
   }
 }
 
-async function markInstalled(install: SoftwareInstall, source: string, now: Date) {
+export async function markInstalled(install: SoftwareInstall, source: string, now: Date) {
   const groupRemovedAt = install.removeFromGroupAfterInstall ? await removeFromGroupQuietly(install, now) : null
 
   await db
@@ -174,17 +225,36 @@ async function markInstalled(install: SoftwareInstall, source: string, now: Date
 }
 
 /**
+ * The agent reported a failed install job: back to pending so the sweep queues another attempt
+ * (up to MAX_INSTALL_ATTEMPTS, then the deadline fails it)
+ */
+export async function markAgentInstallFailed(install: SoftwareInstall, message: string, now: Date) {
+  await db
+    .update(softwareInstalls)
+    .set({ status: "pending", error: message, lastCheckedAt: now, updatedAt: now })
+    .where(and(eq(softwareInstalls.id, install.id), eq(softwareInstalls.status, "assigned")))
+  await logSystem(install.orgId, install.id, "install_attempt_failed", `Install of ${install.appName} failed on the device: ${message}`)
+}
+
+/**
  * The updater reports installed winget packages in every run - use that as a second signal
  */
 async function updaterSawPackage(install: SoftwareInstall): Promise<boolean> {
   if (!install.wingetId) return false
+  const deviceMatch = install.agentDeviceId
+    ? eq(softwareUpdateDevices.id, install.agentDeviceId)
+    : install.entraDeviceId
+      ? eq(softwareUpdateDevices.entraDeviceId, install.entraDeviceId)
+      : null
+  if (!deviceMatch) return false
+
   const [run] = await db
     .select({ results: softwareUpdateRuns.results })
     .from(softwareUpdateRuns)
     .innerJoin(softwareUpdateDevices, eq(softwareUpdateRuns.deviceId, softwareUpdateDevices.id))
     .where(and(
       eq(softwareUpdateDevices.orgId, install.orgId),
-      eq(softwareUpdateDevices.entraDeviceId, install.entraDeviceId),
+      deviceMatch,
       inArray(softwareUpdateRuns.status, ["succeeded", "partial"])
     ))
     .orderBy(desc(softwareUpdateRuns.startedAt))
@@ -206,6 +276,11 @@ export async function cancelInstall(grantId: string, now: Date = new Date()): Pr
     .update(softwareInstalls)
     .set({ status: "cancelled", groupRemovedAt, updatedAt: now })
     .where(eq(softwareInstalls.id, install.id))
+  // An install the agent already started will still finish; this only stops queued and re-sent jobs
+  await db
+    .update(agentJobs)
+    .set({ status: "cancelled", finishedAt: now, updatedAt: now })
+    .where(and(eq(agentJobs.installId, install.id), inArray(agentJobs.status, ["pending", "sent"])))
 }
 
 export interface InstallSweepResult {
@@ -238,6 +313,20 @@ export async function processInstalls(now: Date = new Date(), limit = 25): Promi
       if (install.attempts >= MAX_INSTALL_ATTEMPTS) continue
       const updated = await startInstall(install, now)
       if (updated.status === "assigned") result.assigned++
+      continue
+    }
+
+    // Agent installs finish when the agent reports the job (agent-server.ts); the update log is a backup signal
+    if (install.provider === "agent") {
+      if (await updaterSawPackage(install)) {
+        await markInstalled(install, "IdaraOS Agent update run", now)
+        result.installed++
+      } else {
+        await db
+          .update(softwareInstalls)
+          .set({ lastCheckedAt: now, updatedAt: now })
+          .where(eq(softwareInstalls.id, install.id))
+      }
       continue
     }
 
@@ -275,7 +364,8 @@ export async function processInstalls(now: Date = new Date(), limit = 25): Promi
     }
   }
 
-  // Deadline: end the grant; the device stays in the group so Intune keeps trying
+  // Deadline: end the grant. Intune: the device stays in the group so Intune keeps trying.
+  // Agent: open jobs are cancelled; the last error stays on the install.
   const overdue = await db
     .update(elevationGrants)
     .set({ status: "expired", endedAt: now, endReason: "install_failed", updatedAt: now })
@@ -291,12 +381,18 @@ export async function processInstalls(now: Date = new Date(), limit = 25): Promi
       .update(softwareInstalls)
       .set({
         status: "failed",
-        error: "Not installed before the deadline. Check the app's install status in Intune.",
+        error: sql`CASE WHEN ${softwareInstalls.provider} = 'agent'
+          THEN 'Not installed before the deadline' || COALESCE(': ' || ${softwareInstalls.error}, '. The device may be offline.')
+          ELSE 'Not installed before the deadline. Check the app''s install status in Intune.' END`,
         updatedAt: now,
       })
       .where(and(eq(softwareInstalls.grantId, grant.id), inArray(softwareInstalls.status, ["pending", "assigned"])))
       .returning()
     if (failed) {
+      await db
+        .update(agentJobs)
+        .set({ status: "cancelled", finishedAt: now, updatedAt: now })
+        .where(and(eq(agentJobs.installId, failed.id), eq(agentJobs.status, "pending")))
       await logSystem(grant.orgId, failed.id, "install_failed", `${failed.appName} was not installed before the deadline`)
       result.failed++
     }

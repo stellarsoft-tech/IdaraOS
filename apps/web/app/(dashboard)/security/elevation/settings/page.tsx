@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -17,6 +18,7 @@ import {
   useUpdateElevationSettings,
   type ElevationSettingsUpdate,
 } from "@/lib/api/security-elevation"
+import type { ElevationDeviceProvider } from "@/lib/db/schema/security-elevation"
 import { usePermission } from "@/lib/rbac/context"
 import { formatMinutes } from "@/lib/security/elevation"
 
@@ -120,6 +122,42 @@ export default function ElevationSettingsPage() {
         <Skeleton className="h-96 w-full" />
       ) : (
         <div className="max-w-2xl space-y-8">
+          <section className="space-y-4 rounded-lg border p-5">
+            <div className="space-y-1">
+              <h2 className="font-semibold">Device management</h2>
+              <p className="text-sm text-muted-foreground">
+                How approved apps reach devices. Changing this affects new requests only.
+              </p>
+            </div>
+            <RadioGroup
+              value={settings!.deviceProvider}
+              onValueChange={(v) => save({ deviceProvider: v as ElevationDeviceProvider }, "Device management updated")}
+              disabled={!canEdit || update.isPending}
+              className="space-y-3"
+            >
+              <label className="flex items-start gap-3">
+                <RadioGroupItem value="intune" id="provider-intune" className="mt-1" />
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Intune and Windows LAPS</span>
+                  <span className="block text-sm text-muted-foreground">
+                    Devices are Entra-joined and enrolled in Intune. Installs use Intune install groups, and admin access
+                    reveals the LAPS password.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3">
+                <RadioGroupItem value="agent" id="provider-agent" className="mt-1" />
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">IdaraOS Agent</span>
+                  <span className="block text-sm text-muted-foreground">
+                    No Intune needed. Members link their laptop by signing in to the agent, which installs approved apps
+                    and updates with winget. Admin access requests (LAPS) aren&apos;t available.
+                  </span>
+                </span>
+              </label>
+            </RadioGroup>
+          </section>
+
           <section className="space-y-4 rounded-lg border p-5">
             <h2 className="font-semibold">Durations</h2>
             <div className="space-y-2">

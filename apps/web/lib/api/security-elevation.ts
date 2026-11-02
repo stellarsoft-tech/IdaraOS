@@ -9,6 +9,7 @@ import type {
   ElevationGrantMode,
   ElevationGrantStatus,
   ElevationRequestStatus,
+  ElevationDeviceProvider,
   ElevationRotationStatus,
 } from "@/lib/db/schema/security-elevation"
 
@@ -54,6 +55,7 @@ export interface MyElevationDevice {
   assetTag: string
   model: string | null
   intuneManaged: boolean
+  agentLinked: boolean
 }
 
 export interface MyCatalogApp {
@@ -74,6 +76,8 @@ export interface MyElevationData {
     durationOptions: number[]
     requireReason: boolean
     maxRevealsPerGrant: number
+    provider: ElevationDeviceProvider
+    credentialsAvailable: boolean
   }
 }
 
@@ -95,6 +99,7 @@ export interface ApproverElevationRequest {
   appName: string | null
   installReady: boolean
   intuneManaged: boolean
+  agentDevice: boolean
   requestedMinutes: number | null
   reason: string | null
   status: ElevationRequestStatus
@@ -130,6 +135,7 @@ export interface ElevationSettingsData {
   requireRecentAuth: boolean
   recentAuthMinutes: number
   maxRevealsPerGrant: number
+  deviceProvider: ElevationDeviceProvider
   teamsWebhookConfigured: boolean
   updatedAt: string
 }
@@ -317,6 +323,35 @@ export function useUpdateElevationSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.settings })
       queryClient.invalidateQueries({ queryKey: keys.approvals })
+    },
+  })
+}
+
+// ============================================================================
+// IDARAOS AGENT
+// ============================================================================
+
+export interface LinkedDevice {
+  deviceId: string
+  hostname: string
+  assetId: string
+  assetCreated: boolean
+}
+
+/**
+ * Link the device showing this code (IdaraOS Agent) to me
+ */
+export function useLinkDevice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) =>
+      request<{ data: LinkedDevice }>(
+        "/api/security/my-elevation/link",
+        { method: "POST", body: JSON.stringify({ code }) },
+        "Failed to link the device"
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: keys.my })
     },
   })
 }

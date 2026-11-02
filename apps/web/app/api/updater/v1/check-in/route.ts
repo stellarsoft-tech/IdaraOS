@@ -1,6 +1,6 @@
 /**
  * IdaraOS Updater - Check-in
- * POST /api/updater/v1/check-in - Heartbeat; returns a run when one is due
+ * POST /api/updater/v1/check-in - Heartbeat; returns an update run when one is due, and any agent jobs
  *
  * Auth: `Authorization: Bearer <deviceId>.<deviceSecret>`. Excluded from session auth in middleware.ts.
  */
@@ -12,6 +12,7 @@ import { db } from "@/lib/db"
 import { softwareUpdateDevices } from "@/lib/db/schema"
 import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { authenticateDevice, dispatchRunIfDue } from "@/lib/security/software-updates-server"
+import { dispatchJobs } from "@/lib/security/agent-server"
 
 const checkInSchema = z.object({
   hostname: z.string().trim().min(1).max(63).optional(),
@@ -20,6 +21,8 @@ const checkInSchema = z.object({
   wingetVersion: z.string().trim().max(32).optional().nullable(),
   // Error the device hit outside a run (winget missing, previous upload failed, ...)
   lastError: z.string().max(2000).optional().nullable(),
+  // Windows user signed in at the console (DOMAIN\user), if any
+  loggedOnUser: z.string().trim().max(256).optional().nullable(),
 })
 
 export async function POST(request: NextRequest) {
@@ -45,6 +48,8 @@ export async function POST(request: NextRequest) {
         ...(body.updaterVersion !== undefined && { updaterVersion: body.updaterVersion }),
         ...(body.wingetVersion !== undefined && { wingetVersion: body.wingetVersion }),
         ...(body.lastError !== undefined && { lastError: body.lastError }),
+        // Keep the last known user when nobody is signed in
+        ...(body.loggedOnUser && { lastLoggedOnUser: body.loggedOnUser }),
         updatedAt: now,
       })
       .where(eq(softwareUpdateDevices.id, device.id))
@@ -52,8 +57,9 @@ export async function POST(request: NextRequest) {
 
     const settings = await getSoftwareUpdateSettings(device.orgId)
     const run = await dispatchRunIfDue(updatedDevice, settings, now)
+    const jobs = await dispatchJobs(updatedDevice, now)
 
-    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run })
+    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run, jobs })
   } catch (error) {
     console.error("[Updater] Check-in failed:", error)
     return NextResponse.json({ error: "Check-in failed" }, { status: 500 })
