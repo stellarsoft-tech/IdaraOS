@@ -1,7 +1,9 @@
 import { afterEach, describe, it, expect, vi } from "vitest"
 import {
   isScheduledRunDue,
+  isValidVsWorkload,
   isValidWingetId,
+  isVisualStudioPackage,
   latestScheduledRun,
   mapIntuneInstallState,
   nextScheduledRun,
@@ -9,7 +11,7 @@ import {
   truncateLog,
   type UpdateSchedule,
 } from "../../lib/security/software"
-import { checkCatalogApp } from "../../lib/security/software-validation"
+import { catalogAppFieldsSchema, checkCatalogApp } from "../../lib/security/software-validation"
 
 vi.mock("@/lib/graph/client", () => ({
   getGraphAccessToken: vi.fn(async () => "test-token"),
@@ -123,6 +125,53 @@ describe("catalog rules", () => {
   it("needs the Intune app when an install group is set", () => {
     expect(checkCatalogApp({ installGroupId: GROUP_ID, intuneAppId: null })).toMatch(/Intune app/)
     expect(checkCatalogApp({ installGroupId: GROUP_ID, intuneAppId: APP_ID })).toBeNull()
+  })
+
+  it("allows Visual Studio workloads only on Visual Studio", () => {
+    const workloads = ["Microsoft.VisualStudio.Workload.NetWeb"]
+    expect(checkCatalogApp({ wingetId: "Microsoft.VisualStudio.2022.Community", vsWorkloads: workloads })).toBeNull()
+    expect(checkCatalogApp({ wingetId: "Git.Git", vsWorkloads: workloads })).toMatch(/only for Visual Studio/)
+    expect(checkCatalogApp({ wingetId: "Git.Git", vsWorkloads: [] })).toBeNull()
+  })
+})
+
+describe("Visual Studio workloads", () => {
+  it("accepts workload and component IDs only", () => {
+    expect(isValidVsWorkload("Microsoft.VisualStudio.Workload.NetWeb")).toBe(true)
+    expect(isValidVsWorkload("Microsoft.VisualStudio.Component.Git")).toBe(true)
+    expect(isValidVsWorkload("Microsoft.VisualStudio.ComponentGroup.Web")).toBe(true)
+    expect(isValidVsWorkload("Microsoft.VisualStudio.Workload..NetWeb")).toBe(false)
+    expect(isValidVsWorkload("--quiet")).toBe(false)
+    expect(isValidVsWorkload("Microsoft.VisualStudio.Workload.NetWeb --remove x")).toBe(false)
+    expect(isValidVsWorkload("Microsoft.VisualStudio.Workload.NetWeb;calc")).toBe(false)
+  })
+
+  it("recognises Visual Studio packages", () => {
+    expect(isVisualStudioPackage("Microsoft.VisualStudio.2022.Community")).toBe(true)
+    expect(isVisualStudioPackage("Microsoft.VisualStudio.2022.Professional")).toBe(true)
+    expect(isVisualStudioPackage("Microsoft.VisualStudio.2022.BuildTools")).toBe(true)
+    expect(isVisualStudioPackage("Microsoft.VisualStudioCode")).toBe(false)
+    expect(isVisualStudioPackage("Git.Git")).toBe(false)
+    expect(isVisualStudioPackage(null)).toBe(false)
+  })
+
+  it("validates and de-duplicates workloads from the catalog form", () => {
+    const base = {
+      name: "Visual Studio 2022 Community",
+      access: "approval" as const,
+      enabled: true,
+      wingetId: "Microsoft.VisualStudio.2022.Community",
+      updateMethod: "winget" as const,
+      autoUpdate: true,
+      removeFromGroupAfterInstall: false,
+      installDeadlineHours: 24,
+    }
+    const ok = catalogAppFieldsSchema.safeParse({
+      ...base,
+      vsWorkloads: ["Microsoft.VisualStudio.Workload.NetWeb", " Microsoft.VisualStudio.Workload.NetWeb "],
+    })
+    expect(ok.success && ok.data.vsWorkloads).toEqual(["Microsoft.VisualStudio.Workload.NetWeb"])
+    expect(catalogAppFieldsSchema.safeParse({ ...base, vsWorkloads: ["--quiet"] }).success).toBe(false)
   })
 })
 

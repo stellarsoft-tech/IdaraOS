@@ -28,6 +28,7 @@ export interface CatalogApp {
   wingetId: string | null
   updateMethod: SoftwareUpdateMethod
   autoUpdate: boolean
+  vsWorkloads: string[]
   intuneAppId: string | null
   intuneAppName: string | null
   installGroupId: string | null

@@ -18,7 +18,7 @@ import {
   type SoftwareUpdateSettings,
 } from "@/lib/db/schema"
 import { createAuditLog } from "@/lib/audit"
-import { DEFAULT_CATALOG_APPS, MAX_INSTALL_ATTEMPTS } from "./software"
+import { DEFAULT_CATALOG_APPS, MAX_INSTALL_ATTEMPTS, isValidVsWorkload, isVisualStudioPackage } from "./software"
 import {
   addDeviceToGroup,
   getDeviceInstallState,
@@ -127,12 +127,23 @@ async function startAgentInstall(install: SoftwareInstall, attempts: number, now
     .where(and(eq(agentJobs.installId, install.id), inArray(agentJobs.status, ["pending", "sent"])))
     .limit(1)
   if (!open) {
+    const payload: Record<string, string> = { wingetId: install.wingetId, name: install.appName }
+    // Visual Studio: the workloads to install with it, as set in Approved Software when the job is queued
+    if (install.catalogAppId && isVisualStudioPackage(install.wingetId)) {
+      const [app] = await db
+        .select({ vsWorkloads: softwareCatalog.vsWorkloads })
+        .from(softwareCatalog)
+        .where(eq(softwareCatalog.id, install.catalogAppId))
+        .limit(1)
+      const workloads = (app?.vsWorkloads ?? []).filter(isValidVsWorkload)
+      if (workloads.length > 0) payload.workloads = workloads.join(",")
+    }
     await db.insert(agentJobs).values({
       orgId: install.orgId,
       deviceId: install.agentDeviceId,
       type: "install",
       installId: install.id,
-      payload: { wingetId: install.wingetId, name: install.appName },
+      payload,
     })
   }
 

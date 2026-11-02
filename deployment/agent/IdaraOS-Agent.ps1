@@ -29,7 +29,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.0.1"
+$AgentVersion = "1.0.2"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -41,6 +41,9 @@ $LogPath = Join-Path $LogDir "agent.log"
 
 # Same rule as the server (lib/security/software.ts WINGET_ID_PATTERN)
 $WingetIdPattern = '^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$'
+# Same rule as the server (lib/security/software.ts VS_WORKLOAD_PATTERN)
+$VsWorkloadPattern = '^Microsoft\.VisualStudio\.(Workload|Component|ComponentGroup)\.[A-Za-z0-9._-]{1,100}$'
+$VsPackagePattern = '^Microsoft\.VisualStudio\.20\d\d\.'
 $MaxLogChars = 60000
 
 # winget exit codes (APPINSTALLER_CLI_ERROR_*), as signed 32-bit values
@@ -386,6 +389,7 @@ function Invoke-Run($Run, [string]$Authorization) {
 
 function Invoke-InstallJob($Job, [string]$Authorization) {
     $id = [string]$Job.wingetId
+    $workloads = @($Job.workloads | Where-Object { $_ } | ForEach-Object { [string]$_ })
     Write-Log "Install job $($Job.id): $($Job.name) ($id)"
     $report = @{ exitCode = $null; message = $null; log = $null }
 
@@ -393,13 +397,25 @@ function Invoke-InstallJob($Job, [string]$Authorization) {
         $report.message = "This agent version doesn't support '$($Job.type)' jobs - update the IdaraOS Agent"
     } elseif (-not (Test-WingetId $id)) {
         $report.message = "Rejected: not a valid winget package ID"
+    } elseif ($workloads -and ($id -notmatch $VsPackagePattern)) {
+        $report.message = "Rejected: workloads are only for Visual Studio"
+    } elseif ($badWorkload = $workloads | Where-Object { ($_ -notmatch $VsWorkloadPattern) -or $_.Contains("..") } | Select-Object -First 1) {
+        $report.message = "Rejected: not a Visual Studio workload ID: $badWorkload"
     } else {
         try {
             $winget = Find-Winget
-            $install = Invoke-Winget $winget @(
+            $arguments = @(
                 "install", "--id", $id, "--exact", "--silent", "--scope", "machine", "--source", "winget",
                 "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"
             )
+            if ($workloads) {
+                # Added to the Visual Studio installer's own silent switches. --norestart: never restart the
+                # member's laptop in the middle of their work; winget reports when a restart is needed.
+                $custom = (@($workloads | ForEach-Object { "--add $_" }) + @("--includeRecommended", "--norestart")) -join " "
+                $arguments += @("--custom", $custom)
+                Write-Log "  Workloads: $($workloads -join ', ')"
+            }
+            $install = Invoke-Winget $winget $arguments
             $report.exitCode = $install.ExitCode
             $report.log = Limit-Text $install.Output
             Write-Log ("  winget install {0} exited 0x{1:X8}" -f $id, $install.ExitCode)

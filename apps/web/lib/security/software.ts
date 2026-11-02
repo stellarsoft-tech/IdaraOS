@@ -82,6 +82,34 @@ export function isValidWingetId(id: string): boolean {
   return WINGET_ID_PATTERN.test(id) && !id.includes("..")
 }
 
+/**
+ * Visual Studio workload and component IDs, e.g. "Microsoft.VisualStudio.Workload.NetWeb".
+ * The IdaraOS Agent passes them to the Visual Studio installer as `--add <id>`, so nothing else is allowed.
+ * Keep in sync with $VsWorkloadPattern in deployment/agent/IdaraOS-Agent.ps1.
+ */
+export const VS_WORKLOAD_PATTERN = /^Microsoft\.VisualStudio\.(Workload|Component|ComponentGroup)\.[A-Za-z0-9._-]{1,100}$/
+export const MAX_VS_WORKLOADS = 30
+
+export function isValidVsWorkload(id: string): boolean {
+  return VS_WORKLOAD_PATTERN.test(id) && !id.includes("..")
+}
+
+/** Visual Studio editions and Build Tools in winget, e.g. "Microsoft.VisualStudio.2022.Community" */
+export function isVisualStudioPackage(wingetId: string | null | undefined): boolean {
+  return !!wingetId && /^Microsoft\.VisualStudio\.20\d\d\./i.test(wingetId)
+}
+
+/** Common workloads, offered as one-click choices in Approved Software */
+export const COMMON_VS_WORKLOADS: Array<{ id: string; label: string }> = [
+  { id: "Microsoft.VisualStudio.Workload.NetWeb", label: "ASP.NET and web development" },
+  { id: "Microsoft.VisualStudio.Workload.ManagedDesktop", label: ".NET desktop development" },
+  { id: "Microsoft.VisualStudio.Workload.Azure", label: "Azure development" },
+  { id: "Microsoft.VisualStudio.Workload.Data", label: "Data storage and processing" },
+  { id: "Microsoft.VisualStudio.Workload.NativeDesktop", label: "Desktop development with C++" },
+  { id: "Microsoft.VisualStudio.Workload.NetCrossPlat", label: ".NET Multi-platform App UI (MAUI)" },
+  { id: "Microsoft.VisualStudio.Workload.Node", label: "Node.js development" },
+]
+
 export const SCHEDULE_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 export function isValidTimeZone(timeZone: string): boolean {
@@ -163,7 +191,7 @@ export const DEFAULT_CATALOG_APPS: DefaultCatalogApp[] = [
     publisher: "Microsoft",
     description: "IDE for .NET, C++ and web development",
     notes:
-      "Package with Install-WingetApp.ps1 and a .vsconfig listing your workloads. Raise the Intune install timeout to 120+ minutes. Adding workloads later needs admin, so publish workload add-ons as separate catalog apps. Use the edition you're licensed for.",
+      "IdaraOS Agent: choose the workloads below - they're installed with Visual Studio. Intune: package with Install-WingetApp.ps1 and a .vsconfig listing your workloads, and raise the install timeout to 120+ minutes. Adding workloads later needs admin. Use the edition you're licensed for (Community is free only for individuals and small teams).",
     access: "approval",
     wingetId: "Microsoft.VisualStudio.2022.Professional",
     updateMethod: "winget",

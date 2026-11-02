@@ -127,6 +127,13 @@
       "when": 1784400000000,
       "tag": "0018_idaraos_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784486400000,
+      "tag": "0019_vs_workloads",
+      "breakpoints": true
     }
   ]
 }

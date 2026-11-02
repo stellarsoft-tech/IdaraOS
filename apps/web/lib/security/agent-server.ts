@@ -268,6 +268,8 @@ export interface DispatchedJob {
   type: AgentJob["type"]
   wingetId?: string
   name?: string
+  // Visual Studio workloads to install with it (--add <id>)
+  workloads?: string[]
 }
 
 async function failJob(job: AgentJob, message: string, now: Date) {
@@ -312,7 +314,13 @@ export async function dispatchJobs(device: SoftwareUpdateDevice, now: Date = new
       .where(and(eq(agentJobs.id, job.id), eq(agentJobs.status, job.status), eq(agentJobs.attempts, job.attempts)))
       .returning()
     if (!sent) continue
-    dispatched.push({ id: sent.id, type: sent.type, wingetId: sent.payload.wingetId, name: sent.payload.name })
+    dispatched.push({
+      id: sent.id,
+      type: sent.type,
+      wingetId: sent.payload.wingetId,
+      name: sent.payload.name,
+      ...(sent.payload.workloads && { workloads: sent.payload.workloads.split(",") }),
+    })
   }
   return dispatched
 }

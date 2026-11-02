@@ -4,7 +4,7 @@
 
 import { z } from "zod"
 import { softwareAccessValues, softwareUpdateMethodValues } from "@/lib/db/schema/security-software"
-import { isValidWingetId } from "./software"
+import { MAX_VS_WORKLOADS, isValidVsWorkload, isValidWingetId, isVisualStudioPackage } from "./software"
 import { getRequiredGroupIds } from "./software-intune"
 
 const guid = z.string().uuid("Must be a valid ID")
@@ -26,6 +26,11 @@ export const catalogAppFieldsSchema = z.object({
     .or(z.literal("").transform(() => null)),
   updateMethod: z.enum(softwareUpdateMethodValues),
   autoUpdate: z.boolean(),
+  vsWorkloads: z
+    .array(z.string().trim().refine(isValidVsWorkload, "Workloads look like Microsoft.VisualStudio.Workload.NetWeb"))
+    .max(MAX_VS_WORKLOADS, `At most ${MAX_VS_WORKLOADS} workloads`)
+    .transform((ids) => [...new Set(ids)])
+    .optional(),
   intuneAppId: guid.optional().nullable(),
   intuneAppName: optionalText(200),
   installGroupId: guid.optional().nullable(),
@@ -45,6 +50,9 @@ export function checkCatalogApp(app: Partial<CatalogAppFields>): string | null {
   }
   if (app.installGroupId && !app.intuneAppId) {
     return "Choose the Intune app the install group belongs to"
+  }
+  if (app.vsWorkloads?.length && !isVisualStudioPackage(app.wingetId)) {
+    return "Workloads are only for Visual Studio (winget IDs like Microsoft.VisualStudio.2022.Community)"
   }
   return null
 }

@@ -12,7 +12,7 @@
  */
 
 import { pgTable, uuid, text, timestamp, index, integer, jsonb, boolean, uniqueIndex } from "drizzle-orm/pg-core"
-import { relations } from "drizzle-orm"
+import { relations, sql } from "drizzle-orm"
 import { organizations } from "./organizations"
 import { users } from "./users"
 import { assets } from "./assets"
@@ -112,6 +112,8 @@ export const softwareCatalog = pgTable(
     updateMethod: text("update_method", { enum: softwareUpdateMethodValues }).notNull().default("winget"),
     // Include in the IdaraOS Updater's package list
     autoUpdate: boolean("auto_update").notNull().default(true),
+    // Visual Studio only: workloads/components the IdaraOS Agent installs with it (--add <id>)
+    vsWorkloads: text("vs_workloads").array().notNull().default(sql`'{}'::text[]`),
 
     // Intune: the app and the device group it is Required-assigned to
     intuneAppId: text("intune_app_id"),

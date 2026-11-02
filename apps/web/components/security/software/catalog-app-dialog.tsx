@@ -20,7 +20,15 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIntuneApps, useSaveCatalogApp, type CatalogApp, type CatalogAppInput } from "@/lib/api/security-software"
 import { softwareAccessValues, softwareUpdateMethodValues } from "@/lib/db/schema/security-software"
-import { isValidWingetId, softwareAccessLabels, softwareUpdateMethodLabels } from "@/lib/security/software"
+import {
+  COMMON_VS_WORKLOADS,
+  MAX_VS_WORKLOADS,
+  isValidVsWorkload,
+  isValidWingetId,
+  isVisualStudioPackage,
+  softwareAccessLabels,
+  softwareUpdateMethodLabels,
+} from "@/lib/security/software"
 
 interface CatalogAppDialogProps {
   /** null = closed, "new" = add, otherwise the app to edit */
@@ -38,12 +46,17 @@ const EMPTY: CatalogAppInput = {
   wingetId: null,
   updateMethod: "winget",
   autoUpdate: true,
+  vsWorkloads: [],
   intuneAppId: null,
   intuneAppName: null,
   installGroupId: null,
   installGroupName: null,
   removeFromGroupAfterInstall: false,
   installDeadlineHours: 24,
+}
+
+function parseWorkloads(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).map((w) => w.trim()).filter(Boolean))]
 }
 
 function toInput(app: CatalogApp): CatalogAppInput {
@@ -54,6 +67,8 @@ function toInput(app: CatalogApp): CatalogAppInput {
 export function CatalogAppDialog({ app, onOpenChange }: CatalogAppDialogProps) {
   const save = useSaveCatalogApp()
   const [form, setForm] = useState<CatalogAppInput>(EMPTY)
+  // One workload ID per line (or comma-separated)
+  const [workloadsText, setWorkloadsText] = useState("")
   const [search, setSearch] = useState("")
   const [submittedSearch, setSubmittedSearch] = useState<string | null>(null)
   const intuneApps = useIntuneApps(submittedSearch ?? "", submittedSearch !== null)
@@ -61,6 +76,7 @@ export function CatalogAppDialog({ app, onOpenChange }: CatalogAppDialogProps) {
   useEffect(() => {
     if (app) {
       setForm(app === "new" ? EMPTY : toInput(app))
+      setWorkloadsText(app === "new" ? "" : (app.vsWorkloads ?? []).join("\n"))
       setSearch("")
       setSubmittedSearch(null)
     }
@@ -76,7 +92,21 @@ export function CatalogAppDialog({ app, onOpenChange }: CatalogAppDialogProps) {
 
   const wingetIdInvalid = !!form.wingetId && !isValidWingetId(form.wingetId)
   const needsWingetId = form.updateMethod === "winget" && form.autoUpdate && !form.wingetId
-  const canSubmit = form.name.trim().length > 0 && !wingetIdInvalid && !needsWingetId && form.installDeadlineHours >= 1
+  const isVisualStudio = isVisualStudioPackage(form.wingetId)
+  const workloads = parseWorkloads(workloadsText)
+  const invalidWorkloads = isVisualStudio ? workloads.filter((w) => !isValidVsWorkload(w)) : []
+  const canSubmit =
+    form.name.trim().length > 0 &&
+    !wingetIdInvalid &&
+    !needsWingetId &&
+    invalidWorkloads.length === 0 &&
+    workloads.length <= MAX_VS_WORKLOADS &&
+    form.installDeadlineHours >= 1
+
+  const toggleWorkload = (id: string) => {
+    const next = workloads.includes(id) ? workloads.filter((w) => w !== id) : [...workloads, id]
+    setWorkloadsText(next.join("\n"))
+  }
 
   const chooseIntuneApp = (id: string) => {
     const picked = intuneApps.data?.data.find((a) => a.id === id)
@@ -106,6 +136,8 @@ export function CatalogAppDialog({ app, onOpenChange }: CatalogAppDialogProps) {
         ...form,
         name: form.name.trim(),
         wingetId: form.wingetId?.trim() || null,
+        // Workloads only apply to Visual Studio; clear them if the winget ID changed to something else
+        vsWorkloads: isVisualStudio ? workloads : [],
       })
       toast.success(app === "new" ? `${result.data.name} added` : `${result.data.name} saved`)
       if (result.warning) toast.warning(result.warning, { duration: 10_000 })
@@ -221,6 +253,49 @@ export function CatalogAppDialog({ app, onOpenChange }: CatalogAppDialogProps) {
               </div>
             )}
           </section>
+
+          {isVisualStudio && (
+            <section className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold">Visual Studio workloads</h3>
+                <p className="text-xs text-muted-foreground">
+                  The IdaraOS Agent installs these with Visual Studio, plus their recommended components. Without
+                  them users only get the core editor, and adding workloads later needs admin rights.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {COMMON_VS_WORKLOADS.map((w) => (
+                  <Button
+                    key={w.id}
+                    type="button"
+                    size="sm"
+                    variant={workloads.includes(w.id) ? "default" : "outline"}
+                    onClick={() => toggleWorkload(w.id)}
+                  >
+                    {w.label}
+                  </Button>
+                ))}
+              </div>
+              <Textarea
+                id="app-workloads"
+                value={workloadsText}
+                onChange={(e) => setWorkloadsText(e.target.value)}
+                rows={3}
+                className="font-mono text-xs"
+                placeholder="Microsoft.VisualStudio.Workload.NetWeb"
+              />
+              <p className="text-xs text-muted-foreground">
+                One workload or component ID per line. Find IDs in Microsoft&apos;s &quot;Visual Studio workload and
+                component IDs&quot; list.
+              </p>
+              {invalidWorkloads.length > 0 && (
+                <p className="text-xs text-red-600">Not a workload or component ID: {invalidWorkloads.join(", ")}</p>
+              )}
+              {workloads.length > MAX_VS_WORKLOADS && (
+                <p className="text-xs text-red-600">At most {MAX_VS_WORKLOADS} workloads.</p>
+              )}
+            </section>
+          )}
 
           <section className="space-y-4">
             <h3 className="text-sm font-semibold">Intune install</h3>
