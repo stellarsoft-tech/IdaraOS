@@ -25,7 +25,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Version = "1.0.0"
+$Version = "1.0.1"
 $TaskName = "IdaraOS Agent"
 $TaskPath = "\IdaraOS\"
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
@@ -48,6 +48,43 @@ foreach ($sid in @("S-1-5-18", "S-1-5-32-544")) {
     $acl.AddAccessRule($rule)
 }
 Set-Acl -Path $BaseDir -AclObject $acl
+
+# winget running as SYSTEM needs the Visual C++ Redistributable (x64). Without it every winget call
+# fails with 0xC0000135. Install it from Microsoft if it's missing.
+function Test-VCRuntime {
+    foreach ($key in @(
+        "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+    )) {
+        $runtime = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue
+        if ($runtime -and $runtime.Installed -eq 1) { return $true }
+    }
+    return $false
+}
+
+if (Test-VCRuntime) {
+    Write-Output "Visual C++ runtime (x64) is installed"
+} else {
+    Write-Output "Installing the Visual C++ runtime (x64) that winget needs..."
+    $redist = Join-Path $env:TEMP "vc_redist.x64.exe"
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile $redist -UseBasicParsing
+        $signature = Get-AuthenticodeSignature -FilePath $redist
+        if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "O=Microsoft Corporation") {
+            throw "the download isn't signed by Microsoft"
+        }
+        $process = Start-Process -FilePath $redist -ArgumentList "/install", "/quiet", "/norestart" -Wait -PassThru
+        # 1638: a newer version is already installed; 3010: installed, restart pending
+        if ($process.ExitCode -notin @(0, 1638, 3010)) { throw "the installer exited with $($process.ExitCode)" }
+        Write-Output "Visual C++ runtime (x64) installed"
+    } catch {
+        Write-Warning "Couldn't install the Visual C++ runtime: $($_.Exception.Message). winget won't work until it's installed - get it from https://aka.ms/vs/17/release/vc_redist.x64.exe"
+    } finally {
+        Remove-Item -Path $redist -Force -ErrorAction SilentlyContinue
+    }
+}
 
 Copy-Item -Path (Join-Path $PSScriptRoot "IdaraOS-Agent.ps1") -Destination $ScriptPath -Force
 @{ serverUrl = $ServerUrl.TrimEnd("/") } | ConvertTo-Json | Set-Content -Path (Join-Path $BaseDir "config.json") -Encoding UTF8

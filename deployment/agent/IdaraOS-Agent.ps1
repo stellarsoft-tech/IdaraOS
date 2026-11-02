@@ -29,7 +29,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.0.0"
+$AgentVersion = "1.0.1"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -51,6 +51,10 @@ $ExitFileInUse           = -1978334973  # 0x8A150103
 $ExitRebootToFinish      = -1978334967  # 0x8A150109
 $ExitRebootForInstall    = -1978334966  # 0x8A15010A
 $ExitRebootInitiated     = -1978334965  # 0x8A15010B
+
+# winget.exe itself couldn't start: STATUS_DLL_NOT_FOUND. As SYSTEM it can't use the Store copy of the
+# Visual C++ runtime, so the Visual C++ Redistributable (x64) has to be installed. The installer does that.
+$ExitDllNotFound         = -1073741515  # 0xC0000135
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -237,6 +241,9 @@ function Invoke-Winget([string]$Winget, [string[]]$Arguments) {
     $output = & $Winget @Arguments 2>&1 | ForEach-Object { "$_" }
     # Drop spinner / progress-bar noise (block characters U+2580-U+259F)
     $clean = $output | Where-Object { $_ -and ($_ -notmatch '^\s*[-\\|/]\s*$') -and ($_ -notmatch '[\u2580-\u259F]') }
+    if ($LASTEXITCODE -eq $ExitDllNotFound) {
+        throw "winget couldn't start because the Visual C++ runtime is missing. Re-run Install-IdaraOSAgent.ps1, or install the Microsoft Visual C++ Redistributable (x64)"
+    }
     return @{ ExitCode = $LASTEXITCODE; Output = ($clean -join "`n") }
 }
 

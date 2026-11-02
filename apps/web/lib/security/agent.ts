@@ -82,6 +82,8 @@ const EXIT_REBOOT_TO_FINISH = -1978334967 // 0x8A150109
 const EXIT_REBOOT_INITIATED = -1978334965 // 0x8A15010B
 const EXIT_NO_PACKAGE_FOUND = -1978335212 // 0x8A150014
 const EXIT_PACKAGE_IN_USE = -1978334975 // 0x8A150101
+// winget.exe couldn't start (STATUS_DLL_NOT_FOUND): the Visual C++ runtime is missing for SYSTEM
+const EXIT_DLL_NOT_FOUND = -1073741515 // 0xC0000135
 
 export interface InstallOutcome {
   succeeded: boolean
@@ -105,6 +107,12 @@ export function interpretInstallExitCode(exitCode: number | null | undefined): I
       return { succeeded: false, rebootRequired: false, message: "winget couldn't find this package ID" }
     case EXIT_PACKAGE_IN_USE:
       return { succeeded: false, rebootRequired: false, message: "The app is in use - close it and retry" }
+    case EXIT_DLL_NOT_FOUND:
+      return {
+        succeeded: false,
+        rebootRequired: false,
+        message: "winget couldn't start: the Visual C++ runtime is missing on the device. Re-run the agent installer.",
+      }
     case null:
     case undefined:
       return { succeeded: false, rebootRequired: false, message: "The agent didn't report an exit code" }

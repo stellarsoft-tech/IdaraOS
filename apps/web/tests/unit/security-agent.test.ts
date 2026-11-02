@@ -66,6 +66,8 @@ describe("jobs", () => {
     // 0x8A150014 no package found
     expect(interpretInstallExitCode(-1978335212)).toMatchObject({ succeeded: false })
     expect(interpretInstallExitCode(null)).toMatchObject({ succeeded: false })
+    // 0xC0000135 winget couldn't start (Visual C++ runtime missing)
+    expect(interpretInstallExitCode(-1073741515).message).toMatch(/Visual C\+\+ runtime/)
   })
 
   it("formats unknown exit codes as hex", () => {
