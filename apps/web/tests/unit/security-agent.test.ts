@@ -70,14 +70,28 @@ describe("jobs", () => {
     expect(interpretInstallExitCode(-1073741515).message).toMatch(/Visual C\+\+ runtime/)
   })
 
+  it("fails at once when retrying can't help", () => {
+    // 0x8A150010 no machine-wide installer (per-user-only package)
+    expect(interpretInstallExitCode(-1978335216)).toMatchObject({ succeeded: false, retryable: false })
+    expect(interpretInstallExitCode(-1978335216).message).toMatch(/no machine-wide installer/)
+    // 0x8A150014 no package found
+    expect(interpretInstallExitCode(-1978335212)).toMatchObject({ succeeded: false, retryable: false })
+    // Temporary problems are retried
+    expect(interpretInstallExitCode(-1978334975)).toMatchObject({ retryable: true })
+    expect(interpretInstallExitCode(-1073741515)).toMatchObject({ retryable: true })
+    expect(interpretInstallExitCode(1603)).toMatchObject({ retryable: true })
+    expect(installJobResult(-1978335216, null)).toMatchObject({ succeeded: false, retryable: false })
+  })
+
   it("formats unknown exit codes as hex", () => {
-    expect(interpretInstallExitCode(-1978335216).message).toBe("winget exited with 0x8A150010")
+    expect(interpretInstallExitCode(-1978335224).message).toBe("winget exited with 0x8A150008")
     expect(interpretInstallExitCode(1603).message).toBe("winget exited with 0x00000643")
   })
 
   it("prefers the agent's own message", () => {
     expect(installJobResult(null, "winget (App Installer) isn't installed")).toEqual({
       succeeded: false,
+      retryable: true,
       exitCode: null,
       rebootRequired: false,
       message: "winget (App Installer) isn't installed",

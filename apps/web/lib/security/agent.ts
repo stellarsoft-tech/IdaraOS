@@ -81,6 +81,7 @@ const EXIT_ALREADY_INSTALLED = -1978334963 // 0x8A15010D
 const EXIT_REBOOT_TO_FINISH = -1978334967 // 0x8A150109
 const EXIT_REBOOT_INITIATED = -1978334965 // 0x8A15010B
 const EXIT_NO_PACKAGE_FOUND = -1978335212 // 0x8A150014
+const EXIT_NO_APPLICABLE_INSTALLER = -1978335216 // 0x8A150010
 const EXIT_PACKAGE_IN_USE = -1978334975 // 0x8A150101
 // winget.exe couldn't start (STATUS_DLL_NOT_FOUND): the Visual C++ runtime is missing for SYSTEM
 const EXIT_DLL_NOT_FOUND = -1073741515 // 0xC0000135
@@ -88,6 +89,8 @@ const EXIT_DLL_NOT_FOUND = -1073741515 // 0xC0000135
 export interface InstallOutcome {
   succeeded: boolean
   rebootRequired: boolean
+  /** false when trying again can't help (wrong package ID, no machine-wide installer) */
+  retryable: boolean
   message: string
 }
 
@@ -97,29 +100,45 @@ export interface InstallOutcome {
 export function interpretInstallExitCode(exitCode: number | null | undefined): InstallOutcome {
   switch (exitCode) {
     case 0:
-      return { succeeded: true, rebootRequired: false, message: "Installed" }
+      return { succeeded: true, rebootRequired: false, retryable: false, message: "Installed" }
     case EXIT_ALREADY_INSTALLED:
-      return { succeeded: true, rebootRequired: false, message: "Already installed" }
+      return { succeeded: true, rebootRequired: false, retryable: false, message: "Already installed" }
     case EXIT_REBOOT_TO_FINISH:
     case EXIT_REBOOT_INITIATED:
-      return { succeeded: true, rebootRequired: true, message: "Installed - restart needed to finish" }
+      return { succeeded: true, rebootRequired: true, retryable: false, message: "Installed - restart needed to finish" }
     case EXIT_NO_PACKAGE_FOUND:
-      return { succeeded: false, rebootRequired: false, message: "winget couldn't find this package ID" }
+      return {
+        succeeded: false,
+        rebootRequired: false,
+        retryable: false,
+        message: "winget couldn't find this package ID. Check the winget ID in Approved Software, then retry.",
+      }
+    case EXIT_NO_APPLICABLE_INSTALLER:
+      // The agent installs with --scope machine; per-user-only packages have no matching installer
+      return {
+        succeeded: false,
+        rebootRequired: false,
+        retryable: false,
+        message:
+          "This package has no machine-wide installer, so the IdaraOS Agent can't install it. Install it by hand, or use a different winget ID.",
+      }
     case EXIT_PACKAGE_IN_USE:
-      return { succeeded: false, rebootRequired: false, message: "The app is in use - close it and retry" }
+      return { succeeded: false, rebootRequired: false, retryable: true, message: "The app is in use - close it and retry" }
     case EXIT_DLL_NOT_FOUND:
       return {
         succeeded: false,
         rebootRequired: false,
+        retryable: true,
         message: "winget couldn't start: the Visual C++ runtime is missing on the device. Re-run the agent installer.",
       }
     case null:
     case undefined:
-      return { succeeded: false, rebootRequired: false, message: "The agent didn't report an exit code" }
+      return { succeeded: false, rebootRequired: false, retryable: true, message: "The agent didn't report an exit code" }
     default:
       return {
         succeeded: false,
         rebootRequired: false,
+        retryable: true,
         message: `winget exited with 0x${(exitCode >>> 0).toString(16).toUpperCase().padStart(8, "0")}`,
       }
   }
@@ -128,10 +147,14 @@ export function interpretInstallExitCode(exitCode: number | null | undefined): I
 /**
  * The job result to store for an install the agent reported
  */
-export function installJobResult(exitCode: number | null | undefined, agentMessage?: string | null): AgentJobResult & { succeeded: boolean } {
+export function installJobResult(
+  exitCode: number | null | undefined,
+  agentMessage?: string | null
+): AgentJobResult & { succeeded: boolean; retryable: boolean } {
   const outcome = interpretInstallExitCode(exitCode)
   return {
     succeeded: outcome.succeeded,
+    retryable: outcome.retryable,
     exitCode: exitCode ?? null,
     rebootRequired: outcome.rebootRequired,
     message: agentMessage?.trim() || outcome.message,

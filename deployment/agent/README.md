@@ -57,6 +57,8 @@ Run `Uninstall-IdaraOSAgent.ps1` as admin, then **Revoke** the device in **Softw
 - winget (App Installer) must be installed for the system. It comes with Windows 11; on Windows 10, update **App Installer** from the Microsoft Store first.
 - winget running as SYSTEM also needs the **Visual C++ Redistributable (x64)**. The installer downloads it from Microsoft and installs it if it's missing. Without it, every package fails with `0xC0000135` ("winget couldn't start because the Visual C++ runtime is missing").
 - To update the agent on a laptop, run the installer again. A linked laptop stays linked.
-- Installs use machine scope. An app that only offers a per-user installer fails with a winget error on the request. Choose a different package ID or install it by hand.
+- Installs use machine scope. An app whose winget package only offers a per-user installer (for example `CoreyButler.NVMforWindows`) can't be installed by the agent. The request fails straight away with "This package has no machine-wide installer". Choose a different package ID (for Node.js, `OpenJS.NodeJS.LTS`) or install it by hand. Check a package with `winget show --id <id>` and look at the installer's **Scope**.
+- A wrong package ID also fails the request straight away. Other failures (app in use, download errors) are retried at later check-ins until the request's deadline.
+- Updates can't see per-user installs either, so a per-user app always shows as "not installed" in update runs.
 - If the Intune **IdaraOS Updater** is also installed, remove it so updates don't run twice.
 - The agent and `deployment/intune/idaraos-updater/IdaraOS-Updater.ps1` share the update-run code. A fix to one usually belongs in the other too.

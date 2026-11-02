@@ -38,7 +38,7 @@ import {
 import { truncateLog } from "./software"
 import { generateSecret, hashSecret } from "./software-updates-server"
 import { getElevationSettings } from "./elevation-server"
-import { markAgentInstallFailed, markInstalled } from "./software-server"
+import { failAgentInstall, markAgentInstallFailed, markInstalled } from "./software-server"
 
 const AGENT_ACTOR = { id: null, email: "system", name: "IdaraOS Agent", ip: null, userAgent: null }
 
@@ -365,6 +365,8 @@ export async function completeJob(
     if (install && ["pending", "assigned"].includes(install.status)) {
       if (result.succeeded) {
         await markInstalled(install, result.rebootRequired ? "IdaraOS Agent - restart needed" : "IdaraOS Agent", now)
+      } else if (!result.retryable) {
+        await failAgentInstall(install, result.message ?? "Install failed", now)
       } else {
         await markAgentInstallFailed(install, result.message ?? "Install failed", now)
       }

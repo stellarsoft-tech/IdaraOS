@@ -237,6 +237,30 @@ export async function markAgentInstallFailed(install: SoftwareInstall, message: 
 }
 
 /**
+ * The agent reported a failure that another attempt can't fix (wrong package ID, no machine-wide
+ * installer): fail the install and end the grant now instead of retrying until the deadline.
+ * IT can still Retry after fixing the app in Approved Software.
+ */
+export async function failAgentInstall(install: SoftwareInstall, message: string, now: Date) {
+  const [failed] = await db
+    .update(softwareInstalls)
+    .set({ status: "failed", error: message, lastCheckedAt: now, updatedAt: now })
+    .where(and(eq(softwareInstalls.id, install.id), inArray(softwareInstalls.status, ["pending", "assigned"])))
+    .returning()
+  if (!failed) return
+
+  await db
+    .update(agentJobs)
+    .set({ status: "cancelled", finishedAt: now, updatedAt: now })
+    .where(and(eq(agentJobs.installId, install.id), eq(agentJobs.status, "pending")))
+  await db
+    .update(elevationGrants)
+    .set({ status: "expired", endedAt: now, endReason: "install_failed", updatedAt: now })
+    .where(and(eq(elevationGrants.id, install.grantId), eq(elevationGrants.status, "active")))
+  await logSystem(install.orgId, install.id, "install_failed", `Install of ${install.appName} failed on the device: ${message}`)
+}
+
+/**
  * The updater reports installed winget packages in every run - use that as a second signal
  */
 async function updaterSawPackage(install: SoftwareInstall): Promise<boolean> {
