@@ -32,7 +32,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.1.0"
+$AgentVersion = "1.2.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -474,6 +474,26 @@ function Get-InstalledSoftware {
     return @{ exitCode = $result.ExitCode; message = $message; log = $result.Output }
 }
 
+function Update-AllApps([bool]$IncludeUnknown) {
+    $winget = Find-Winget
+    # Runs as SYSTEM, so no admin prompt. --silent / --disable-interactivity keep it unattended.
+    $arguments = @(
+        "upgrade", "--all", "--silent", "--source", "winget",
+        "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"
+    )
+    if ($IncludeUnknown) { $arguments += "--include-unknown" }
+    $result = Invoke-Winget $winget $arguments
+    switch ($result.ExitCode) {
+        0 { return @{ exitCode = 0; message = "Updated all apps that had updates"; log = $result.Output } }
+        { $_ -eq $ExitNoPackageFound } { return @{ exitCode = 0; message = "Everything is already up to date"; log = $result.Output } }
+        { $_ -eq $ExitUpdateNotApplicable } { return @{ exitCode = 0; message = "Everything is already up to date"; log = $result.Output } }
+        { ($_ -eq $ExitRebootToFinish) -or ($_ -eq $ExitRebootInitiated) -or ($_ -eq $ExitRebootForInstall) } {
+            return @{ exitCode = 0; message = "Updated apps - a restart is needed to finish"; log = $result.Output }
+        }
+        default { return @{ exitCode = $result.ExitCode; message = ("winget upgrade --all exited 0x{0:X8}" -f $result.ExitCode); log = $result.Output } }
+    }
+}
+
 function Get-LocalAdmins {
     try {
         $names = @(Get-LocalGroupMember -Group "Administrators" -ErrorAction Stop | ForEach-Object { [string]$_.Name })
@@ -525,6 +545,8 @@ function Invoke-ActionJob($Job, [string]$Authorization) {
         switch ($key) {
             "collect-diagnostics"     { $result = Get-Diagnostics }
             "list-installed-software" { $result = Get-InstalledSoftware }
+            "upgrade-all"             { $result = Update-AllApps $false }
+            "upgrade-all-unknown"     { $result = Update-AllApps $true }
             "check-local-admins"      { $result = Get-LocalAdmins }
             "restart-service"         { $result = Restart-AllowedService $param }
             "clear-update-cache"      { $result = Clear-UpdateCache }

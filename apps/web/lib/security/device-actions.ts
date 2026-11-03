@@ -62,6 +62,20 @@ export const DEVICE_ACTIONS: DeviceActionDef[] = [
     changesDevice: false,
   },
   {
+    key: "upgrade-all",
+    label: "Update all apps",
+    description:
+      "Runs winget upgrade on every app that has an update. The agent runs as SYSTEM, so it needs no admin rights and nobody is prompted.",
+    changesDevice: true,
+  },
+  {
+    key: "upgrade-all-unknown",
+    label: "Update all apps (include unknown versions)",
+    description:
+      "Like Update all apps, but also tries apps whose installed version winget can't read (--include-unknown). Broader, and occasionally updates more than you expect.",
+    changesDevice: true,
+  },
+  {
     key: "check-local-admins",
     label: "Check admin accounts",
     description:

@@ -25,7 +25,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Version = "1.1.0"
+$Version = "1.2.0"
 $TaskName = "IdaraOS Agent"
 $TaskPath = "\IdaraOS\"
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"

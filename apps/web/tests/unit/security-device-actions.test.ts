@@ -14,6 +14,8 @@ describe("device action allowlist", () => {
   it("only accepts known action keys", () => {
     expect(isValidDeviceAction("restart-service")).toBe(true)
     expect(isValidDeviceAction("collect-diagnostics")).toBe(true)
+    expect(isValidDeviceAction("upgrade-all")).toBe(true)
+    expect(isValidDeviceAction("upgrade-all-unknown")).toBe(true)
     expect(isValidDeviceAction("rm -rf /")).toBe(false)
     expect(isValidDeviceAction("")).toBe(false)
     expect(isValidDeviceAction("toString")).toBe(false)
