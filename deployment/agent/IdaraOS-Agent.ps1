@@ -32,7 +32,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.2.0"
+$AgentVersion = "1.3.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -494,6 +494,129 @@ function Update-AllApps([bool]$IncludeUnknown) {
     }
 }
 
+# NVM for Windows (Corey Butler). The agent runs as SYSTEM, so it can only see nvm if it's
+# installed machine-wide - the installer sets NVM_HOME / NVM_SYMLINK as machine environment
+# variables and puts nvm on the machine PATH. A per-user install isn't visible to SYSTEM.
+function Find-Nvm {
+    $candidates = @()
+    $machineHome = [Environment]::GetEnvironmentVariable("NVM_HOME", "Machine")
+    if ($machineHome) { $candidates += (Join-Path $machineHome "nvm.exe") }
+    $cmd = Get-Command nvm.exe -ErrorAction SilentlyContinue
+    if ($cmd) { $candidates += $cmd.Source }
+    $candidates += @(
+        (Join-Path $env:ProgramData "nvm\nvm.exe"),
+        (Join-Path ${env:ProgramFiles} "nvm\nvm.exe"),
+        "C:\nvm\nvm.exe"
+    )
+    foreach ($exe in $candidates) {
+        if ($exe -and (Test-Path $exe)) { return $exe }
+    }
+    return $null
+}
+
+function Invoke-Nvm([string]$Nvm, [string[]]$Arguments) {
+    $ErrorActionPreference = "Continue"
+    # nvm reads NVM_HOME / NVM_SYMLINK. SYSTEM won't have a user's copies, so make sure the
+    # process has the machine values (or fall back to the folder nvm.exe lives in).
+    if (-not $env:NVM_HOME) {
+        $env:NVM_HOME = [Environment]::GetEnvironmentVariable("NVM_HOME", "Machine")
+        if (-not $env:NVM_HOME) { $env:NVM_HOME = Split-Path $Nvm -Parent }
+    }
+    if (-not $env:NVM_SYMLINK) {
+        $env:NVM_SYMLINK = [Environment]::GetEnvironmentVariable("NVM_SYMLINK", "Machine")
+    }
+    $output = & $Nvm @Arguments 2>&1 | ForEach-Object { "$_" }
+    return @{ ExitCode = $LASTEXITCODE; Output = ($output -join "`n") }
+}
+
+# Installed Node versions from `nvm list` (lines like "  * 22.2.1 (Currently using 64-bit executable)")
+function Get-NvmInstalled([string]$Nvm) {
+    $result = Invoke-Nvm $Nvm @("list")
+    $versions = @()
+    $current = $null
+    foreach ($line in ($result.Output -split "`n")) {
+        $m = [regex]::Match($line, '(\*)?\s*(\d+\.\d+\.\d+)')
+        if ($m.Success) {
+            $v = $m.Groups[2].Value
+            $versions += $v
+            if ($line.Trim().StartsWith("*")) { $current = $v }
+        }
+    }
+    return @{ Versions = @($versions | Select-Object -Unique); Current = $current; Raw = $result.Output }
+}
+
+function Get-NodeVersions {
+    $nvm = Find-Nvm
+    if (-not $nvm) {
+        return @{ exitCode = 1; message = "NVM for Windows isn't installed machine-wide on this device, so the agent (SYSTEM) can't see it"; log = $null }
+    }
+    $result = Invoke-Nvm $nvm @("list")
+    return @{ exitCode = 0; message = "Listed Node.js versions (nvm)"; log = $result.Output }
+}
+
+function Update-NodeVersions {
+    $nvm = Find-Nvm
+    if (-not $nvm) {
+        return @{ exitCode = 1; message = "NVM for Windows isn't installed machine-wide on this device, so the agent (SYSTEM) can't manage Node versions"; log = $null }
+    }
+    $sb = New-Object System.Text.StringBuilder
+    $before = Get-NvmInstalled $nvm
+    [void]$sb.AppendLine("nvm list (before):")
+    [void]$sb.AppendLine($before.Raw)
+    if (@($before.Versions).Count -eq 0) {
+        return @{ exitCode = 0; message = "No Node.js versions are installed under nvm"; log = $sb.ToString() }
+    }
+
+    # The full release list, so we can find the newest patch in each installed major line
+    try {
+        $index = Invoke-RestMethod -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 60
+    } catch {
+        [void]$sb.AppendLine("Couldn't reach nodejs.org: $($_.Exception.Message)")
+        return @{ exitCode = 1; message = "Couldn't check for Node.js updates (nodejs.org unreachable)"; log = $sb.ToString() }
+    }
+
+    $updated = @()
+    foreach ($major in (@($before.Versions | ForEach-Object { ($_ -split '\.')[0] }) | Select-Object -Unique)) {
+        $installedInMajor = @($before.Versions | Where-Object { ($_ -split '\.')[0] -eq $major }) |
+            Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+        $latest = @($index | Where-Object { $_.version -match "^v$major\." }) |
+            Sort-Object { [version]($_.version.TrimStart('v')) } -Descending | Select-Object -First 1
+        if (-not $latest) {
+            [void]$sb.AppendLine("Node $major.x: no releases found on nodejs.org")
+            continue
+        }
+        $latestV = $latest.version.TrimStart('v')
+        if ([version]$latestV -gt [version]$installedInMajor) {
+            [void]$sb.AppendLine("Node $major.x: $installedInMajor -> $latestV (installing)")
+            $install = Invoke-Nvm $nvm @("install", $latestV)
+            [void]$sb.AppendLine($install.Output)
+            $updated += "$installedInMajor -> $latestV"
+        } else {
+            [void]$sb.AppendLine("Node $major.x: $installedInMajor is already the newest")
+        }
+    }
+
+    # Keep whatever line was active active, on its newest installed version
+    if ($before.Current) {
+        $after = Get-NvmInstalled $nvm
+        $curMajor = ($before.Current -split '\.')[0]
+        $use = @($after.Versions | Where-Object { ($_ -split '\.')[0] -eq $curMajor }) |
+            Sort-Object { [version]$_ } -Descending | Select-Object -First 1
+        if ($use) {
+            $useResult = Invoke-Nvm $nvm @("use", $use)
+            [void]$sb.AppendLine($useResult.Output)
+        }
+    }
+
+    $final = Get-NvmInstalled $nvm
+    [void]$sb.AppendLine("")
+    [void]$sb.AppendLine("nvm list (after):")
+    [void]$sb.AppendLine($final.Raw)
+
+    $message = if (@($updated).Count -gt 0) { "Updated Node.js: " + (@($updated) -join ", ") } else { "All installed Node.js versions are already up to date" }
+    return @{ exitCode = 0; message = $message; log = $sb.ToString() }
+}
+
 function Get-LocalAdmins {
     try {
         $names = @(Get-LocalGroupMember -Group "Administrators" -ErrorAction Stop | ForEach-Object { [string]$_.Name })
@@ -547,6 +670,8 @@ function Invoke-ActionJob($Job, [string]$Authorization) {
             "list-installed-software" { $result = Get-InstalledSoftware }
             "upgrade-all"             { $result = Update-AllApps $false }
             "upgrade-all-unknown"     { $result = Update-AllApps $true }
+            "list-node-versions"      { $result = Get-NodeVersions }
+            "update-node"             { $result = Update-NodeVersions }
             "check-local-admins"      { $result = Get-LocalAdmins }
             "restart-service"         { $result = Restart-AllowedService $param }
             "clear-update-cache"      { $result = Clear-UpdateCache }

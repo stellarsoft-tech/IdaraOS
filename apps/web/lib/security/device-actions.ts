@@ -76,6 +76,20 @@ export const DEVICE_ACTIONS: DeviceActionDef[] = [
     changesDevice: true,
   },
   {
+    key: "list-node-versions",
+    label: "List Node.js versions (nvm)",
+    description:
+      "Runs nvm list to show the Node.js versions installed under NVM for Windows. Read-only. Needs NVM for Windows installed machine-wide (the agent runs as SYSTEM).",
+    changesDevice: false,
+  },
+  {
+    key: "update-node",
+    label: "Update Node.js (nvm)",
+    description:
+      "For each installed Node.js line, installs the newest release in that major version if nvm doesn't already have it (e.g. 22.2.1 -> newest 22.x), keeps the active line current, and records the nvm list in the output. Needs NVM for Windows installed machine-wide.",
+    changesDevice: true,
+  },
+  {
     key: "check-local-admins",
     label: "Check admin accounts",
     description:

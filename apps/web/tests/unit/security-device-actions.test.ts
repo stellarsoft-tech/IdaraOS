@@ -16,6 +16,8 @@ describe("device action allowlist", () => {
     expect(isValidDeviceAction("collect-diagnostics")).toBe(true)
     expect(isValidDeviceAction("upgrade-all")).toBe(true)
     expect(isValidDeviceAction("upgrade-all-unknown")).toBe(true)
+    expect(isValidDeviceAction("list-node-versions")).toBe(true)
+    expect(isValidDeviceAction("update-node")).toBe(true)
     expect(isValidDeviceAction("rm -rf /")).toBe(false)
     expect(isValidDeviceAction("")).toBe(false)
     expect(isValidDeviceAction("toString")).toBe(false)
