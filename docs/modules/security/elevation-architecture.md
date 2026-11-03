@@ -460,6 +460,12 @@ Wrong codes are rate-limited per user, 10 per 15 minutes per app instance.
 - Cancelling the grant cancels open jobs. The deadline fails the install with the last error.
 - A later update run that sees the package installed also marks the install done.
 
+**Device actions (agent 1.1.0+):**
+- An admin runs one of a fixed, reviewed set of actions on a device from **Software Updates → Devices → Actions**: collect diagnostics, list installed software, check the local Administrators group, restart an allowlisted service, clear the Windows Update cache (`lib/security/device-actions.ts`).
+- Reuses `security_agent_jobs` with `type = action` (no migration — `type` is plain text). Payload `{ actionKey, name, param? }`; no command is ever stored or sent.
+- `POST /api/security/software-updates/devices/[id]/action` (needs `security.software-updates` edit, agent devices only) queues the job; `GET` lists recent action jobs for the history panel. Dispatch, resend and attempt limits are shared with install jobs. `completeJob` interprets an action's result as success on exit 0, failure otherwise — no winget retry semantics.
+- **The safety boundary:** the server sends only an action key from the allowlist; the agent runs only the keys hardcoded in `IdaraOS-Agent.ps1`, and `restart-service` maps an allowlisted key to a service name on the device. There is no free-text/remote-shell path. Adding an action means shipping a new agent version.
+
 **Not available for agent devices:**
 - Credentials grants: no LAPS without Entra. Requests, approvals and reveals are refused, and the UI hides them.
 - Self-service (Company Portal) apps. Members see "Ask IT to install it".

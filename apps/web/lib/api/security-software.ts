@@ -4,6 +4,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import type { AgentJobStatus } from "@/lib/db/schema/security-agent"
 import type {
   SoftwareAccess,
   SoftwareUpdateDeviceStatus,
@@ -261,6 +262,47 @@ export function useRevokeUpdaterDevice() {
     (id) => [`/api/security/software-updates/devices/${id}/revoke`, { method: "POST" }],
     "Failed to revoke the device"
   )
+}
+
+export interface DeviceActionJobEntry {
+  id: string
+  actionKey: string
+  actionName: string
+  param: string | null
+  status: AgentJobStatus
+  message: string | null
+  log: string | null
+  createdAt: string
+  finishedAt: string | null
+}
+
+export function useDeviceActions(deviceId: string | null) {
+  return useQuery({
+    queryKey: ["security-device-actions", deviceId],
+    queryFn: () =>
+      request<{ data: DeviceActionJobEntry[] }>(
+        `/api/security/software-updates/devices/${deviceId}/action`,
+        undefined,
+        "Failed to load device actions"
+      ),
+    enabled: !!deviceId,
+    refetchInterval: 15_000,
+  })
+}
+
+export function useQueueDeviceAction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, action, param }: { id: string; action: string; param?: string | null }) =>
+      request(
+        `/api/security/software-updates/devices/${id}/action`,
+        { method: "POST", body: JSON.stringify({ action, param: param ?? null }) },
+        "Failed to queue the action"
+      ),
+    onSettled: (_data, _err, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["security-device-actions", vars.id] })
+    },
+  })
 }
 
 export function useUpdateSchedule() {

@@ -29,7 +29,10 @@ import { softwareInstalls, softwareUpdateDevices } from "./security-software"
 export const agentPairingStatusValues = ["pending", "approved", "completed", "expired"] as const
 export type AgentPairingStatus = (typeof agentPairingStatusValues)[number]
 
-export const agentJobTypeValues = ["install"] as const
+// "install": run an approved winget install. "action": run one allowlisted device action
+// (see lib/security/device-actions.ts). The `type` column is plain text, so adding a value
+// here needs no migration.
+export const agentJobTypeValues = ["install", "action"] as const
 export type AgentJobType = (typeof agentJobTypeValues)[number]
 
 /**

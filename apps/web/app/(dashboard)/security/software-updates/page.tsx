@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EnrollmentTokenCard } from "@/components/security/software/enrollment-token-card"
 import { UpdateRunDialog } from "@/components/security/software/update-run-dialog"
+import { DeviceActionsDialog } from "@/components/security/software/device-actions-dialog"
 import {
   useRevokeUpdaterDevice,
   useRunAllUpdates,
@@ -61,6 +62,7 @@ function DevicesTab({
 }) {
   const runNow = useRunDeviceUpdate()
   const revoke = useRevokeUpdaterDevice()
+  const [actionsDevice, setActionsDevice] = useState<UpdaterDevice | null>(null)
 
   const handleRun = async (device: UpdaterDevice) => {
     try {
@@ -82,6 +84,7 @@ function DevicesTab({
   }
 
   return (
+    <>
     <div className="rounded-lg border">
       <Table>
         <TableHeader>
@@ -159,6 +162,12 @@ function DevicesTab({
                         <Play className="mr-1.5 h-3.5 w-3.5" />
                         Run now
                       </Button>
+                      {/* Device actions are an agent feature (agent devices have no Entra device ID) */}
+                      {!d.entraDeviceId && d.machineId && (
+                        <Button variant="outline" size="sm" onClick={() => setActionsDevice(d)}>
+                          Actions
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => handleRevoke(d)} disabled={revoke.isPending}>
                         Revoke
                       </Button>
@@ -171,6 +180,12 @@ function DevicesTab({
         </TableBody>
       </Table>
     </div>
+    <DeviceActionsDialog
+      deviceId={actionsDevice?.id ?? null}
+      hostname={actionsDevice?.hostname ?? ""}
+      onOpenChange={(open) => !open && setActionsDevice(null)}
+    />
+    </>
   )
 }
 

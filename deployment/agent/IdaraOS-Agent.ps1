@@ -13,9 +13,12 @@
       2. Checks in (with the signed-in Windows user). IdaraOS answers with:
          - an update run (schedule due, or "Run now"): `winget upgrade` for each package, every result reported
          - install jobs for approved apps: `winget install --scope machine`, the result reported
+         - action jobs: one of a fixed set of reviewed device actions (restart a service, collect
+           diagnostics, ...), each identified only by a key the agent knows
 
-    Only package IDs come from the server, and each is validated before use. The agent never runs
-    anything except winget.
+    The server never sends a command - only validated winget package IDs and action keys from a
+    fixed allowlist. The agent runs winget and the specific actions built into this script, and
+    nothing else.
 
     Windows PowerShell 5.1 compatible.
 
@@ -29,7 +32,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.0.2"
+$AgentVersion = "1.1.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -45,6 +48,17 @@ $WingetIdPattern = '^[A-Za-z0-9][A-Za-z0-9.+_-]{0,127}$'
 $VsWorkloadPattern = '^Microsoft\.VisualStudio\.(Workload|Component|ComponentGroup)\.[A-Za-z0-9._-]{1,100}$'
 $VsPackagePattern = '^Microsoft\.VisualStudio\.20\d\d\.'
 $MaxLogChars = 60000
+
+# Services the "restart-service" action may restart. The server sends only the key (e.g. "spooler");
+# the agent maps it to the Windows service name here, so no arbitrary service name is ever run.
+# Keep in step with RESTARTABLE_SERVICES in lib/security/device-actions.ts.
+$RestartableServices = @{
+    spooler  = "Spooler"
+    wuauserv = "wuauserv"
+    bits     = "BITS"
+    dnscache = "Dnscache"
+    usosvc   = "UsoSvc"
+}
 
 # winget exit codes (APPINSTALLER_CLI_ERROR_*), as signed 32-bit values
 $ExitNoPackageFound      = -1978335212  # 0x8A150014
@@ -431,6 +445,109 @@ function Invoke-InstallJob($Job, [string]$Authorization) {
 }
 
 # ============================================================================
+# DEVICE ACTIONS
+#   Each returns @{ exitCode; message; log }. exitCode 0 = success. No action takes free-text
+#   input from the server; "restart-service" maps an allowlisted key to a service name here.
+# ============================================================================
+
+function Get-Diagnostics {
+    $sb = New-Object System.Text.StringBuilder
+    $os = Get-CimInstance Win32_OperatingSystem
+    [void]$sb.AppendLine("Host: $env:COMPUTERNAME")
+    [void]$sb.AppendLine("OS: $($os.Caption) $($os.Version)")
+    [void]$sb.AppendLine("Last boot: $($os.LastBootUpTime)")
+    [void]$sb.AppendLine("Free memory (MB): $([math]::Round($os.FreePhysicalMemory / 1024))")
+    foreach ($disk in Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3") {
+        [void]$sb.AppendLine(("Disk {0} free: {1:N1} GB of {2:N1} GB" -f $disk.DeviceID, ($disk.FreeSpace / 1GB), ($disk.Size / 1GB)))
+    }
+    $pending = (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending") -or `
+               (Test-Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired")
+    [void]$sb.AppendLine("Pending reboot: $pending")
+    try { [void]$sb.AppendLine("winget: $(Find-Winget)") } catch { [void]$sb.AppendLine("winget: not installed for the system") }
+    return @{ exitCode = 0; message = "Diagnostics collected"; log = $sb.ToString() }
+}
+
+function Get-InstalledSoftware {
+    $winget = Find-Winget
+    $result = Invoke-Winget $winget @("list", "--accept-source-agreements", "--disable-interactivity")
+    $message = if ($result.ExitCode -eq 0) { "Listed installed software" } else { "winget list exited 0x{0:X8}" -f $result.ExitCode }
+    return @{ exitCode = $result.ExitCode; message = $message; log = $result.Output }
+}
+
+function Get-LocalAdmins {
+    try {
+        $names = @(Get-LocalGroupMember -Group "Administrators" -ErrorAction Stop | ForEach-Object { [string]$_.Name })
+        return @{ exitCode = 0; message = ("{0} account(s) in Administrators" -f $names.Count); log = ($names -join "`n") }
+    } catch {
+        # Older hosts or a renamed group: fall back to net localgroup
+        $raw = net localgroup Administrators 2>&1 | ForEach-Object { "$_" }
+        return @{ exitCode = 0; message = "Listed local administrators"; log = ($raw -join "`n") }
+    }
+}
+
+function Restart-AllowedService([string]$Key) {
+    if (-not $RestartableServices.ContainsKey($Key)) {
+        return @{ exitCode = 1; message = "Rejected: '$Key' isn't a service this agent may restart"; log = $null }
+    }
+    $service = $RestartableServices[$Key]
+    Restart-Service -Name $service -Force -ErrorAction Stop
+    return @{ exitCode = 0; message = "Restarted the $service service"; log = $null }
+}
+
+function Clear-UpdateCache {
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($service in @("wuauserv", "bits")) {
+        try { Stop-Service -Name $service -Force -ErrorAction Stop; [void]$sb.AppendLine("Stopped $service") }
+        catch { [void]$sb.AppendLine("Could not stop ${service}: $($_.Exception.Message)") }
+    }
+    $softwareDistribution = Join-Path $env:SystemRoot "SoftwareDistribution"
+    if (Test-Path $softwareDistribution) {
+        $backup = "$softwareDistribution.old"
+        if (Test-Path $backup) { Remove-Item $backup -Recurse -Force -ErrorAction SilentlyContinue }
+        Rename-Item -Path $softwareDistribution -NewName "SoftwareDistribution.old" -Force -ErrorAction Stop
+        [void]$sb.AppendLine("Cleared the SoftwareDistribution folder")
+    }
+    foreach ($service in @("bits", "wuauserv")) {
+        try { Start-Service -Name $service -ErrorAction Stop; [void]$sb.AppendLine("Started $service") }
+        catch { [void]$sb.AppendLine("Could not start ${service}: $($_.Exception.Message)") }
+    }
+    return @{ exitCode = 0; message = "Cleared the Windows Update cache"; log = $sb.ToString() }
+}
+
+function Invoke-ActionJob($Job, [string]$Authorization) {
+    $key = [string]$Job.actionKey
+    $param = [string]$Job.param
+    $label = if ($param) { "$key / $param" } else { $key }
+    Write-Log "Action job $($Job.id): $($Job.name) ($label)"
+    $report = @{ exitCode = $null; message = $null; log = $null }
+
+    try {
+        switch ($key) {
+            "collect-diagnostics"     { $result = Get-Diagnostics }
+            "list-installed-software" { $result = Get-InstalledSoftware }
+            "check-local-admins"      { $result = Get-LocalAdmins }
+            "restart-service"         { $result = Restart-AllowedService $param }
+            "clear-update-cache"      { $result = Clear-UpdateCache }
+            default {
+                $result = @{ exitCode = 1; message = "This agent version doesn't support the '$key' action - update the IdaraOS Agent"; log = $null }
+            }
+        }
+        $report.exitCode = $result.exitCode
+        $report.message = $result.message
+        if ($result.log) { $report.log = Limit-Text ([string]$result.log) }
+        Write-Log ("  action {0} exited {1}" -f $key, $result.exitCode)
+    } catch {
+        $report.exitCode = 1
+        $report.message = "Error: $($_.Exception.Message)"
+        Write-Log "  Action failed: $($report.message)" "ERROR"
+    }
+
+    if (Send-Report "/api/updater/v1/jobs/$($Job.id)" "job-$($Job.id)" $report $Authorization) {
+        Write-Log "Reported job $($Job.id)"
+    }
+}
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -483,7 +600,9 @@ try {
 
     # Installs first: an approved app the member is waiting for shouldn't wait behind a long update run
     foreach ($job in @($response.jobs)) {
-        if ($job) { Invoke-InstallJob $job $authorization }
+        if (-not $job) { continue }
+        if ($job.type -eq "action") { Invoke-ActionJob $job $authorization }
+        else { Invoke-InstallJob $job $authorization }
     }
     if ($response.run) {
         Invoke-Run $response.run $authorization

@@ -39,6 +39,13 @@ import { truncateLog } from "./software"
 import { generateSecret, hashSecret } from "./software-updates-server"
 import { getElevationSettings } from "./elevation-server"
 import { failAgentInstall, markAgentInstallFailed, markInstalled } from "./software-server"
+import {
+  actionJobResult,
+  deviceActionName,
+  getDeviceAction,
+  isValidDeviceAction,
+  isValidDeviceActionParam,
+} from "./device-actions"
 
 const AGENT_ACTOR = { id: null, email: "system", name: "IdaraOS Agent", ip: null, userAgent: null }
 
@@ -270,6 +277,9 @@ export interface DispatchedJob {
   name?: string
   // Visual Studio workloads to install with it (--add <id>)
   workloads?: string[]
+  // Action jobs: the allowlisted action key and its chosen parameter (see device-actions.ts)
+  actionKey?: string
+  param?: string
 }
 
 async function failJob(job: AgentJob, message: string, now: Date) {
@@ -304,7 +314,7 @@ export async function dispatchJobs(device: SoftwareUpdateDevice, now: Date = new
   const dispatched: DispatchedJob[] = []
   for (const job of due) {
     if (job.attempts >= MAX_JOB_ATTEMPTS) {
-      await failJob(job, "The device didn't report a result for this install", now)
+      await failJob(job, "The device didn't report a result in time", now)
       continue
     }
     // Conditional update so two overlapping check-ins don't both send it
@@ -320,6 +330,8 @@ export async function dispatchJobs(device: SoftwareUpdateDevice, now: Date = new
       wingetId: sent.payload.wingetId,
       name: sent.payload.name,
       ...(sent.payload.workloads && { workloads: sent.payload.workloads.split(",") }),
+      ...(sent.payload.actionKey && { actionKey: sent.payload.actionKey }),
+      ...(sent.payload.param && { param: sent.payload.param }),
     })
   }
   return dispatched
@@ -352,7 +364,11 @@ export async function completeJob(
   if (!job) return { ok: false, status: 404, error: "Job not found" }
   if (job.status !== "sent") return { ok: false, status: 409, error: "This job isn't waiting for a result" }
 
-  const result = installJobResult(report.exitCode, report.message)
+  // Action jobs have no winget/retry semantics: success is exit 0, and a failure is just reported.
+  const result =
+    job.type === "action"
+      ? { ...actionJobResult(report.exitCode, report.message), rebootRequired: false, retryable: false }
+      : installJobResult(report.exitCode, report.message)
   const [finished] = await db
     .update(agentJobs)
     .set({
@@ -394,4 +410,101 @@ export async function completeJob(
   )
 
   return { ok: true, job: finished }
+}
+
+// ============================================================================
+// DEVICE ACTIONS
+// ============================================================================
+
+export type QueueActionResult =
+  | { ok: true; jobId: string; actionName: string }
+  | { ok: false; status: number; error: string }
+
+/**
+ * Queue one allowlisted action for a device, to run at its next check-in.
+ * The action key and parameter are validated against the allowlist (device-actions.ts);
+ * no command text is ever stored or sent. Caller checks the device is active and authorized.
+ */
+export async function queueDeviceAction(
+  device: SoftwareUpdateDevice,
+  actionKey: string,
+  param: string | null
+): Promise<QueueActionResult> {
+  if (!isValidDeviceAction(actionKey)) {
+    return { ok: false, status: 400, error: "Unknown device action" }
+  }
+  if (!isValidDeviceActionParam(actionKey, param)) {
+    return { ok: false, status: 400, error: "That option isn't allowed for this action" }
+  }
+  const action = getDeviceAction(actionKey)!
+  const normalizedParam = action.param ? param : null
+
+  // One open job per action+parameter, so repeated clicks don't pile up
+  const [open] = await db
+    .select({ id: agentJobs.id })
+    .from(agentJobs)
+    .where(
+      and(
+        eq(agentJobs.deviceId, device.id),
+        eq(agentJobs.type, "action"),
+        or(eq(agentJobs.status, "pending"), eq(agentJobs.status, "sent")),
+        sql`${agentJobs.payload}->>'actionKey' = ${actionKey}`,
+        normalizedParam
+          ? sql`${agentJobs.payload}->>'param' = ${normalizedParam}`
+          : sql`${agentJobs.payload}->>'param' IS NULL`
+      )
+    )
+    .limit(1)
+  if (open) {
+    return { ok: false, status: 409, error: "That action is already queued for this device" }
+  }
+
+  const payload: Record<string, string> = { actionKey, name: action.label }
+  if (normalizedParam) payload.param = normalizedParam
+
+  const [job] = await db
+    .insert(agentJobs)
+    .values({ orgId: device.orgId, deviceId: device.id, type: "action", payload })
+    .returning({ id: agentJobs.id })
+
+  return { ok: true, jobId: job.id, actionName: action.label }
+}
+
+export interface DeviceActionJob {
+  id: string
+  actionKey: string
+  actionName: string
+  param: string | null
+  status: AgentJob["status"]
+  message: string | null
+  log: string | null
+  createdAt: Date
+  finishedAt: Date | null
+}
+
+/**
+ * Recent action jobs for a device (newest first), for the portal's action history
+ */
+export async function listDeviceActionJobs(
+  device: SoftwareUpdateDevice,
+  limit = 25
+): Promise<DeviceActionJob[]> {
+  const rows = await db
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.deviceId, device.id), eq(agentJobs.type, "action")))
+    .orderBy(sql`${agentJobs.createdAt} DESC`)
+    .limit(limit)
+
+  return rows.map((job) => ({
+    id: job.id,
+    actionKey: job.payload.actionKey ?? "",
+    actionName: job.payload.name ?? deviceActionName(job.payload.actionKey ?? ""),
+    param: job.payload.param ?? null,
+    status: job.status,
+    message: job.result?.message ?? job.error ?? null,
+    log: job.log,
+    createdAt: job.createdAt,
+    finishedAt: job.finishedAt,
+  }))
 }

@@ -1,0 +1,160 @@
+"use client"
+
+import { useState } from "react"
+import { formatDistanceToNow } from "date-fns"
+import { CheckCircle2, ChevronDown, Clock, Loader2, Play, XCircle } from "lucide-react"
+import { toast } from "sonner"
+
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useDeviceActions, useQueueDeviceAction, type DeviceActionJobEntry } from "@/lib/api/security-software"
+import { DEVICE_ACTIONS } from "@/lib/security/device-actions"
+import type { AgentJobStatus } from "@/lib/db/schema/security-agent"
+
+interface DeviceActionsDialogProps {
+  deviceId: string | null
+  hostname: string
+  onOpenChange: (open: boolean) => void
+}
+
+const statusMeta: Record<AgentJobStatus, { label: string; icon: typeof Clock; className: string }> = {
+  pending: { label: "Queued", icon: Clock, className: "text-blue-600" },
+  sent: { label: "Running", icon: Loader2, className: "text-blue-600" },
+  succeeded: { label: "Done", icon: CheckCircle2, className: "text-green-600" },
+  failed: { label: "Failed", icon: XCircle, className: "text-red-600" },
+  cancelled: { label: "Cancelled", icon: XCircle, className: "text-muted-foreground" },
+}
+
+function HistoryRow({ job }: { job: DeviceActionJobEntry }) {
+  const [open, setOpen] = useState(false)
+  const meta = statusMeta[job.status]
+  const Icon = meta.icon
+
+  return (
+    <div className="rounded-md border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Icon className={`h-4 w-4 shrink-0 ${meta.className} ${job.status === "sent" ? "animate-spin" : ""}`} />
+            {job.actionName}
+            {job.param && <code className="rounded bg-muted px-1 text-xs">{job.param}</code>}
+          </div>
+          {job.message && <p className="mt-0.5 text-xs text-muted-foreground">{job.message}</p>}
+        </div>
+        <div className="shrink-0 text-right text-xs text-muted-foreground">
+          <div>{meta.label}</div>
+          <div>{formatDistanceToNow(new Date(job.createdAt), { addSuffix: true })}</div>
+        </div>
+      </div>
+      {job.log && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+            {open ? "Hide output" : "Show output"}
+          </button>
+          {open && (
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs">{job.log}</pre>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function DeviceActionsDialog({ deviceId, hostname, onOpenChange }: DeviceActionsDialogProps) {
+  const { data, isLoading } = useDeviceActions(deviceId)
+  const queue = useQueueDeviceAction()
+  // Chosen parameter per action that takes one (keyed by action key)
+  const [params, setParams] = useState<Record<string, string>>({})
+
+  const jobs = data?.data ?? []
+
+  const run = async (actionKey: string, param: string | null) => {
+    if (!deviceId) return
+    try {
+      await queue.mutateAsync({ id: deviceId, action: actionKey, param })
+      toast.success(`Queued for ${hostname} — it runs at the next check-in`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to queue the action")
+    }
+  }
+
+  return (
+    <Dialog open={!!deviceId} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Device actions · {hostname}</DialogTitle>
+          <DialogDescription>
+            A queued action runs the next time the device checks in. The agent runs only these reviewed actions — never a typed command.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          {DEVICE_ACTIONS.map((action) => {
+            const needsParam = !!action.param
+            const chosen = params[action.key] ?? ""
+            const disabled = queue.isPending || (needsParam && !chosen)
+            return (
+              <div key={action.key} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    {action.label}
+                    {action.changesDevice && <Badge variant="outline" className="text-[10px]">Changes device</Badge>}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{action.description}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {action.param && (
+                    <Select value={chosen} onValueChange={(v) => setParams((p) => ({ ...p, [action.key]: v }))}>
+                      <SelectTrigger className="w-44">
+                        <SelectValue placeholder={action.param.label} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(action.param.options).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={disabled}
+                    onClick={() => run(action.key, needsParam ? chosen : null)}
+                  >
+                    <Play className="mr-1.5 h-3.5 w-3.5" />
+                    Run
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold">Recent actions</h3>
+          {isLoading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : jobs.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No actions have been run on this device yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {jobs.map((job) => (
+                <HistoryRow key={job.id} job={job} />
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
