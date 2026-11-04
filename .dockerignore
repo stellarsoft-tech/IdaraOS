@@ -58,6 +58,8 @@ Thumbs.db
 deployment/**
 !deployment/docker/init-db.sh
 !deployment/docker/start-dev.sh
+# Served to agent devices for self-update and read by the app at build/runtime
+!deployment/agent/IdaraOS-Agent.ps1
 .github
 
 # Specs and scripts (development only)
