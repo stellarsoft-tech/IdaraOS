@@ -21,11 +21,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EnrollmentTokenCard } from "@/components/security/software/enrollment-token-card"
 import { UpdateRunDialog } from "@/components/security/software/update-run-dialog"
 import { DeviceActionsDialog } from "@/components/security/software/device-actions-dialog"
+import { PolicyGroupsTab } from "@/components/security/software/policy-groups-tab"
 import {
   useRevokeUpdaterDevice,
   useRunAllUpdates,
   useRunDeviceUpdate,
   useSoftwareUpdates,
+  useUpdateAllAgents,
+  useUpdateDeviceAgent,
   useUpdateRuns,
   useUpdateSchedule,
   type SoftwareUpdatesData,
@@ -62,7 +65,17 @@ function DevicesTab({
 }) {
   const runNow = useRunDeviceUpdate()
   const revoke = useRevokeUpdaterDevice()
+  const updateAgent = useUpdateDeviceAgent()
   const [actionsDevice, setActionsDevice] = useState<UpdaterDevice | null>(null)
+
+  const handleUpdateAgent = async (device: UpdaterDevice) => {
+    try {
+      await updateAgent.mutateAsync(device.id)
+      toast.success(`${device.hostname} will update its agent at the next check-in`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to request the agent update")
+    }
+  }
 
   const handleRun = async (device: UpdaterDevice) => {
     try {
@@ -150,6 +163,11 @@ function DevicesTab({
               <TableCell className="text-xs text-muted-foreground">
                 <div>Updater {d.updaterVersion ?? "—"}</div>
                 <div>winget {d.wingetVersion ?? "—"}</div>
+                {d.agentUpdateRequestedAt ? (
+                  <div className="mt-1 text-blue-600">Agent update - waiting for check-in</div>
+                ) : (
+                  d.agentUpdateAvailable && <Badge variant="outline" className="mt-1">Agent update available</Badge>
+                )}
               </TableCell>
               <TableCell>
                 <div className="flex flex-wrap justify-end gap-2">
@@ -166,6 +184,11 @@ function DevicesTab({
                       {!d.entraDeviceId && d.machineId && (
                         <Button variant="outline" size="sm" onClick={() => setActionsDevice(d)}>
                           Actions
+                        </Button>
+                      )}
+                      {!d.entraDeviceId && d.machineId && d.agentUpdateAvailable && !d.agentUpdateRequestedAt && (
+                        <Button variant="outline" size="sm" onClick={() => handleUpdateAgent(d)} disabled={updateAgent.isPending}>
+                          Update agent
                         </Button>
                       )}
                       <Button variant="ghost" size="sm" onClick={() => handleRevoke(d)} disabled={revoke.isPending}>
@@ -298,6 +321,7 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
     scheduleTimezone: data.settings.scheduleTimezone,
     checkInMinutes: data.settings.checkInMinutes,
   })
+  const [autoUpdate, setAutoUpdate] = useState(data.settings.agentAutoUpdate)
 
   useEffect(() => {
     setForm({
@@ -307,7 +331,19 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
       scheduleTimezone: data.settings.scheduleTimezone,
       checkInMinutes: data.settings.checkInMinutes,
     })
+    setAutoUpdate(data.settings.agentAutoUpdate)
   }, [data.settings])
+
+  const handleAutoUpdate = async (value: boolean) => {
+    setAutoUpdate(value)
+    try {
+      await update.mutateAsync({ agentAutoUpdate: value })
+      toast.success(value ? "Agents will stay up to date automatically" : "Automatic agent updates turned off")
+    } catch (error) {
+      setAutoUpdate(!value)
+      toast.error(error instanceof Error ? error.message : "Failed to save the setting")
+    }
+  }
 
   const timeZones = useMemo(() => {
     try {
@@ -434,6 +470,22 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
         </div>
       </div>
 
+      <div className="space-y-4 rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="agent-auto-update" className="text-base font-semibold">
+              Keep IdaraOS Agents up to date
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Agents behind the version this server ships ({data.settings.releasedAgentVersion ?? "unknown"}) update
+              themselves at check-in. The agent pulls the server&apos;s own script and verifies it - no file to deploy by
+              hand. You can also update one device from the Devices tab.
+            </p>
+          </div>
+          <Switch id="agent-auto-update" checked={autoUpdate} onCheckedChange={handleAutoUpdate} disabled={!canEdit} />
+        </div>
+      </div>
+
       <div className="space-y-2 rounded-lg border p-4">
         <h3 className="font-semibold">Packages updated on each run</h3>
         <p className="text-sm text-muted-foreground">
@@ -468,11 +520,13 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
 export default function SoftwareUpdatesPage() {
   const { data, isLoading } = useSoftwareUpdates()
   const runAll = useRunAllUpdates()
+  const updateAllAgents = useUpdateAllAgents()
   const canEdit = usePermission("security.software-updates", "edit")
   const [tab, setTab] = useState("devices")
   const [deviceFilter, setDeviceFilter] = useState(ALL)
 
   const devices = data?.data ?? []
+  const agentUpdatesAvailable = devices.some((d) => d.agentUpdateAvailable && d.status === "active")
 
   const handleRunAll = async () => {
     if (!window.confirm("Run updates on every device at its next check-in?")) return
@@ -481,6 +535,16 @@ export default function SoftwareUpdatesPage() {
       toast.success(`Requested updates on ${result.data.count} devices`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to request updates")
+    }
+  }
+
+  const handleUpdateAllAgents = async () => {
+    if (!window.confirm("Update the IdaraOS Agent on every device to the version this server ships?")) return
+    try {
+      const result = await updateAllAgents.mutateAsync()
+      toast.success(`Agent update requested on ${result.data.count} device(s)`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to request agent updates")
     }
   }
 
@@ -503,6 +567,12 @@ export default function SoftwareUpdatesPage() {
             </Link>
           </Button>
           <Protected module="security.software-updates" action="edit">
+            {agentUpdatesAvailable && (
+              <Button variant="outline" onClick={handleUpdateAllAgents} disabled={updateAllAgents.isPending}>
+                {updateAllAgents.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                Update all agents
+              </Button>
+            )}
             <Button onClick={handleRunAll} disabled={runAll.isPending || devices.length === 0}>
               {runAll.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
               Run on all devices
@@ -536,11 +606,15 @@ export default function SoftwareUpdatesPage() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="devices">Devices ({devices.length})</TabsTrigger>
+            <TabsTrigger value="groups">Groups &amp; policies</TabsTrigger>
             <TabsTrigger value="log">Update log</TabsTrigger>
             <TabsTrigger value="schedule">Schedule &amp; enrollment</TabsTrigger>
           </TabsList>
           <TabsContent value="devices" className="mt-4">
             <DevicesTab devices={devices} canEdit={canEdit} onShowLog={showLog} />
+          </TabsContent>
+          <TabsContent value="groups" className="mt-4">
+            <PolicyGroupsTab canEdit={canEdit} />
           </TabsContent>
           <TabsContent value="log" className="mt-4">
             <LogTab devices={devices} deviceFilter={deviceFilter} onDeviceFilter={setDeviceFilter} />

@@ -467,6 +467,17 @@ Wrong codes are rate-limited per user, 10 per 15 minutes per app instance.
 - `POST /api/security/software-updates/devices/[id]/action` (needs `security.software-updates` edit, agent devices only) queues the job; `GET` lists recent action jobs for the history panel. Dispatch, resend and attempt limits are shared with install jobs. `completeJob` interprets an action's result as success on exit 0, failure otherwise — no winget retry semantics.
 - **The safety boundary:** the server sends only an action key from the allowlist; the agent runs only the keys hardcoded in `IdaraOS-Agent.ps1`, and `restart-service` maps an allowlisted key to a service name on the device. There is no free-text/remote-shell path. Adding an action means shipping a new agent version.
 
+**Device groups & policies (agent 1.4.0+):**
+- Groups (`security_policy_groups`) hold agent devices and/or members (`security_policy_group_members`, a row references exactly one device or one user). Policies (`security_policies`, one per `type` per group) attach to a group; the first type is `usb-storage-block` (`lib/security/device-policies.ts`). Admin UI: **Software Updates → Groups & policies** (`security.software-updates` view/edit).
+- `getEffectivePolicies(device)` resolves the policies that apply to a device — union across every group it's a direct member of, or that the signed-in member (`device.userId`) belongs to — with the strictest setting winning (`combinePolicies`). The check-in returns this as `policies`; the agent applies each idempotently and reverts one it previously applied once it's no longer sent. `usb-storage-block` sets `USBSTOR\Start` to 4 (block) / 3 (allow).
+- The agent reports what it applied in the next check-in's `policyResults`; `recordDevicePolicyState` stores it per device/type in `security_device_policy_state`. Policy `type` is plain text — a new type needs no migration.
+- **The safety boundary:** same as actions — the server sends only an allowlisted policy type with bounded settings (sanitized to the type's defined fields); the agent enforces only the types hardcoded in `IdaraOS-Agent.ps1`.
+
+**Agent self-update (agent 1.4.0+):**
+- The server serves its own `deployment/agent/IdaraOS-Agent.ps1` from `GET /api/updater/v1/agent-script` (device-authenticated), with the version and SHA-256 of the raw bytes (`lib/security/agent-release.ts`, cached by mtime). The released version is the `$AgentVersion` in that file.
+- Check-in returns `agentUpdate { version, sha256 }` when the device is behind and either an admin asked (`agentUpdateRequestedAt`, set by `POST .../devices/[id]/update-agent` or `.../update-all-agents`) or org setting `agentAutoUpdate` is on. The agent downloads the script, verifies the SHA-256 with `Get-FileHash`, and replaces its own file (next run uses it). The request clears once the device reports the shipped version.
+- **The safety boundary:** admins can only move a device to the version this server ships — never a supplied script, URL or command. Hardening to do: Authenticode-sign the script and pin the signer, so a compromised release endpoint can't push arbitrary code.
+
 **Not available for agent devices:**
 - Credentials grants: no LAPS without Entra. Requests, approvals and reveals are refused, and the UI hides them.
 - Self-service (Company Portal) apps. Members see "Ask IT to install it".

@@ -74,6 +74,9 @@ export interface UpdaterDevice {
   lastLoggedOnUser: string | null
   runRequestedAt: string | null
   offline: boolean
+  // IdaraOS Agent self-update
+  agentUpdateRequestedAt: string | null
+  agentUpdateAvailable: boolean
 }
 
 export interface SoftwareUpdatesData {
@@ -85,6 +88,8 @@ export interface SoftwareUpdatesData {
     scheduleTime: string
     scheduleTimezone: string
     checkInMinutes: number
+    agentAutoUpdate: boolean
+    releasedAgentVersion: string | null
     enrollmentTokenHint: string | null
     enrollmentTokenCreatedAt: string | null
     nextRunAt: string | null
@@ -93,7 +98,10 @@ export interface SoftwareUpdatesData {
 }
 
 export type ScheduleUpdate = Partial<
-  Pick<SoftwareUpdatesData["settings"], "scheduleEnabled" | "scheduleDays" | "scheduleTime" | "scheduleTimezone" | "checkInMinutes">
+  Pick<
+    SoftwareUpdatesData["settings"],
+    "scheduleEnabled" | "scheduleDays" | "scheduleTime" | "scheduleTimezone" | "checkInMinutes" | "agentAutoUpdate"
+  >
 >
 
 export interface UpdateRun {
@@ -261,6 +269,20 @@ export function useRevokeUpdaterDevice() {
   return useUpdatesMutation<string>(
     (id) => [`/api/security/software-updates/devices/${id}/revoke`, { method: "POST" }],
     "Failed to revoke the device"
+  )
+}
+
+export function useUpdateDeviceAgent() {
+  return useUpdatesMutation<string>(
+    (id) => [`/api/security/software-updates/devices/${id}/update-agent`, { method: "POST" }],
+    "Failed to request the agent update"
+  )
+}
+
+export function useUpdateAllAgents() {
+  return useUpdatesMutation<void, { data: { count: number } }>(
+    () => ["/api/security/software-updates/update-all-agents", { method: "POST" }],
+    "Failed to request agent updates"
   )
 }
 

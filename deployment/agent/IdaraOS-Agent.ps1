@@ -15,10 +15,14 @@
          - install jobs for approved apps: `winget install --scope machine`, the result reported
          - action jobs: one of a fixed set of reviewed device actions (restart a service, collect
            diagnostics, ...), each identified only by a key the agent knows
+         - policies: the effective desired state for this device (e.g. block USB storage), applied
+           idempotently and enforced from a fixed allowlist of policy types
+         - agentUpdate: when the server ships a newer agent, the version + SHA-256 of its official
+           script, which this agent downloads (verifying the hash) and uses to replace itself
 
-    The server never sends a command - only validated winget package IDs and action keys from a
-    fixed allowlist. The agent runs winget and the specific actions built into this script, and
-    nothing else.
+    The server never sends a command - only validated winget package IDs, action keys and policy
+    types from a fixed allowlist, and (for self-update) the server's own script, hash-verified. The
+    agent runs winget and the specific actions and policies built into this script, and nothing else.
 
     Windows PowerShell 5.1 compatible.
 
@@ -32,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.3.0"
+$AgentVersion = "1.4.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -116,6 +120,13 @@ function Write-Json([string]$Path, $Value) {
 function Get-State {
     $state = Read-Json $StatePath
     if (-not $state) { $state = [pscustomobject]@{ lastCheckIn = $null; checkInMinutes = 15; lastError = $null } }
+    # Policy bookkeeping, added in 1.4.0: policy types we've applied (to revert when removed) and the
+    # last results to report at the next check-in. Add them to state loaded from an older file.
+    foreach ($prop in @("managedPolicies", "policyResults")) {
+        if (-not ($state.PSObject.Properties.Name -contains $prop)) {
+            $state | Add-Member -NotePropertyName $prop -NotePropertyValue @() -Force
+        }
+    }
     return $state
 }
 
@@ -695,6 +706,87 @@ function Invoke-ActionJob($Job, [string]$Authorization) {
 }
 
 # ============================================================================
+# POLICIES
+#   The server sends the effective desired state (policy types from a fixed allowlist, matching
+#   lib/security/device-policies.ts). The agent applies only the policy types it knows, idempotently,
+#   and reverts a policy it previously applied once the server stops sending it. No free-text input.
+# ============================================================================
+
+# USB mass storage: Start = 4 disables the USBSTOR driver (no USB drives mount); 3 is the default.
+# Keyboards, mice and other non-storage USB devices are unaffected. Reversible.
+function Set-UsbStorageBlock([bool]$Blocked) {
+    $path = "HKLM:\SYSTEM\CurrentControlSet\Services\USBSTOR"
+    $desired = if ($Blocked) { 4 } else { 3 }
+    try {
+        $current = $null
+        try { $current = (Get-ItemProperty -Path $path -Name Start -ErrorAction Stop).Start } catch { }
+        if ($current -ne $desired) {
+            Set-ItemProperty -Path $path -Name Start -Value $desired -Type DWord -ErrorAction Stop
+        }
+        $message = if ($Blocked) { "USB storage blocked" } else { "USB storage allowed" }
+        return @{ type = "usb-storage-block"; ok = $true; message = $message; state = @{ blocked = $Blocked } }
+    } catch {
+        return @{ type = "usb-storage-block"; ok = $false; message = "Error: $($_.Exception.Message)"; state = @{ blocked = $Blocked } }
+    }
+}
+
+function Invoke-Policies($Policies, $State) {
+    $desired = @{}
+    foreach ($p in @($Policies)) { if ($p -and $p.type) { $desired[[string]$p.type] = $true } }
+    $managed = @{}
+    foreach ($t in @($State.managedPolicies)) { if ($t) { $managed[[string]$t] = $true } }
+
+    $results = @()
+    $nowManaged = @()
+
+    # usb-storage-block: present => block; no longer present => revert once (only if we applied it)
+    if ($desired.ContainsKey("usb-storage-block")) {
+        $result = Set-UsbStorageBlock $true
+        $results += $result
+        if ($result.ok) { $nowManaged += "usb-storage-block" }
+    } elseif ($managed.ContainsKey("usb-storage-block")) {
+        $results += (Set-UsbStorageBlock $false)
+    }
+
+    $State.managedPolicies = @($nowManaged)
+    foreach ($result in $results) { Write-Log ("  policy {0}: {1}" -f $result.type, $result.message) }
+    return $results
+}
+
+# Replace this script with the version the server ships, after verifying its SHA-256. The server
+# only ever serves its own official script, so this updates the agent - it can't run other code.
+function Update-AgentScript($Update, [string]$Authorization) {
+    if (-not $Update -or -not $Update.version) { return }
+    if ([string]$Update.version -eq $AgentVersion) { return }
+    Write-Log "Agent update offered: $AgentVersion -> $($Update.version)"
+    $temp = Join-Path $env:TEMP ("IdaraOS-Agent-{0}.ps1" -f ([guid]::NewGuid().ToString("N")))
+    try {
+        $uri = "{0}/api/updater/v1/agent-script" -f (Get-ServerUrl)
+        $headers = @{ "User-Agent" = "IdaraOS-Agent/$AgentVersion"; "Authorization" = $Authorization }
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest -Uri $uri -Headers $headers -OutFile $temp -UseBasicParsing -TimeoutSec 120
+        $hash = (Get-FileHash -Path $temp -Algorithm SHA256).Hash.ToLower()
+        $expected = ([string]$Update.sha256).ToLower()
+        if ($hash -ne $expected) {
+            Write-Log "Agent update rejected: SHA-256 mismatch (expected $expected, got $hash)" "ERROR"
+            return
+        }
+        $content = Get-Content -Path $temp -Raw -Encoding UTF8
+        if ($content -notmatch '\$AgentVersion\s*=') {
+            Write-Log "Agent update rejected: the downloaded file isn't the IdaraOS Agent" "ERROR"
+            return
+        }
+        Copy-Item -Path $temp -Destination $PSCommandPath -Force
+        try { Set-ItemProperty -Path "HKLM:\SOFTWARE\IdaraOS\Agent" -Name "Version" -Value ([string]$Update.version) -ErrorAction SilentlyContinue } catch { }
+        Write-Log "Updated agent to $($Update.version) - it takes effect at the next run"
+    } catch {
+        Write-Log "Agent self-update failed: $($_.Exception.Message)" "ERROR"
+    } finally {
+        Remove-Item -Path $temp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -729,6 +821,8 @@ try {
 
     $body = Get-DeviceInfo $winget
     $body["lastError"] = $state.lastError
+    # Report what we applied for each policy last cycle (the server records it per device)
+    $body["policyResults"] = @($state.policyResults)
     try {
         $response = Invoke-IdaraOS -Path "/api/updater/v1/check-in" -Body $body -Authorization $authorization
     } catch {
@@ -753,6 +847,15 @@ try {
     }
     if ($response.run) {
         Invoke-Run $response.run $authorization
+    }
+
+    # Policies: apply the effective desired state idempotently, remember the results for next check-in
+    $state.policyResults = @(Invoke-Policies $response.policies $state)
+    Write-Json $StatePath $state
+
+    # Agent self-update: only when the server offered a newer version (admin-triggered or auto-update)
+    if ($response.agentUpdate) {
+        Update-AgentScript $response.agentUpdate $authorization
     }
 } catch {
     $state.lastError = "$($_.Exception.Message)"

@@ -134,6 +134,13 @@
       "when": 1784486400000,
       "tag": "0019_vs_workloads",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793836800000,
+      "tag": "0020_device_policies",
+      "breakpoints": true
     }
   ]
 }

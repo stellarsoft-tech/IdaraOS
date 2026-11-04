@@ -206,6 +206,8 @@ export const softwareUpdateSettings = pgTable(
     scheduleTimezone: text("schedule_timezone").notNull().default("UTC"),
     // How often devices check in for run requests
     checkInMinutes: integer("check_in_minutes").notNull().default(15),
+    // Keep IdaraOS Agents on the version this server ships, updating them automatically at check-in
+    agentAutoUpdate: boolean("agent_auto_update").notNull().default(false),
 
     // Enrollment token (only the hash is kept; the token is shown once)
     enrollmentTokenHash: text("enrollment_token_hash"),
@@ -259,6 +261,10 @@ export const softwareUpdateDevices = pgTable(
     // "Run now" request, picked up at the next check-in
     runRequestedAt: timestamp("run_requested_at", { withTimezone: true }),
     runRequestedById: uuid("run_requested_by_id").references(() => users.id, { onDelete: "set null" }),
+
+    // IdaraOS Agent self-update: set when an admin asks this device to update to the shipped agent
+    // version. Cleared once the device reports it is on that version. (Also driven by agentAutoUpdate.)
+    agentUpdateRequestedAt: timestamp("agent_update_requested_at", { withTimezone: true }),
 
     // Agent provider: the IdaraOS user who signed in to the agent on this device
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),

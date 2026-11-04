@@ -13,6 +13,9 @@ import { softwareUpdateDevices } from "@/lib/db/schema"
 import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { authenticateDevice, dispatchRunIfDue } from "@/lib/security/software-updates-server"
 import { dispatchJobs } from "@/lib/security/agent-server"
+import { getEffectivePolicies, recordDevicePolicyState } from "@/lib/security/policy-server"
+import { getReleasedAgent } from "@/lib/security/agent-release"
+import { isAgentVersionOlder } from "@/lib/security/device-policies"
 
 const checkInSchema = z.object({
   hostname: z.string().trim().min(1).max(63).optional(),
@@ -23,6 +26,18 @@ const checkInSchema = z.object({
   lastError: z.string().max(2000).optional().nullable(),
   // Windows user signed in at the console (DOMAIN\user), if any
   loggedOnUser: z.string().trim().max(256).optional().nullable(),
+  // What the agent applied for each effective policy last cycle (type from the allowlist)
+  policyResults: z
+    .array(
+      z.object({
+        type: z.string().trim().max(64),
+        ok: z.boolean(),
+        message: z.string().max(2000).optional().nullable(),
+        state: z.record(z.unknown()).optional(),
+      })
+    )
+    .max(20)
+    .optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -55,11 +70,35 @@ export async function POST(request: NextRequest) {
       .where(eq(softwareUpdateDevices.id, device.id))
       .returning()
 
+    // Record what the agent applied for each policy last cycle
+    if (body.policyResults?.length) {
+      await recordDevicePolicyState(updatedDevice, body.policyResults, now)
+    }
+
     const settings = await getSoftwareUpdateSettings(device.orgId)
     const run = await dispatchRunIfDue(updatedDevice, settings, now)
     const jobs = await dispatchJobs(updatedDevice, now)
+    const policies = await getEffectivePolicies(updatedDevice)
 
-    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run, jobs })
+    // Agent self-update: offer the shipped version when this device is behind and either an admin
+    // asked it to update or auto-update is on. The agent only ever moves to the server's own script.
+    let agentUpdate: { version: string; sha256: string } | null = null
+    const released = await getReleasedAgent()
+    if (released) {
+      const behind = isAgentVersionOlder(updatedDevice.updaterVersion, released.version)
+      const wanted = settings.agentAutoUpdate || updatedDevice.agentUpdateRequestedAt != null
+      if (behind && wanted) {
+        agentUpdate = { version: released.version, sha256: released.sha256 }
+      } else if (!behind && updatedDevice.agentUpdateRequestedAt) {
+        // The device reached the shipped version - clear the pending request
+        await db
+          .update(softwareUpdateDevices)
+          .set({ agentUpdateRequestedAt: null, updatedAt: now })
+          .where(eq(softwareUpdateDevices.id, updatedDevice.id))
+      }
+    }
+
+    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run, jobs, policies, agentUpdate })
   } catch (error) {
     console.error("[Updater] Check-in failed:", error)
     return NextResponse.json({ error: "Check-in failed" }, { status: 500 })

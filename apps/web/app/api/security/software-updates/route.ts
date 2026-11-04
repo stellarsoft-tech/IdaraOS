@@ -12,6 +12,8 @@ import { P } from "@/lib/rbac/resources"
 import { nextScheduledRun } from "@/lib/security/software"
 import { ensureDefaultCatalog, getSoftwareUpdateSettings, getUpdatePackages } from "@/lib/security/software-server"
 import { scheduleFromSettings } from "@/lib/security/software-updates-server"
+import { getReleasedAgent } from "@/lib/security/agent-release"
+import { isAgentVersionOlder } from "@/lib/security/device-policies"
 
 export async function GET() {
   try {
@@ -37,15 +39,21 @@ export async function GET() {
 
     const now = new Date()
     const offlineAfterMs = Math.max(settings.checkInMinutes * 4, 24 * 60) * 60_000
+    const released = await getReleasedAgent()
+    const releasedAgentVersion = released?.version ?? null
 
     const data = devices.map(({ device, assetName, assetTag, linkedUserName }) => {
       const { secretHash: _s, ...rest } = device
+      const isAgent = !!device.machineId && !device.entraDeviceId
       return {
         ...rest,
         assetName,
         assetTag,
         linkedUserName,
         offline: !device.lastSeenAt || now.getTime() - device.lastSeenAt.getTime() > offlineAfterMs,
+        // Agent devices behind the version this server ships can self-update
+        agentUpdateAvailable:
+          isAgent && releasedAgentVersion != null && isAgentVersionOlder(device.updaterVersion, releasedAgentVersion),
       }
     })
 
@@ -58,6 +66,8 @@ export async function GET() {
         scheduleTime: settings.scheduleTime,
         scheduleTimezone: settings.scheduleTimezone,
         checkInMinutes: settings.checkInMinutes,
+        agentAutoUpdate: settings.agentAutoUpdate,
+        releasedAgentVersion,
         enrollmentTokenHint: settings.enrollmentTokenHint,
         enrollmentTokenCreatedAt: settings.enrollmentTokenCreatedAt,
         nextRunAt: nextScheduledRun(scheduleFromSettings(settings), now),
