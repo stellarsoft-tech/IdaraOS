@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.4.0"
+$AgentVersion = "1.4.1"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -712,22 +712,40 @@ function Invoke-ActionJob($Job, [string]$Authorization) {
 #   and reverts a policy it previously applied once the server stops sending it. No free-text input.
 # ============================================================================
 
-# USB mass storage: Start = 4 disables the USBSTOR driver (no USB drives mount); 3 is the default.
-# Keyboards, mice and other non-storage USB devices are unaffected. Reversible.
+# Block USB mass storage with two layers, so it holds across device types and current sessions:
+#   1. The mass-storage drivers USBSTOR and UASPStor (Start 4 = disabled, 3 = default). BOTH matter:
+#      modern USB drives (USB 3.x sticks, external SSDs) use UASP (uaspstor), which USBSTOR alone
+#      doesn't cover. This fully bites after a reboot - the disabled driver then never loads.
+#   2. The "Removable Disks" access policy (driver-agnostic, no reboot): deny read and write.
+#   Keyboards, mice, webcams and other non-storage USB devices are unaffected. All reversible.
 function Set-UsbStorageBlock([bool]$Blocked) {
-    $path = "HKLM:\SYSTEM\CurrentControlSet\Services\USBSTOR"
-    $desired = if ($Blocked) { 4 } else { 3 }
-    try {
-        $current = $null
-        try { $current = (Get-ItemProperty -Path $path -Name Start -ErrorAction Stop).Start } catch { }
-        if ($current -ne $desired) {
-            Set-ItemProperty -Path $path -Name Start -Value $desired -Type DWord -ErrorAction Stop
+    $errors = @()
+    $start = if ($Blocked) { 4 } else { 3 }
+    foreach ($svc in @("USBSTOR", "UASPStor")) {
+        $key = "HKLM:\SYSTEM\CurrentControlSet\Services\$svc"
+        if (Test-Path $key) {
+            try { Set-ItemProperty -Path $key -Name "Start" -Value $start -Type DWord -ErrorAction Stop }
+            catch { $errors += ("{0}: {1}" -f $svc, $_.Exception.Message) }
         }
-        $message = if ($Blocked) { "USB storage blocked" } else { "USB storage allowed" }
-        return @{ type = "usb-storage-block"; ok = $true; message = $message; state = @{ blocked = $Blocked } }
-    } catch {
-        return @{ type = "usb-storage-block"; ok = $false; message = "Error: $($_.Exception.Message)"; state = @{ blocked = $Blocked } }
     }
+    # Removable Disks device class (this GUID is Windows' own identifier for removable disks)
+    $policyKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\RemovableStorageDevices\{53f5630d-b6bf-11d0-94f2-00a0c91efb8b}"
+    try {
+        if ($Blocked) {
+            if (-not (Test-Path $policyKey)) { New-Item -Path $policyKey -Force | Out-Null }
+            Set-ItemProperty -Path $policyKey -Name "Deny_Read" -Value 1 -Type DWord -ErrorAction Stop
+            Set-ItemProperty -Path $policyKey -Name "Deny_Write" -Value 1 -Type DWord -ErrorAction Stop
+        } elseif (Test-Path $policyKey) {
+            Set-ItemProperty -Path $policyKey -Name "Deny_Read" -Value 0 -Type DWord -ErrorAction Stop
+            Set-ItemProperty -Path $policyKey -Name "Deny_Write" -Value 0 -Type DWord -ErrorAction Stop
+        }
+    } catch { $errors += ("RemovableStorageDevices: {0}" -f $_.Exception.Message) }
+
+    if ($errors.Count -gt 0) {
+        return @{ type = "usb-storage-block"; ok = $false; message = ("Error: " + ($errors -join "; ")); state = @{ blocked = $Blocked } }
+    }
+    $message = if ($Blocked) { "USB storage blocked" } else { "USB storage allowed" }
+    return @{ type = "usb-storage-block"; ok = $true; message = $message; state = @{ blocked = $Blocked } }
 }
 
 function Invoke-Policies($Policies, $State) {
