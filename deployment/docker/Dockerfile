@@ -79,6 +79,12 @@ COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
+# The IdaraOS Agent script is served to devices for self-update (/api/updater/v1/agent-script) and
+# sets the "shipped" agent version. Next's standalone output doesn't trace files outside apps/web,
+# so copy it in explicitly and point the app at it (lib/security/agent-release.ts reads this path).
+COPY deployment/agent/IdaraOS-Agent.ps1 ./apps/web/agent/IdaraOS-Agent.ps1
+ENV AGENT_SCRIPT_PATH=/app/apps/web/agent/IdaraOS-Agent.ps1
+
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app
 
