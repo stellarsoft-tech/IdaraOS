@@ -22,6 +22,7 @@ import { EnrollmentTokenCard } from "@/components/security/software/enrollment-t
 import { UpdateRunDialog } from "@/components/security/software/update-run-dialog"
 import { DeviceActionsDialog } from "@/components/security/software/device-actions-dialog"
 import { PolicyGroupsTab } from "@/components/security/software/policy-groups-tab"
+import { WebAccessApprovalsTab } from "@/components/security/web-access/web-access-approvals"
 import {
   useRevokeUpdaterDevice,
   useRunAllUpdates,
@@ -607,6 +608,7 @@ export default function SoftwareUpdatesPage() {
           <TabsList>
             <TabsTrigger value="devices">Devices ({devices.length})</TabsTrigger>
             <TabsTrigger value="groups">Groups &amp; policies</TabsTrigger>
+            <TabsTrigger value="web-access">Website access</TabsTrigger>
             <TabsTrigger value="log">Update log</TabsTrigger>
             <TabsTrigger value="schedule">Schedule &amp; enrollment</TabsTrigger>
           </TabsList>
@@ -615,6 +617,9 @@ export default function SoftwareUpdatesPage() {
           </TabsContent>
           <TabsContent value="groups" className="mt-4">
             <PolicyGroupsTab canEdit={canEdit} />
+          </TabsContent>
+          <TabsContent value="web-access" className="mt-4">
+            <WebAccessApprovalsTab canEdit={canEdit} />
           </TabsContent>
           <TabsContent value="log" className="mt-4">
             <LogTab devices={devices} deviceFilter={deviceFilter} onDeviceFilter={setDeviceFilter} />

@@ -1,0 +1,12 @@
+# IdaraOS web filtering - Piracy & torrents (starter list). One domain per line; the agent also blocks the www. host.
+thepiratebay.org
+1337x.to
+yts.mx
+rarbg.to
+limetorrents.lol
+torrentz2.eu
+nyaa.si
+eztv.re
+kickasstorrents.to
+fitgirl-repacks.site
+thepirateproxy.live

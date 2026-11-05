@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest"
 import {
   POLICY_TYPES,
+  WEB_FILTERING_CATEGORIES,
+  WEB_FILTERING_TYPE,
   combinePolicies,
   getPolicyType,
   isAgentVersionOlder,
   isValidPolicyType,
+  isWebFilteringCategory,
+  normalizeDomainPattern,
   policyName,
   sanitizePolicySettings,
 } from "../../lib/security/device-policies"
@@ -94,6 +98,72 @@ describe("combinePolicies", () => {
       { type: "firewall-on", enabled: true, settings: {} },
     ])
     expect(result.map((p) => p.type)).toEqual(["usb-storage-block", "firewall-on", "bitlocker"])
+  })
+})
+
+describe("normalizeDomainPattern", () => {
+  it("lower-cases and strips scheme, path, port, wildcard and adblock punctuation", () => {
+    expect(normalizeDomainPattern("Example.COM")).toBe("example.com")
+    expect(normalizeDomainPattern("https://sub.example.com/path?q=1")).toBe("sub.example.com")
+    expect(normalizeDomainPattern("*.example.com")).toBe("example.com")
+    expect(normalizeDomainPattern("||ads.example.com^")).toBe("ads.example.com")
+    expect(normalizeDomainPattern("example.com:8080")).toBe("example.com")
+    expect(normalizeDomainPattern("  .example.com  ")).toBe("example.com")
+  })
+
+  it("rejects comments, blanks and non-domains", () => {
+    expect(normalizeDomainPattern("# a comment")).toBeNull()
+    expect(normalizeDomainPattern("! adblock")).toBeNull()
+    expect(normalizeDomainPattern("not a domain")).toBeNull()
+    expect(normalizeDomainPattern("localhost")).toBeNull()
+    expect(normalizeDomainPattern("")).toBeNull()
+  })
+})
+
+describe("web-filtering policy", () => {
+  it("is registered and revertable", () => {
+    expect(isValidPolicyType(WEB_FILTERING_TYPE)).toBe(true)
+    expect(getPolicyType(WEB_FILTERING_TYPE)?.revertOnDisable).toBe(true)
+  })
+
+  it("recognizes only its curated categories", () => {
+    expect(isWebFilteringCategory("gambling")).toBe(true)
+    expect(isWebFilteringCategory("adult")).toBe(false) // adult is the blockAdult DNS toggle, not a list
+    expect(isWebFilteringCategory("constructor")).toBe(false)
+    expect(WEB_FILTERING_CATEGORIES.length).toBeGreaterThan(0)
+  })
+
+  it("normalizes a domain string-list: dedupe, strip, drop invalid", () => {
+    const s = sanitizePolicySettings(WEB_FILTERING_TYPE, {
+      blocklist: ["Example.com", "https://bad.com/x", "example.com", "not a domain", "foo.bar:8080"],
+    })
+    expect(s.blocklist).toEqual(["example.com", "bad.com", "foo.bar"])
+  })
+
+  it("keeps only known categories in the multi-select and dedupes", () => {
+    const s = sanitizePolicySettings(WEB_FILTERING_TYPE, { categories: ["gambling", "gambling", "bogus", "social"] })
+    expect(s.categories).toEqual(["gambling", "social"])
+  })
+
+  it("fills boolean defaults and ignores undefined settings", () => {
+    const s = sanitizePolicySettings(WEB_FILTERING_TYPE, {})
+    expect(s.securityFiltering).toBe(true)
+    expect(s.lockDns).toBe(true)
+    expect(s.allowlistOnly).toBe(false)
+    expect(s.categories).toEqual([])
+    expect(s.blocklist).toEqual([])
+  })
+
+  it("unions lists and categories across groups (strictest wins)", () => {
+    const result = combinePolicies([
+      { type: WEB_FILTERING_TYPE, enabled: true, settings: { categories: ["gambling"], blocklist: ["a.com"], allowlistOnly: false } },
+      { type: WEB_FILTERING_TYPE, enabled: true, settings: { categories: ["social"], blocklist: ["b.com"], allowlistOnly: true } },
+    ])
+    expect(result).toHaveLength(1)
+    const settings = result[0].settings
+    expect(settings.categories).toEqual(expect.arrayContaining(["gambling", "social"]))
+    expect(settings.blocklist).toEqual(expect.arrayContaining(["a.com", "b.com"]))
+    expect(settings.allowlistOnly).toBe(true) // boolean OR
   })
 })
 

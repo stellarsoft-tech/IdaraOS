@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.6.0"
+$AgentVersion = "1.7.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -130,6 +130,10 @@ function Get-State {
     # Managed admin password report pending upload (1.6.0): a single object or null.
     if (-not ($state.PSObject.Properties.Name -contains "adminCredential")) {
         $state | Add-Member -NotePropertyName "adminCredential" -NotePropertyValue $null -Force
+    }
+    # Web filtering state (1.7.0): what we last applied (for visibility), or null when not filtering.
+    if (-not ($state.PSObject.Properties.Name -contains "webFiltering")) {
+        $state | Add-Member -NotePropertyName "webFiltering" -NotePropertyValue $null -Force
     }
     return $state
 }
@@ -955,10 +959,233 @@ function Set-ManagedAdminPassword([string]$Account) {
     }
 }
 
-# Apply the effective desired state. USB blocking is reverted when removed; the protective policies
-# (firewall, Defender, BitLocker) are only ever forced on and never torn down. Returns the policy
-# results and any BitLocker volumes to escrow (handled separately so keys stay out of the results).
-function Invoke-Policies($Policies, $State) {
+# ============================================================================
+# WEB FILTERING
+#   Filter web access with a filtering DNS resolver, a hosts-file category block, browser policies
+#   (Chrome, Edge) and Microsoft Defender network protection. Category domain lists are fetched from
+#   the server (SHA-256 verified) and cached; everything is re-applied each check-in and fully
+#   reverted when the policy is removed. Revertable: it only ever restores normal browsing.
+# ============================================================================
+
+$WebFilterDir = Join-Path $BaseDir "filter-lists"
+$HostsPath = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
+$WebFilterBegin = "# BEGIN IdaraOS WebFilter"
+$WebFilterEnd = "# END IdaraOS WebFilter"
+$ChromeKey = "HKLM:\SOFTWARE\Policies\Google\Chrome"
+$EdgeKey = "HKLM:\SOFTWARE\Policies\Microsoft\Edge"
+# Cloudflare for Families resolvers: security (malware/phishing) and family (malware + adult).
+$DnsSecurity = @("1.1.1.2", "1.0.0.2")
+$DnsFamily = @("1.1.1.3", "1.0.0.3")
+
+# Normalize a list/admin entry into a bare hostname, or $null to skip (comments, blanks, junk).
+function ConvertTo-FilterHost([string]$Line) {
+    $s = ([string]$Line).Trim().ToLower()
+    if (-not $s -or $s.StartsWith("#") -or $s.StartsWith("!")) { return $null }
+    $s = $s -replace '^https?://', ''   # scheme
+    $s = $s -replace '^\*\.', ''        # wildcard prefix -> apex
+    $s = $s -replace '/.*$', ''         # path
+    $s = $s -replace ':\d+$', ''        # port
+    $s = $s.Trim('.')
+    if (-not $s -or $s -notmatch '^[a-z0-9.-]+\.[a-z]{2,}$') { return $null }
+    return $s
+}
+
+# Download a category list to the cache if its hash changed, verifying SHA-256. Returns the cached
+# file path, or $null. Reuses the cached copy when its hash matches the one the server advertised.
+function Get-FilterListFile([string]$Category, [string]$Sha256, [string]$Authorization) {
+    if (-not (Test-Path $WebFilterDir)) { New-Item -ItemType Directory -Path $WebFilterDir -Force | Out-Null }
+    $dest = Join-Path $WebFilterDir ("{0}.txt" -f $Category)
+    $want = ([string]$Sha256).ToLower()
+    if ((Test-Path $dest) -and $want) {
+        try { if ((Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToLower() -eq $want) { return $dest } } catch { }
+    }
+    $temp = Join-Path $env:TEMP ("IdaraOS-list-{0}.txt" -f ([guid]::NewGuid().ToString("N")))
+    try {
+        $uri = "{0}/api/updater/v1/filter-list/{1}" -f (Get-ServerUrl), $Category
+        $headers = @{ "User-Agent" = "IdaraOS-Agent/$AgentVersion"; "Authorization" = $Authorization }
+        $ProgressPreference = "SilentlyContinue"
+        Invoke-WebRequest -Uri $uri -Headers $headers -OutFile $temp -UseBasicParsing -TimeoutSec 60
+        if ($want) {
+            $have = (Get-FileHash -Path $temp -Algorithm SHA256).Hash.ToLower()
+            if ($have -ne $want) { Write-Log ("  web-filter list {0}: SHA-256 mismatch" -f $Category) "ERROR"; return $null }
+        }
+        Copy-Item -Path $temp -Destination $dest -Force
+        return $dest
+    } catch {
+        Write-Log ("  web-filter list {0}: download failed: {1}" -f $Category, $_.Exception.Message) "ERROR"
+        if (Test-Path $dest) { return $dest }   # fall back to a cached copy
+        return $null
+    } finally {
+        Remove-Item -Path $temp -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Rebuild the IdaraOS block in the hosts file (0.0.0.0 for each domain + its www host). An empty list
+# removes the block entirely. Only ever touches the lines between our own markers.
+function Set-HostsFilter([string[]]$Domains) {
+    $lines = @()
+    if (Test-Path $HostsPath) { $lines = @(Get-Content -Path $HostsPath -Encoding UTF8) }
+    $kept = New-Object System.Collections.Generic.List[string]
+    $inRegion = $false
+    foreach ($line in $lines) {
+        if ($line -eq $WebFilterBegin) { $inRegion = $true; continue }
+        if ($line -eq $WebFilterEnd) { $inRegion = $false; continue }
+        if (-not $inRegion) { $kept.Add($line) }
+    }
+    if ($Domains.Count -gt 0) {
+        while ($kept.Count -gt 0 -and [string]::IsNullOrWhiteSpace($kept[$kept.Count - 1])) { $kept.RemoveAt($kept.Count - 1) }
+        $kept.Add($WebFilterBegin)
+        foreach ($d in $Domains) {
+            $kept.Add("0.0.0.0 $d")
+            if ($d -notlike "www.*") { $kept.Add("0.0.0.0 www.$d") }
+        }
+        $kept.Add($WebFilterEnd)
+    }
+    Set-Content -Path $HostsPath -Value $kept -Encoding ASCII -Force
+    try { ipconfig /flushdns | Out-Null } catch { }
+}
+
+# Write Chrome/Edge URL allow/block lists, SafeSearch and DNS-over-HTTPS policy from the settings.
+function Set-BrowserFilter($Settings) {
+    $block = @(); foreach ($b in @($Settings.blocklist)) { $h = ConvertTo-FilterHost $b; if ($h) { $block += $h } }
+    $allow = @(); foreach ($a in @($Settings.allowlist)) { $h = ConvertTo-FilterHost $a; if ($h) { $allow += $h } }
+    $allowlistOnly = [bool]$Settings.allowlistOnly
+    foreach ($root in @($ChromeKey, $EdgeKey)) {
+        try {
+            if (-not (Test-Path $root)) { New-Item -Path $root -Force | Out-Null }
+            $blKey = Join-Path $root "URLBlocklist"
+            if (Test-Path $blKey) { Remove-Item -Path $blKey -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -Path $blKey -Force | Out-Null
+            $i = 1
+            if ($allowlistOnly) { Set-ItemProperty -Path $blKey -Name "$i" -Value "*" -Type String; $i++ }
+            foreach ($d in $block) { Set-ItemProperty -Path $blKey -Name "$i" -Value $d -Type String; $i++ }
+            $alKey = Join-Path $root "URLAllowlist"
+            if (Test-Path $alKey) { Remove-Item -Path $alKey -Recurse -Force -ErrorAction SilentlyContinue }
+            if ($allow.Count -gt 0) {
+                New-Item -Path $alKey -Force | Out-Null
+                $j = 1; foreach ($d in $allow) { Set-ItemProperty -Path $alKey -Name "$j" -Value $d -Type String; $j++ }
+            }
+            if ([bool]$Settings.enforceSafeSearch) {
+                Set-ItemProperty -Path $root -Name "ForceGoogleSafeSearch" -Value 1 -Type DWord
+                Set-ItemProperty -Path $root -Name "ForceYouTubeRestrict" -Value 2 -Type DWord
+            } else {
+                Remove-ItemProperty -Path $root -Name "ForceGoogleSafeSearch" -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $root -Name "ForceYouTubeRestrict" -ErrorAction SilentlyContinue
+            }
+            if ([bool]$Settings.disableDoh) { Set-ItemProperty -Path $root -Name "DnsOverHttpsMode" -Value "off" -Type String }
+            else { Remove-ItemProperty -Path $root -Name "DnsOverHttpsMode" -ErrorAction SilentlyContinue }
+        } catch { }
+    }
+}
+
+function Remove-BrowserFilter {
+    foreach ($root in @($ChromeKey, $EdgeKey)) {
+        foreach ($sub in @("URLBlocklist", "URLAllowlist")) {
+            $k = Join-Path $root $sub
+            if (Test-Path $k) { Remove-Item -Path $k -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+        foreach ($val in @("ForceGoogleSafeSearch", "ForceYouTubeRestrict", "DnsOverHttpsMode")) {
+            Remove-ItemProperty -Path $root -Name $val -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# Pin every active physical adapter to the filtering resolver (reversible with Reset-FilterDns).
+function Set-FilterDns([string[]]$Servers) {
+    if (-not (Get-Command Set-DnsClientServerAddress -ErrorAction SilentlyContinue)) { return }
+    try {
+        foreach ($a in @(Get-NetAdapter -Physical -ErrorAction Stop | Where-Object { $_.Status -eq "Up" })) {
+            try { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $Servers -ErrorAction Stop } catch { }
+        }
+    } catch { }
+}
+
+function Reset-FilterDns {
+    if (-not (Get-Command Set-DnsClientServerAddress -ErrorAction SilentlyContinue)) { return }
+    try {
+        foreach ($a in @(Get-NetAdapter -Physical -ErrorAction Stop)) {
+            try { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses -ErrorAction Stop } catch { }
+        }
+    } catch { }
+}
+
+# Turn on Microsoft Defender network protection + SmartScreen (blocks malicious/phishing sites).
+function Set-WebSecurity {
+    try { Set-MpPreference -EnableNetworkProtection Enabled -ErrorAction Stop } catch { }
+    try {
+        $sys = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System"
+        if (-not (Test-Path $sys)) { New-Item -Path $sys -Force | Out-Null }
+        Set-ItemProperty -Path $sys -Name "EnableSmartScreen" -Value 1 -Type DWord
+    } catch { }
+    try {
+        if (-not (Test-Path $EdgeKey)) { New-Item -Path $EdgeKey -Force | Out-Null }
+        Set-ItemProperty -Path $EdgeKey -Name "SmartScreenEnabled" -Value 1 -Type DWord
+    } catch { }
+}
+
+# Apply web filtering from the policy settings and the category-list manifest (category -> sha256).
+# Builds the hosts block (category lists + blocklist, minus allowlist), browser policies, DNS and
+# Defender network protection. Returns the standard @{ type; ok; message; state } result.
+function Set-WebFiltering($Settings, $Lists, $State, [string]$Authorization) {
+    $errors = @()
+    $hashByCat = @{}
+    foreach ($l in @($Lists)) { if ($l -and $l.category) { $hashByCat[[string]$l.category] = [string]$l.sha256 } }
+
+    $allowSet = @{}
+    foreach ($a in @($Settings.allowlist)) { $h = ConvertTo-FilterHost $a; if ($h) { $allowSet[$h] = $true } }
+
+    $blockSet = @{}
+    foreach ($cat in @($Settings.categories)) {
+        $c = [string]$cat
+        if (-not $c) { continue }
+        $file = Get-FilterListFile $c $hashByCat[$c] $Authorization
+        if (-not $file) { $errors += ("list {0} unavailable" -f $c); continue }
+        foreach ($line in @(Get-Content -Path $file -Encoding UTF8)) {
+            $h = ConvertTo-FilterHost $line
+            if ($h -and -not $allowSet.ContainsKey($h)) { $blockSet[$h] = $true }
+        }
+    }
+    foreach ($b in @($Settings.blocklist)) {
+        $h = ConvertTo-FilterHost $b
+        if ($h -and -not $allowSet.ContainsKey($h)) { $blockSet[$h] = $true }
+    }
+    $domains = @($blockSet.Keys)
+
+    try { Set-HostsFilter $domains } catch { $errors += ("hosts: " + $_.Exception.Message) }
+    try { Set-BrowserFilter $Settings } catch { $errors += ("browser: " + $_.Exception.Message) }
+    if ([bool]$Settings.lockDns) {
+        if ([bool]$Settings.blockAdult) { Set-FilterDns $DnsFamily }
+        elseif ([bool]$Settings.securityFiltering) { Set-FilterDns $DnsSecurity }
+    }
+    if ([bool]$Settings.securityFiltering) { Set-WebSecurity }
+
+    $State.webFiltering = [pscustomobject]@{ applied = $true; categories = @($Settings.categories); domains = $domains.Count }
+    $resultState = @{ domains = $domains.Count; categories = @($Settings.categories).Count; allowlistOnly = [bool]$Settings.allowlistOnly }
+    if ($errors.Count -gt 0) {
+        return @{ type = "web-filtering"; ok = $false; message = ("Applied with issues: " + ($errors -join "; ")); state = $resultState }
+    }
+    $msg = "Web filtering applied: {0} blocked domain(s), {1} categor(ies)" -f $domains.Count, @($Settings.categories).Count
+    return @{ type = "web-filtering"; ok = $true; message = $msg; state = $resultState }
+}
+
+# Undo web filtering: remove the hosts block and browser policies, restore DNS. Leaves Defender
+# network protection in place (never disables a security feature automatically).
+function Remove-WebFiltering($State) {
+    $errors = @()
+    try { Set-HostsFilter @() } catch { $errors += $_.Exception.Message }
+    try { Remove-BrowserFilter } catch { $errors += $_.Exception.Message }
+    try { Reset-FilterDns } catch { $errors += $_.Exception.Message }
+    $State.webFiltering = $null
+    $ok = ($errors.Count -eq 0)
+    $msg = if ($ok) { "Web filtering removed" } else { "Web filtering removed with issues: " + ($errors -join "; ") }
+    return @{ type = "web-filtering"; ok = $ok; message = $msg; state = @{} }
+}
+
+# Apply the effective desired state. USB blocking and web filtering are reverted when removed; the
+# protective policies (firewall, Defender, BitLocker) are only ever forced on and never torn down.
+# Returns the policy results and any BitLocker volumes to escrow (handled separately so keys stay
+# out of the results).
+function Invoke-Policies($Policies, $State, $WebFilteringLists, [string]$Authorization) {
     $desired = @{}
     foreach ($p in @($Policies)) { if ($p -and $p.type) { $desired[[string]$p.type] = $p } }
     $managed = @{}
@@ -997,6 +1224,15 @@ function Invoke-Policies($Policies, $State) {
         $bl = Set-BitLocker $includeData
         $results += $bl.result
         $bitlocker = @($bl.volumes)
+    }
+
+    # web-filtering (revertable): apply while present; remove once when withdrawn
+    if ($desired.ContainsKey("web-filtering")) {
+        $wf = Set-WebFiltering $desired["web-filtering"].settings $WebFilteringLists $State $Authorization
+        $results += $wf
+        if ($wf.ok) { $nowManaged += "web-filtering" }
+    } elseif ($managed.ContainsKey("web-filtering")) {
+        $results += (Remove-WebFiltering $State)
     }
 
     $State.managedPolicies = @($nowManaged)
@@ -1141,7 +1377,7 @@ try {
     }
 
     # Policies: apply the effective desired state idempotently, remember the results for next check-in
-    $policyOutput = Invoke-Policies $response.policies $state
+    $policyOutput = Invoke-Policies $response.policies $state $response.webFilteringLists $authorization
     $state.policyResults = @($policyOutput.results)
     # Keep collected BitLocker keys DPAPI-protected on disk (SYSTEM/Admin-only folder); send next cycle
     $state.bitlocker = @()

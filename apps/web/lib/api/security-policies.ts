@@ -4,7 +4,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { PolicyTypeDef } from "@/lib/security/device-policies"
+import type { PolicySettingValue, PolicyTypeDef } from "@/lib/security/device-policies"
 
 // ============================================================================
 // TYPES (mirror lib/security/policy-server.ts view types)
@@ -23,7 +23,7 @@ export interface PolicyView {
   type: string
   name: string
   enabled: boolean
-  settings: Record<string, boolean>
+  settings: Record<string, PolicySettingValue>
 }
 
 export interface PolicyGroupView {
@@ -131,7 +131,7 @@ export function useRemoveGroupMember() {
 }
 
 export function useSetGroupPolicy() {
-  return usePolicyMutation<{ groupId: string; type: string; enabled: boolean; settings?: Record<string, boolean> }>(
+  return usePolicyMutation<{ groupId: string; type: string; enabled: boolean; settings?: Record<string, PolicySettingValue> }>(
     ({ groupId, ...body }) => [
       `/api/security/policies/groups/${groupId}/policies`,
       { method: "PUT", body: JSON.stringify(body) },

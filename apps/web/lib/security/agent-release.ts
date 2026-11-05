@@ -76,3 +76,28 @@ export async function getReleasedAgent(): Promise<ReleasedAgent | null> {
   cache = { path: scriptPath, mtimeMs: info.mtimeMs, agent }
   return agent
 }
+
+const INSTALLER_CANDIDATE_PATHS = [
+  process.env.AGENT_INSTALLER_PATH,
+  path.join(process.cwd(), "deployment/agent/Install-IdaraOSAgent.ps1"),
+  path.join(process.cwd(), "..", "..", "deployment/agent/Install-IdaraOSAgent.ps1"),
+  path.join(process.cwd(), "..", "deployment/agent/Install-IdaraOSAgent.ps1"),
+].filter((p): p is string => !!p)
+
+/**
+ * The agent installer script (deployment/agent/Install-IdaraOSAgent.ps1) so a member can install the
+ * agent from the portal. Non-secret: it embeds no credentials and pairing (sign-in + code) is the
+ * gate. Returns the raw bytes and the `$Version` in it, or null if the file can't be found.
+ */
+export async function getInstallerScript(): Promise<{ version: string; content: Buffer } | null> {
+  for (const candidate of INSTALLER_CANDIDATE_PATHS) {
+    try {
+      const content = await readFile(candidate)
+      const match = content.toString("utf8").match(/\$Version\s*=\s*"([^"]+)"/)
+      return { version: match ? match[1] : "", content }
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null
+}

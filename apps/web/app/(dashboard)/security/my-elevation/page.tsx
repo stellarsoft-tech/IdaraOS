@@ -15,6 +15,7 @@ import { CredentialReveal } from "@/components/security/elevation/credential-rev
 import { GrantCountdown } from "@/components/security/elevation/grant-countdown"
 import { RequestAccessDialog } from "@/components/security/elevation/request-access-dialog"
 import { RequestInstallDialog } from "@/components/security/software/request-install-dialog"
+import { MyWebAccess } from "@/components/security/web-access/my-web-access"
 import {
   useCancelElevationRequest,
   useMyElevation,
@@ -137,7 +138,7 @@ export default function MyElevationPage() {
               <Button variant="outline" asChild>
                 <Link href="/security/my-elevation/link">
                   <Link2 className="mr-2 h-4 w-4" />
-                  Link a device
+                  Add a device
                 </Link>
               </Button>
             )}
@@ -155,11 +156,11 @@ export default function MyElevationPage() {
         <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-900/10">
           {isAgent ? (
             <>
-              No devices are linked to you yet. When IT installs the IdaraOS Agent on your laptop it shows a code -{" "}
+              No devices are linked to you yet.{" "}
               <Link href="/security/my-elevation/link" className="font-medium underline">
-                enter it here
-              </Link>
-              .
+                Install the IdaraOS Agent and link your laptop
+              </Link>{" "}
+              - it only takes a minute from an admin PowerShell.
             </>
           ) : (
             <>
@@ -299,6 +300,12 @@ export default function MyElevationPage() {
             </div>
           ))}
         </section>
+      )}
+
+      {isAgent && (
+        <div className="mt-8 border-t pt-8">
+          <MyWebAccess />
+        </div>
       )}
 
       <RequestAccessDialog open={requestOpen} onOpenChange={setRequestOpen} devices={devices} options={options} />

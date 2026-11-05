@@ -1,0 +1,18 @@
+# IdaraOS web filtering - Gaming (starter list). One domain per line; the agent also blocks the www. host.
+steampowered.com
+store.steampowered.com
+epicgames.com
+store.epicgames.com
+roblox.com
+ea.com
+origin.com
+battle.net
+riotgames.com
+leagueoflegends.com
+minecraft.net
+xbox.com
+playstation.com
+miniclip.com
+poki.com
+crazygames.com
+addictinggames.com

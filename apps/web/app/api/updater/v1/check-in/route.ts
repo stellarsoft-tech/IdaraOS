@@ -17,7 +17,9 @@ import { getEffectivePolicies, recordBitlockerKeys, recordDevicePolicyState } fr
 import { getElevationSettings, verifyAgentRotations } from "@/lib/security/elevation-server"
 import { getAdminCredentialSignal, recordAdminCredential } from "@/lib/security/admin-credential-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
-import { isAgentVersionOlder } from "@/lib/security/device-policies"
+import { isAgentVersionOlder, WEB_FILTERING_TYPE } from "@/lib/security/device-policies"
+import { getFilterListManifest } from "@/lib/security/filter-lists"
+import { getActiveWebAccessDomains } from "@/lib/security/web-access-server"
 
 const checkInSchema = z.object({
   hostname: z.string().trim().min(1).max(63).optional(),
@@ -120,6 +122,25 @@ export async function POST(request: NextRequest) {
     const jobs = await dispatchJobs(updatedDevice, now)
     const policies = await getEffectivePolicies(updatedDevice)
 
+    // Web filtering: advertise the SHA-256 of each selected category list so the agent re-downloads
+    // only the lists that changed since it last applied them. The list contents are fetched from
+    // /api/updater/v1/filter-list/<category>; the settings themselves ride in `policies`.
+    let webFilteringLists: Array<{ category: string; sha256: string }> = []
+    const webPolicy = policies.find((p) => p.type === WEB_FILTERING_TYPE)
+    const webCategories = webPolicy?.settings.categories
+    if (Array.isArray(webCategories) && webCategories.length > 0) {
+      webFilteringLists = await getFilterListManifest(webCategories)
+    }
+    // Merge the member's live website-access exceptions into the effective allowlist: an approved
+    // request unblocks that site until it expires, after which it drops out and the agent re-blocks.
+    if (webPolicy && updatedDevice.userId) {
+      const exceptions = await getActiveWebAccessDomains(device.orgId, updatedDevice.userId, now)
+      if (exceptions.length > 0) {
+        const current = Array.isArray(webPolicy.settings.allowlist) ? webPolicy.settings.allowlist : []
+        webPolicy.settings.allowlist = [...new Set([...current, ...exceptions])]
+      }
+    }
+
     // Tell the agent whether to manage (rotate + escrow) the local admin account this cycle
     const elevationSettings = await getElevationSettings(device.orgId)
     const adminCredential = await getAdminCredentialSignal(updatedDevice, {
@@ -145,7 +166,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run, jobs, policies, agentUpdate, adminCredential })
+    return NextResponse.json({
+      checkInMinutes: settings.checkInMinutes,
+      run,
+      jobs,
+      policies,
+      agentUpdate,
+      adminCredential,
+      webFilteringLists,
+    })
   } catch (error) {
     console.error("[Updater] Check-in failed:", error)
     return NextResponse.json({ error: "Check-in failed" }, { status: 500 })

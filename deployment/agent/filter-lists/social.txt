@@ -1,0 +1,16 @@
+# IdaraOS web filtering - Social media (starter list). One domain per line; the agent also blocks the www. host.
+facebook.com
+m.facebook.com
+instagram.com
+twitter.com
+x.com
+tiktok.com
+snapchat.com
+reddit.com
+tumblr.com
+pinterest.com
+threads.net
+vk.com
+weibo.com
+quora.com
+9gag.com

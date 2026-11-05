@@ -1,0 +1,21 @@
+# IdaraOS web filtering - Gambling (starter list). One domain per line; the agent also blocks the www. host.
+bet365.com
+williamhill.com
+pokerstars.com
+pokerstarscasino.com
+draftkings.com
+sportsbook.draftkings.com
+fanduel.com
+sportsbook.fanduel.com
+betmgm.com
+caesars.com
+betway.com
+888casino.com
+888poker.com
+ladbrokes.com
+paddypower.com
+unibet.com
+betfair.com
+bovada.lv
+stake.com
+roobet.com

@@ -1,0 +1,16 @@
+# IdaraOS web filtering - Ads & trackers (starter list). One domain per line; the agent also blocks the www. host.
+doubleclick.net
+googlesyndication.com
+googleadservices.com
+adservice.google.com
+adnxs.com
+criteo.com
+taboola.com
+outbrain.com
+scorecardresearch.com
+moatads.com
+amazon-adsystem.com
+pubmatic.com
+rubiconproject.com
+adcolony.com
+ads.yahoo.com

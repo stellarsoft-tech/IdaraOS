@@ -29,6 +29,7 @@ import {
   policyName,
   sanitizePolicySettings,
   type EffectivePolicy,
+  type PolicySettingValue,
 } from "./device-policies"
 
 // ============================================================================
@@ -48,7 +49,7 @@ export interface PolicyView {
   type: string
   name: string
   enabled: boolean
-  settings: Record<string, boolean>
+  settings: Record<string, PolicySettingValue>
 }
 
 export interface PolicyGroupView {

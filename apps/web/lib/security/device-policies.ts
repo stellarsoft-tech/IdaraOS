@@ -10,13 +10,41 @@
  * state the agent enforces must match on both sides.
  */
 
-/** A setting a policy carries, chosen from a fixed allowlist (never free text) */
-export interface PolicySettingDef {
+/** A value a policy setting can hold: a boolean toggle, or a list of strings (domains / categories). */
+export type PolicySettingValue = boolean | string[]
+
+interface BaseSettingDef {
   key: string
   label: string
-  type: "boolean"
+  /** Short helper text shown under the control (optional) */
+  hint?: string
+}
+
+/** A boolean toggle setting */
+export interface BooleanSettingDef extends BaseSettingDef {
+  kind: "boolean"
   default: boolean
 }
+
+/** A free-entry list of domain patterns (one per line in the UI), bounded in count and length */
+export interface StringListSettingDef extends BaseSettingDef {
+  kind: "string-list"
+  default: string[]
+  /** Max number of entries kept */
+  maxItems: number
+  /** Max length of a single entry */
+  maxLen: number
+}
+
+/** A pick-many-from-a-fixed-list setting (e.g. blocked categories) */
+export interface MultiSelectSettingDef extends BaseSettingDef {
+  kind: "multi-select"
+  options: Array<{ value: string; label: string }>
+  default: string[]
+}
+
+/** A setting a policy carries, chosen from a fixed allowlist (never arbitrary free text) */
+export type PolicySettingDef = BooleanSettingDef | StringListSettingDef | MultiSelectSettingDef
 
 export interface PolicyTypeDef {
   /** Stable key sent to the agent, e.g. "usb-storage-block" */
@@ -26,12 +54,46 @@ export interface PolicyTypeDef {
   description: string
   settings: PolicySettingDef[]
   /**
-   * Whether turning the policy off undoes it on the device. Access restrictions (block USB) are
-   * reverted - the whole point is to restore access. Protective policies (firewall on, Defender on,
-   * BitLocker) are NOT torn down when removed: the agent just stops forcing them. It never turns a
-   * firewall off, disables antivirus, or decrypts a disk on its own.
+   * Whether turning the policy off undoes it on the device. Access restrictions (block USB,
+   * web filtering) are reverted - the whole point is to restore access. Protective policies
+   * (firewall on, Defender on, BitLocker) are NOT torn down when removed: the agent just stops
+   * forcing them. It never turns a firewall off, disables antivirus, or decrypts a disk on its own.
    */
   revertOnDisable: boolean
+}
+
+// ============================================================================
+// WEB FILTERING - category list (single source of truth, shared with the list loader & agent)
+// ============================================================================
+
+/** The curated category lists IdaraOS ships (deployment/agent/filter-lists/<category>.txt). */
+export const WEB_FILTERING_TYPE = "web-filtering"
+
+export const WEB_FILTERING_CATEGORIES = [
+  "gambling",
+  "social",
+  "streaming",
+  "gaming",
+  "dating",
+  "piracy",
+  "ads",
+] as const
+
+export type WebFilteringCategory = (typeof WEB_FILTERING_CATEGORIES)[number]
+
+const WEB_FILTERING_CATEGORY_LABELS: Record<WebFilteringCategory, string> = {
+  gambling: "Gambling",
+  social: "Social media",
+  streaming: "Streaming & video",
+  gaming: "Gaming",
+  dating: "Dating",
+  piracy: "Piracy & torrents",
+  ads: "Ads & trackers",
+}
+
+/** Whether `value` names a curated web-filtering category. */
+export function isWebFilteringCategory(value: string): value is WebFilteringCategory {
+  return (WEB_FILTERING_CATEGORIES as readonly string[]).includes(value)
 }
 
 /**
@@ -69,10 +131,63 @@ export const POLICY_TYPES: PolicyTypeDef[] = [
     label: "Encrypt disk (BitLocker) + escrow key",
     description:
       "Turns on BitLocker for the operating-system drive (XTS-AES-256, using the TPM plus a recovery password) and escrows the recovery key to IdaraOS, encrypted at rest. The key can be revealed later from the device's actions, and every reveal is audited. Needs a TPM; encryption runs in the background. Turning the policy off stops enforcing it but never decrypts the disk.",
-    settings: [
-      { key: "includeDataDrives", label: "Also encrypt fixed data drives", type: "boolean", default: false },
-    ],
+    settings: [{ key: "includeDataDrives", label: "Also encrypt fixed data drives", kind: "boolean", default: false }],
     revertOnDisable: false,
+  },
+  {
+    type: WEB_FILTERING_TYPE,
+    label: "Web content filtering",
+    description:
+      "Filters web access on the device: blocks whole categories (gambling, social media, ...), enforces admin allow/block lists, forces SafeSearch, and blocks malware/phishing. Enforced by the agent with a filtering DNS resolver, a hosts-file category block, browser policies (Chrome, Edge, Firefox) and Microsoft Defender network protection, re-applied every check-in. Reversible - turning the policy off restores normal browsing. Applies to everyone on the device.",
+    settings: [
+      { key: "securityFiltering", label: "Block malware & phishing sites", kind: "boolean", default: true },
+      { key: "blockAdult", label: "Block adult content", kind: "boolean", default: true },
+      {
+        key: "enforceSafeSearch",
+        label: "Force SafeSearch (Google, Bing, YouTube)",
+        kind: "boolean",
+        default: true,
+      },
+      {
+        key: "categories",
+        label: "Blocked categories",
+        kind: "multi-select",
+        options: WEB_FILTERING_CATEGORIES.map((c) => ({ value: c, label: WEB_FILTERING_CATEGORY_LABELS[c] })),
+        default: [],
+      },
+      {
+        key: "blocklist",
+        label: "Always block these domains",
+        hint: "One domain per line (e.g. example.com). Paths are ignored - filtering is domain-level.",
+        kind: "string-list",
+        default: [],
+        maxItems: 500,
+        maxLen: 253,
+      },
+      {
+        key: "allowlist",
+        label: "Always allow these domains",
+        hint: "One domain per line. These are never blocked, even if a category would block them.",
+        kind: "string-list",
+        default: [],
+        maxItems: 500,
+        maxLen: 253,
+      },
+      {
+        key: "allowlistOnly",
+        label: "Allow only the domains above (block everything else)",
+        kind: "boolean",
+        default: false,
+      },
+      {
+        key: "disableDoh",
+        label: "Turn off browser DNS-over-HTTPS (stops filtering bypass)",
+        kind: "boolean",
+        default: true,
+      },
+      { key: "lockDns", label: "Pin and re-apply the filtering DNS each check-in", kind: "boolean", default: true },
+    ],
+    revertOnDisable: true,
   },
 ]
 
@@ -94,16 +209,75 @@ export function policyName(type: string): string {
 }
 
 /**
- * Keep only settings the policy defines, coercing each to its declared type and filling defaults.
+ * Normalize a domain pattern from an allow/block list: lower-case, strip any scheme/path/port and
+ * common adblock punctuation, keep an optional leading "*." wildcard, and validate it looks like a
+ * domain. Returns null for anything that isn't a plausible domain (filtering is domain-level, so a
+ * URL path is dropped). Keeps garbage and arbitrary data out of what reaches the agent.
+ */
+const DOMAIN_PATTERN_RE = /^(\*\.)?([a-z0-9-]+\.)+[a-z]{2,}$/
+
+export function normalizeDomainPattern(value: string): string | null {
+  let s = value.trim().toLowerCase()
+  if (!s || s.startsWith("#") || s.startsWith("!")) return null
+  s = s.replace(/^https?:\/\//, "") // scheme
+  s = s.replace(/^\|\|/, "").replace(/[\^$].*$/, "") // adblock prefix/suffix
+  s = s.replace(/^\*\./, "") // wildcard prefix -> apex (a host block covers subdomains anyway)
+  s = s.replace(/\/.*$/, "") // path
+  s = s.replace(/:\d+$/, "") // port
+  s = s.replace(/^\.+/, "") // leading dots
+  if (!s || s.length > 253) return null
+  if (!DOMAIN_PATTERN_RE.test(s)) return null
+  return s
+}
+
+/** Coerce one raw setting value to its declared kind, falling back to the default. */
+function sanitizeSettingValue(setting: PolicySettingDef, raw: unknown): PolicySettingValue {
+  switch (setting.kind) {
+    case "boolean":
+      return typeof raw === "boolean" ? raw : setting.default
+    case "multi-select": {
+      if (!Array.isArray(raw)) return [...setting.default]
+      const allowed = new Set(setting.options.map((o) => o.value))
+      const seen = new Set<string>()
+      const out: string[] = []
+      for (const v of raw) {
+        if (typeof v !== "string" || !allowed.has(v) || seen.has(v)) continue
+        seen.add(v)
+        out.push(v)
+      }
+      return out
+    }
+    case "string-list": {
+      if (!Array.isArray(raw)) return [...setting.default]
+      const seen = new Set<string>()
+      const out: string[] = []
+      for (const v of raw) {
+        if (typeof v !== "string") continue
+        const cleaned = normalizeDomainPattern(v)
+        if (!cleaned || cleaned.length > setting.maxLen || seen.has(cleaned)) continue
+        seen.add(cleaned)
+        out.push(cleaned)
+        if (out.length >= setting.maxItems) break
+      }
+      return out
+    }
+  }
+}
+
+/**
+ * Keep only settings the policy defines, coercing each to its declared kind and filling defaults.
  * Anything the policy doesn't define is dropped, so no arbitrary data reaches the agent.
  */
-export function sanitizePolicySettings(type: string, input: Record<string, unknown> | null | undefined): Record<string, boolean> {
+export function sanitizePolicySettings(
+  type: string,
+  input: Record<string, unknown> | null | undefined
+): Record<string, PolicySettingValue> {
   const def = POLICY_BY_TYPE[type]
   if (!def) return {}
-  const clean: Record<string, boolean> = {}
+  const clean: Record<string, PolicySettingValue> = {}
   for (const setting of def.settings) {
-    const value = input && Object.prototype.hasOwnProperty.call(input, setting.key) ? input[setting.key] : undefined
-    clean[setting.key] = typeof value === "boolean" ? value : setting.default
+    const raw = input && Object.prototype.hasOwnProperty.call(input, setting.key) ? input[setting.key] : undefined
+    clean[setting.key] = sanitizeSettingValue(setting, raw)
   }
   return clean
 }
@@ -111,18 +285,27 @@ export function sanitizePolicySettings(type: string, input: Record<string, unkno
 /** One policy as delivered to the agent: the type and its sanitized settings */
 export interface EffectivePolicy {
   type: string
-  settings: Record<string, boolean>
+  settings: Record<string, PolicySettingValue>
+}
+
+/** Merge two values for the same setting key: strictest wins (boolean OR, list union). */
+function mergeSettingValue(a: PolicySettingValue | undefined, b: PolicySettingValue): PolicySettingValue {
+  if (a === undefined) return b
+  if (typeof a === "boolean" && typeof b === "boolean") return a || b
+  if (Array.isArray(a) && Array.isArray(b)) return [...new Set([...a, ...b])]
+  return b // mismatched kinds for one key shouldn't happen; prefer the later value
 }
 
 /**
  * Combine the enabled policies that apply to a device into the effective desired state the agent
- * enforces. A device can be reached by several groups; for each policy type the strictest wins
- * (for a boolean "block" setting, true wins), so one group enabling a restriction is enough.
+ * enforces. A device can be reached by several groups; for each policy type the strictest wins -
+ * a boolean "block" setting is OR-ed (one group enabling a restriction is enough), and a list
+ * setting (allow/block lists, categories) is the union across groups.
  */
 export function combinePolicies(
   applied: Array<{ type: string; enabled: boolean; settings: Record<string, unknown> }>
 ): EffectivePolicy[] {
-  const byType = new Map<string, Record<string, boolean>>()
+  const byType = new Map<string, Record<string, PolicySettingValue>>()
   for (const policy of applied) {
     if (!policy.enabled || !isValidPolicyType(policy.type)) continue
     const settings = sanitizePolicySettings(policy.type, policy.settings)
@@ -130,9 +313,8 @@ export function combinePolicies(
     if (!existing) {
       byType.set(policy.type, settings)
     } else {
-      // Strictest wins: OR the booleans together
       for (const [key, value] of Object.entries(settings)) {
-        existing[key] = existing[key] || value
+        existing[key] = mergeSettingValue(existing[key], value)
       }
     }
   }

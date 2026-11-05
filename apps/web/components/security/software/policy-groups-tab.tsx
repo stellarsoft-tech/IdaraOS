@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Laptop, Loader2, Plus, Trash2, User, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -13,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { PolicySettingDef, PolicySettingValue } from "@/lib/security/device-policies"
 import {
   usePolicyGroups,
   useCreatePolicyGroup,
@@ -23,6 +25,102 @@ import {
   type PolicyGroupView,
   type PolicyGroupsData,
 } from "@/lib/api/security-policies"
+
+/** Split a domain list textarea into clean, deduped entries (the server validates again). */
+function parseDomains(text: string): string[] {
+  return [...new Set(text.split(/[\s,]+/).map((d) => d.trim().toLowerCase()).filter(Boolean))]
+}
+
+/** A domain allow/block list: a textarea whose value commits (parsed) when it loses focus. */
+function StringListField({
+  setting,
+  value,
+  disabled,
+  onChange,
+}: {
+  setting: Extract<PolicySettingDef, { kind: "string-list" }>
+  value: PolicySettingValue | undefined
+  disabled: boolean
+  onChange: (value: string[]) => void
+}) {
+  const saved = (Array.isArray(value) ? value : setting.default).join("\n")
+  const [text, setText] = useState(saved)
+  // Re-sync when the saved value changes (e.g. the server normalized what we sent)
+  useEffect(() => setText(saved), [saved])
+
+  const commit = () => {
+    const parsed = parseDomains(text)
+    if (parsed.join("\n") !== saved) onChange(parsed)
+  }
+
+  return (
+    <div className="space-y-1 text-xs">
+      <span className="text-muted-foreground">{setting.label}</span>
+      <Textarea
+        value={text}
+        rows={3}
+        disabled={disabled}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        placeholder="one-domain-per-line.com"
+        className="font-mono text-xs"
+      />
+      {setting.hint && <p className="text-muted-foreground">{setting.hint}</p>}
+    </div>
+  )
+}
+
+/** Render one policy setting by its kind: boolean toggle, category checkboxes, or a domain list. */
+function PolicySettingField({
+  setting,
+  value,
+  disabled,
+  onChange,
+}: {
+  setting: PolicySettingDef
+  value: PolicySettingValue | undefined
+  disabled: boolean
+  onChange: (value: PolicySettingValue) => void
+}) {
+  if (setting.kind === "boolean") {
+    return (
+      <label className="flex items-center justify-between gap-3 text-xs">
+        <span className="text-muted-foreground">{setting.label}</span>
+        <Switch
+          checked={typeof value === "boolean" ? value : setting.default}
+          disabled={disabled}
+          onCheckedChange={(checked) => onChange(checked)}
+        />
+      </label>
+    )
+  }
+  if (setting.kind === "multi-select") {
+    const selected = new Set(Array.isArray(value) ? value : setting.default)
+    return (
+      <div className="space-y-1.5 text-xs">
+        <span className="text-muted-foreground">{setting.label}</span>
+        <div className="grid grid-cols-2 gap-1.5">
+          {setting.options.map((o) => (
+            <label key={o.value} className="flex items-center gap-2">
+              <Checkbox
+                checked={selected.has(o.value)}
+                disabled={disabled}
+                onCheckedChange={(checked) => {
+                  const next = new Set(selected)
+                  if (checked === true) next.add(o.value)
+                  else next.delete(o.value)
+                  onChange([...next])
+                }}
+              />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  return <StringListField setting={setting} value={value} disabled={disabled} onChange={onChange} />
+}
 
 function CreateGroupDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [name, setName] = useState("")
@@ -124,7 +222,7 @@ function GroupCard({
       onError(error, "Failed to change the policy")
     }
   }
-  const setSetting = async (type: string, key: string, value: boolean) => {
+  const setSetting = async (type: string, key: string, value: PolicySettingValue) => {
     try {
       const current = group.policies.find((p) => p.type === type)
       const settings = { ...(current?.settings ?? {}), [key]: value }
@@ -183,16 +281,15 @@ function GroupCard({
                 />
               </div>
               {enabled && pt.settings.length > 0 && (
-                <div className="mt-2 space-y-1.5 border-t pt-2">
+                <div className="mt-2 space-y-2.5 border-t pt-2">
                   {pt.settings.map((s) => (
-                    <label key={s.key} className="flex items-center justify-between gap-3 text-xs">
-                      <span className="text-muted-foreground">{s.label}</span>
-                      <Switch
-                        checked={current?.settings?.[s.key] ?? s.default}
-                        disabled={!canEdit || setPolicy.isPending}
-                        onCheckedChange={(checked) => setSetting(pt.type, s.key, checked)}
-                      />
-                    </label>
+                    <PolicySettingField
+                      key={s.key}
+                      setting={s}
+                      value={current?.settings?.[s.key]}
+                      disabled={!canEdit || setPolicy.isPending}
+                      onChange={(value) => setSetting(pt.type, s.key, value)}
+                    />
                   ))}
                 </div>
               )}

@@ -1,0 +1,17 @@
+# IdaraOS web filtering - Streaming & video (starter list). One domain per line; the agent also blocks the www. host.
+# Note: this blocks youtube.com outright - that is stricter than the "Force SafeSearch" YouTube Restricted setting.
+netflix.com
+hulu.com
+disneyplus.com
+max.com
+hbomax.com
+primevideo.com
+peacocktv.com
+paramountplus.com
+twitch.tv
+youtube.com
+m.youtube.com
+dailymotion.com
+vimeo.com
+spotify.com
+soundcloud.com

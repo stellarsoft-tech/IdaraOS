@@ -1,0 +1,12 @@
+# IdaraOS web filtering - Dating (starter list). One domain per line; the agent also blocks the www. host.
+tinder.com
+bumble.com
+match.com
+okcupid.com
+hinge.co
+pof.com
+plentyoffish.com
+zoosk.com
+grindr.com
+badoo.com
+eharmony.com
