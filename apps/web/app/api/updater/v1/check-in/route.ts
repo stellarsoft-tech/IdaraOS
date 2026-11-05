@@ -14,7 +14,7 @@ import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { authenticateDevice, dispatchRunIfDue } from "@/lib/security/software-updates-server"
 import { dispatchJobs } from "@/lib/security/agent-server"
 import { getEffectivePolicies, recordBitlockerKeys, recordDevicePolicyState } from "@/lib/security/policy-server"
-import { getElevationSettings, verifyAgentRotations } from "@/lib/security/elevation-server"
+import { expireDueGrants, getElevationSettings, requestDueAgentRotations, verifyAgentRotations } from "@/lib/security/elevation-server"
 import { getAdminCredentialSignal, recordAdminCredential } from "@/lib/security/admin-credential-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
 import { isAgentVersionOlder, WEB_FILTERING_TYPE } from "@/lib/security/device-policies"
@@ -143,6 +143,13 @@ export async function POST(request: NextRequest) {
 
     // Tell the agent whether to manage (rotate + escrow) the local admin account this cycle
     const elevationSettings = await getElevationSettings(device.orgId)
+    // Rotate the managed admin password promptly when a session ends: expire any due grants and
+    // request a rotation for this device now, so it happens on this check-in instead of waiting for
+    // the next periodic sweep. The sweep still backstops offline devices.
+    if (elevationSettings.manageAgentAdmin) {
+      await expireDueGrants(now, device.orgId)
+      await requestDueAgentRotations(updatedDevice.id, now)
+    }
     const adminCredential = await getAdminCredentialSignal(updatedDevice, {
       manageAgentAdmin: elevationSettings.manageAgentAdmin,
       agentAdminAccount: elevationSettings.agentAdminAccount,

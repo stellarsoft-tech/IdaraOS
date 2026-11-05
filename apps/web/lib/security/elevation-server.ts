@@ -161,6 +161,37 @@ export async function rotateGrantPassword(
 }
 
 /**
+ * Request rotations for THIS agent device's ended, revealed credentials grants - called at check-in
+ * so the managed admin password rotates on the next check-in after a session ends, instead of waiting
+ * for the periodic sweep to flag it (which added a whole sweep interval to the window). Scoped to one
+ * device; the sweep still backstops offline devices and the Intune provider. Only picks grants already
+ * marked for rotation (status 'pending'/'failed'), so it never re-rotates a verified one. Returns how
+ * many rotations were requested.
+ */
+export async function requestDueAgentRotations(agentDeviceId: string, now: Date = new Date()): Promise<number> {
+  const toRotate = await db
+    .select({
+      id: elevationGrants.id,
+      orgId: elevationGrants.orgId,
+      rotationAttempts: elevationGrants.rotationAttempts,
+    })
+    .from(elevationGrants)
+    .innerJoin(elevationRequests, eq(elevationGrants.requestId, elevationRequests.id))
+    .where(and(
+      eq(elevationRequests.agentDeviceId, agentDeviceId),
+      inArray(elevationGrants.rotationStatus, ["pending", "failed"]),
+      lt(elevationGrants.rotationAttempts, MAX_ROTATION_ATTEMPTS)
+    ))
+
+  let requested = 0
+  for (const grant of toRotate) {
+    const ok = await rotateGrantPassword(grant, { intuneDeviceId: null, agentDeviceId }, now)
+    if (ok) requested++
+  }
+  return requested
+}
+
+/**
  * Request rotations for ended grants whose password was revealed, then confirm
  * requested rotations once Entra holds a newer LAPS backup.
  */
