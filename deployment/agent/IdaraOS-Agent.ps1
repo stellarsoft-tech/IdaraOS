@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.5.0"
+$AgentVersion = "1.6.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -126,6 +126,10 @@ function Get-State {
         if (-not ($state.PSObject.Properties.Name -contains $prop)) {
             $state | Add-Member -NotePropertyName $prop -NotePropertyValue @() -Force
         }
+    }
+    # Managed admin password report pending upload (1.6.0): a single object or null.
+    if (-not ($state.PSObject.Properties.Name -contains "adminCredential")) {
+        $state | Add-Member -NotePropertyName "adminCredential" -NotePropertyValue $null -Force
     }
     return $state
 }
@@ -884,6 +888,73 @@ function Set-BitLocker([bool]$IncludeDataDrives) {
     return @{ result = @{ type = "bitlocker"; ok = $true; message = $msg; state = $state }; volumes = $volumes }
 }
 
+# ============================================================================
+# MANAGED ADMIN PASSWORD
+#   When the server asks (a grant ended, or first adoption), rotate a pre-existing local admin
+#   account to a unique random password and hand it back so IdaraOS can escrow it (encrypted at
+#   rest). The agent NEVER creates the account - if it's missing, it reports "missing" and stops.
+#   The password is kept DPAPI-protected on disk between check-ins and sent over HTTPS, exactly like
+#   the BitLocker recovery keys.
+# ============================================================================
+
+# A strong random password: 20 characters, at least one of each class, no ambiguous characters.
+function New-ManagedPassword {
+    $lower  = "abcdefghijkmnpqrstuvwxyz"   # no l, o
+    $upper  = "ABCDEFGHJKLMNPQRSTUVWXYZ"   # no I, O
+    $digit  = "23456789"                   # no 0, 1
+    $symbol = "!@#%^&*()-_=+[]{}"
+    $all = $lower + $upper + $digit + $symbol
+    $bytes = New-Object byte[] 96
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    $chars = New-Object System.Collections.Generic.List[char]
+    $i = 0
+    foreach ($set in @($lower, $upper, $digit, $symbol)) {
+        $chars.Add($set[$bytes[$i] % $set.Length]); $i++
+    }
+    while ($chars.Count -lt 20) { $chars.Add($all[$bytes[$i] % $all.Length]); $i++ }
+    # Fisher-Yates shuffle so the guaranteed characters aren't always first
+    for ($j = $chars.Count - 1; $j -gt 0; $j--) {
+        $k = $bytes[$i % $bytes.Length] % ($j + 1); $i++
+        $tmp = $chars[$j]; $chars[$j] = $chars[$k]; $chars[$k] = $tmp
+    }
+    return (-join $chars)
+}
+
+# Rotate the configured local admin account's password. Returns @{ status; account; password?;
+# rotatedAt?; error? }. status: "ok" (rotated), "missing" (no such account), "error".
+function Set-ManagedAdminPassword([string]$Account) {
+    $name = ([string]$Account).Trim()
+    if (-not $name) { return @{ status = "error"; account = $Account; error = "No admin account configured" } }
+
+    # The account must already exist - the agent never creates local accounts
+    $exists = $false
+    try {
+        if (Get-Command Get-LocalUser -ErrorAction SilentlyContinue) {
+            $exists = [bool](Get-LocalUser -Name $name -ErrorAction SilentlyContinue)
+        } else {
+            $raw = (net user 2>&1 | ForEach-Object { "$_" }) -join " "
+            $exists = $raw -match [regex]::Escape($name)
+        }
+    } catch { }
+    if (-not $exists) { return @{ status = "missing"; account = $name } }
+
+    try {
+        $password = New-ManagedPassword
+        if (Get-Command Set-LocalUser -ErrorAction SilentlyContinue) {
+            $secure = ConvertTo-SecureString $password -AsPlainText -Force
+            Set-LocalUser -Name $name -Password $secure -ErrorAction Stop
+        } else {
+            # Fall back to net user on hosts without the LocalAccounts module
+            $out = net user $name $password 2>&1 | ForEach-Object { "$_" }
+            if ($LASTEXITCODE -ne 0) { throw ("net user failed: " + (($out -join " ").Trim())) }
+        }
+        return @{ status = "ok"; account = $name; password = $password; rotatedAt = (Get-Date).ToUniversalTime().ToString("o") }
+    } catch {
+        return @{ status = "error"; account = $name; error = $_.Exception.Message }
+    }
+}
+
 # Apply the effective desired state. USB blocking is reverted when removed; the protective policies
 # (firewall, Defender, BitLocker) are only ever forced on and never torn down. Returns the policy
 # results and any BitLocker volumes to escrow (handled separately so keys stay out of the results).
@@ -1020,6 +1091,27 @@ try {
             encryptionPercentage = [int]$bl.encryptionPercentage
         }
     }
+    # Managed admin password rotated last cycle: DPAPI-protected on disk, sent over HTTPS here so the
+    # server escrows it (encrypted at rest). Reported once, after an actual rotation, then cleared.
+    $reportedAdmin = $false
+    if ($state.adminCredential) {
+        $ac = $state.adminCredential
+        $adminReport = @{ account = [string]$ac.account; status = [string]$ac.status }
+        if ([string]$ac.status -eq "ok" -and $ac.passwordProtected) {
+            $pw = $null
+            try { $pw = Unprotect-Text ([string]$ac.passwordProtected) } catch { }
+            if ($pw) {
+                $adminReport["password"] = $pw
+                $adminReport["rotatedAt"] = [string]$ac.rotatedAt
+                $body["adminCredential"] = $adminReport
+                $reportedAdmin = $true
+            }
+        } else {
+            if ($ac.error) { $adminReport["error"] = [string]$ac.error }
+            $body["adminCredential"] = $adminReport
+            $reportedAdmin = $true
+        }
+    }
     try {
         $response = Invoke-IdaraOS -Path "/api/updater/v1/check-in" -Body $body -Authorization $authorization
     } catch {
@@ -1034,6 +1126,8 @@ try {
     $state.lastCheckIn = (Get-Date).ToUniversalTime().ToString("o")
     if ($response.checkInMinutes) { $state.checkInMinutes = [int]$response.checkInMinutes }
     $state.lastError = $null
+    # The admin credential report was accepted with the check-in; don't send it again
+    if ($reportedAdmin) { $state.adminCredential = $null }
     Write-Json $StatePath $state
 
     # Installs first: an approved app the member is waiting for shouldn't wait behind a long update run
@@ -1063,6 +1157,37 @@ try {
             encryptionMethod = [string]$vol.encryptionMethod
             protectionOn = [bool]$vol.protectionOn
             encryptionPercentage = [int]$vol.encryptionPercentage
+        }
+    }
+
+    # Managed admin password: rotate the configured local admin account when the server asks (a grant
+    # ended, or first adoption). Keep the result DPAPI-protected to report at the next check-in.
+    $adminSignal = $response.adminCredential
+    if ($adminSignal -and $adminSignal.manage -and $adminSignal.rotate) {
+        $acct = [string]$adminSignal.account
+        if (-not $acct) { $acct = "StellarAdmin" }
+        $rot = Set-ManagedAdminPassword $acct
+        Write-Log ("  admin credential ({0}): {1}" -f $acct, $rot.status)
+        if ($rot.status -eq "ok") {
+            $protected = $null
+            try { $protected = Protect-Text ([string]$rot.password) } catch { }
+            if ($protected) {
+                $state.adminCredential = [pscustomobject]@{
+                    account = [string]$rot.account
+                    status = "ok"
+                    passwordProtected = $protected
+                    rotatedAt = [string]$rot.rotatedAt
+                    error = $null
+                }
+            }
+        } else {
+            $state.adminCredential = [pscustomobject]@{
+                account = [string]$rot.account
+                status = [string]$rot.status
+                passwordProtected = $null
+                rotatedAt = $null
+                error = [string]$rot.error
+            }
         }
     }
     Write-Json $StatePath $state

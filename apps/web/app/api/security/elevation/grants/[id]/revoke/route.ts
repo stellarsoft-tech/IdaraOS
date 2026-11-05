@@ -88,7 +88,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Rotate straight away rather than waiting for the next sweep
     if (revoked.rotationStatus === "pending") {
-      await rotateGrantPassword(revoked, row.request.intuneDeviceId, now)
+      await rotateGrantPassword(
+        revoked,
+        { intuneDeviceId: row.request.intuneDeviceId, agentDeviceId: row.request.agentDeviceId },
+        now
+      )
     }
 
     return NextResponse.json({ data: revoked })

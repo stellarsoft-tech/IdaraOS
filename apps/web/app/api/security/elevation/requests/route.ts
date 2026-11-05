@@ -109,6 +109,8 @@ export async function GET() {
       settings: {
         credentialModeEnabled: settings.credentialModeEnabled,
         maxMinutes: settings.maxMinutes,
+        manageAgentAdmin: settings.manageAgentAdmin,
+        provider: settings.deviceProvider,
       },
     })
   } catch (error) {

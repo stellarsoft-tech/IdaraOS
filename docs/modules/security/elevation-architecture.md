@@ -484,16 +484,24 @@ Wrong codes are rate-limited per user, 10 per 15 minutes per app instance.
 - Reveal: `POST .../devices/[id]/bitlocker-keys/[keyId]/reveal` (edit permission) decrypts and returns one key and **writes an audit entry every time** (`bitlocker_key_revealed`). The list endpoint (`GET .../bitlocker-keys`, view permission) never returns keys and reports `encryptionKeyConfigured` so the UI (Devices → Actions → BitLocker recovery keys) can warn when `ENCRYPTION_KEY` is the dev default.
 - **The safety boundary:** escrowed keys are only as safe as `ENCRYPTION_KEY`; it must be set in production (the same key protects Entra/SCIM secrets). Hardening to do: envelope-encrypt with a KMS/HSM-held key so a DB + env leak isn't enough.
 
+**Managed admin credentials — agent LAPS (agent 1.6.0+):**
+- This is the agent-provider counterpart to Windows LAPS. It makes **Mode A (credentials)** work without Entra: instead of reading the password from Entra, the agent manages a pre-existing local admin account (default `StellarAdmin`) and IdaraOS escrows the password.
+- Turned on per org with `security_elevation_settings.manage_agent_admin` (+ `agent_admin_account`), in **Admin Access → Settings → Managed admin password** (agent provider only; migration 0022).
+- At check-in the server returns `adminCredential { manage, account, rotate }` (`getAdminCredentialSignal`, `lib/security/admin-credential-server.ts`). `rotate` is true when a rotation was requested or nothing is escrowed yet (adoption). The agent generates a unique password on the device, sets it on the account with `Set-LocalUser` (it **never creates** the account — a missing account reports `missing`), keeps it DPAPI-protected in its state file, and reports it in the next check-in's `adminCredential` field over HTTPS.
+- `recordAdminCredential` encrypts the password at rest with `encrypt()` and upserts one row in `security_device_admin_credentials`; the plaintext is never stored or logged.
+- Flow reuses the whole elevation machinery: request (My Admin Access) → approve (credentials; needs `security.elevation-credentials:edit` and `manage_agent_admin`) → reveal (`revealAdminCredential`, decrypts; same reveal-count, recent-auth and audit guards as LAPS) → expiry → rotation. On expiry the sweep's `rotateGrantPassword` takes the agent branch: it flags the device (`requestAdminRotation`) and sets the grant `rotationStatus = requested`. The agent rotates at its next check-in and reports the new password; `verifyAgentRotations` (called from the check-in) then marks the grant `verified`. No Graph is involved.
+- **Honest limits:** rotation lands at the next check-in (~±15 min), and a device **offline when access ends** keeps the revealed password valid until it reconnects (the portal stops showing it at expiry regardless). At most one credentials grant exists per agent device at a time (one open request/live grant per device, and the device is tied to its linked member), so a stale report can't verify a newer request. Same `ENCRYPTION_KEY` safety boundary as the BitLocker keys.
+
 **Agent self-update (agent 1.4.0+):**
 - The server serves its own `deployment/agent/IdaraOS-Agent.ps1` from `GET /api/updater/v1/agent-script` (device-authenticated), with the version and SHA-256 of the raw bytes (`lib/security/agent-release.ts`, cached by mtime). The released version is the `$AgentVersion` in that file.
 - Check-in returns `agentUpdate { version, sha256 }` when the device is behind and either an admin asked (`agentUpdateRequestedAt`, set by `POST .../devices/[id]/update-agent` or `.../update-all-agents`) or org setting `agentAutoUpdate` is on. The agent downloads the script, verifies the SHA-256 with `Get-FileHash`, and replaces its own file (next run uses it). The request clears once the device reports the shipped version.
 - **The safety boundary:** admins can only move a device to the version this server ships — never a supplied script, URL or command. Hardening to do: Authenticode-sign the script and pin the signer, so a compromised release endpoint can't push arbitrary code.
 
 **Not available for agent devices:**
-- Credentials grants: no LAPS without Entra. Requests, approvals and reveals are refused, and the UI hides them.
+- Credentials grants when `manage_agent_admin` is **off**: with no Entra LAPS and no managed account, requests and approvals are refused and the UI hides them. Turning on **Managed admin password** enables them (see above).
 - Self-service (Company Portal) apps. Members see "Ask IT to install it".
 
-**Out of scope:** local admin accounts and passwords. IT does these by hand; see the decision log.
+**Out of scope:** creating or deleting local admin accounts. IT creates the managed account (e.g. `StellarAdmin`) by hand on each device; the agent only ever rotates its **password** when managed admin is on. See the decision log.
 
 **Still to do:**
 - A way for IT to restore a revoked agent device.

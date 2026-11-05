@@ -14,6 +14,8 @@ import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { authenticateDevice, dispatchRunIfDue } from "@/lib/security/software-updates-server"
 import { dispatchJobs } from "@/lib/security/agent-server"
 import { getEffectivePolicies, recordBitlockerKeys, recordDevicePolicyState } from "@/lib/security/policy-server"
+import { getElevationSettings, verifyAgentRotations } from "@/lib/security/elevation-server"
+import { getAdminCredentialSignal, recordAdminCredential } from "@/lib/security/admin-credential-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
 import { isAgentVersionOlder } from "@/lib/security/device-policies"
 
@@ -51,6 +53,17 @@ const checkInSchema = z.object({
       })
     )
     .max(16)
+    .optional(),
+  // Managed local admin account the agent rotates + escrows (agent provider). password is a secret,
+  // encrypted at rest on arrival; status says whether the rotation actually happened.
+  adminCredential: z
+    .object({
+      account: z.string().trim().max(64).optional().nullable(),
+      password: z.string().max(256).optional().nullable(),
+      rotatedAt: z.string().trim().max(40).optional().nullable(),
+      status: z.enum(["ok", "missing", "error"]),
+      error: z.string().max(2000).optional().nullable(),
+    })
     .optional(),
 })
 
@@ -92,11 +105,27 @@ export async function POST(request: NextRequest) {
     if (body.bitlocker?.length) {
       await recordBitlockerKeys(updatedDevice, body.bitlocker, now)
     }
+    // Escrow the managed local admin password the agent rotated (encrypted at rest). A fresh password
+    // confirms any grant that was waiting on this device's rotation.
+    if (body.adminCredential) {
+      const { rotatedAt } = await recordAdminCredential(updatedDevice, body.adminCredential, now)
+      if (rotatedAt) {
+        // A genuinely fresh rotation was escrowed, so confirm any grant awaiting it
+        await verifyAgentRotations(updatedDevice.id, now)
+      }
+    }
 
     const settings = await getSoftwareUpdateSettings(device.orgId)
     const run = await dispatchRunIfDue(updatedDevice, settings, now)
     const jobs = await dispatchJobs(updatedDevice, now)
     const policies = await getEffectivePolicies(updatedDevice)
+
+    // Tell the agent whether to manage (rotate + escrow) the local admin account this cycle
+    const elevationSettings = await getElevationSettings(device.orgId)
+    const adminCredential = await getAdminCredentialSignal(updatedDevice, {
+      manageAgentAdmin: elevationSettings.manageAgentAdmin,
+      agentAdminAccount: elevationSettings.agentAdminAccount,
+    })
 
     // Agent self-update: offer the shipped version when this device is behind and either an admin
     // asked it to update or auto-update is on. The agent only ever moves to the server's own script.
@@ -116,7 +145,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run, jobs, policies, agentUpdate })
+    return NextResponse.json({ checkInMinutes: settings.checkInMinutes, run, jobs, policies, agentUpdate, adminCredential })
   } catch (error) {
     console.error("[Updater] Check-in failed:", error)
     return NextResponse.json({ error: "Check-in failed" }, { status: 500 })

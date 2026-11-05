@@ -101,11 +101,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (!check.ok) {
       return NextResponse.json({ error: check.error }, { status: check.status })
     }
-    if (mode === "credentials" && !existing.entraDeviceId) {
-      return NextResponse.json(
-        { error: "This device isn't joined to Entra, so there's no LAPS password to share. Approve an install instead." },
-        { status: 400 }
-      )
+    if (mode === "credentials") {
+      if (existing.agentDeviceId) {
+        if (!settings.manageAgentAdmin) {
+          return NextResponse.json(
+            { error: "Managed admin passwords aren't turned on for IdaraOS Agent devices. Turn them on in admin access settings." },
+            { status: 400 }
+          )
+        }
+      } else if (!existing.entraDeviceId) {
+        return NextResponse.json(
+          { error: "This device isn't joined to Entra, so there's no LAPS password to share. Approve an install instead." },
+          { status: 400 }
+        )
+      }
     }
 
     const now = new Date()

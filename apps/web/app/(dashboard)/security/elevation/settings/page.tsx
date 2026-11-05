@@ -32,6 +32,8 @@ interface FormState {
   requireRecentAuth: boolean
   recentAuthMinutes: number
   maxRevealsPerGrant: number
+  manageAgentAdmin: boolean
+  agentAdminAccount: string
 }
 
 function SwitchRow({
@@ -79,6 +81,8 @@ export default function ElevationSettingsPage() {
         requireRecentAuth: settings.requireRecentAuth,
         recentAuthMinutes: settings.recentAuthMinutes,
         maxRevealsPerGrant: settings.maxRevealsPerGrant,
+        manageAgentAdmin: settings.manageAgentAdmin,
+        agentAdminAccount: settings.agentAdminAccount,
       })
     }
   }, [settings])
@@ -151,7 +155,8 @@ export default function ElevationSettingsPage() {
                   <span className="block text-sm font-medium">IdaraOS Agent</span>
                   <span className="block text-sm text-muted-foreground">
                     No Intune needed. Members link their laptop by signing in to the agent, which installs approved apps
-                    and updates with winget. Admin access requests (LAPS) aren&apos;t available.
+                    and updates with winget. Admin access requests reveal the managed local admin password when you turn
+                    that on below.
                   </span>
                 </span>
               </label>
@@ -243,6 +248,43 @@ export default function ElevationSettingsPage() {
               </div>
             </div>
           </section>
+
+          {settings!.deviceProvider === "agent" && (
+            <section className="space-y-4 rounded-lg border p-5">
+              <div className="space-y-1">
+                <h2 className="font-semibold">Managed admin password (IdaraOS Agent)</h2>
+                <p className="text-sm text-muted-foreground">
+                  The agent rotates a pre-existing local admin account to a unique password on each device and escrows
+                  it in IdaraOS (encrypted at rest). Approved admin access requests then reveal it, and it&apos;s
+                  rotated again when access ends. The agent never creates the account - IT creates it on each device.
+                </p>
+              </div>
+              <SwitchRow
+                id="manage-agent-admin"
+                label="Let the agent manage the local admin password"
+                description="Rotates and escrows the account below, and allows admin access requests for agent devices."
+                checked={form.manageAgentAdmin}
+                onCheckedChange={(v) => set("manageAgentAdmin", v)}
+                disabled={!canEdit}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="agent-admin-account">Local admin account to manage</Label>
+                <Input
+                  id="agent-admin-account"
+                  value={form.agentAdminAccount}
+                  onChange={(e) => set("agentAdminAccount", e.target.value)}
+                  maxLength={64}
+                  placeholder="StellarAdmin"
+                  disabled={!canEdit || !form.manageAgentAdmin}
+                  className="w-64"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Must already exist on every device as a local administrator. If it&apos;s missing, the agent reports
+                  that and does nothing.
+                </p>
+              </div>
+            </section>
+          )}
 
           {canEdit && (
             <div className="flex justify-end">

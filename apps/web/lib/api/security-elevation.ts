@@ -123,7 +123,12 @@ export interface ApproverInstallSummary extends InstallSummary {
 export interface ApproverElevationData {
   data: ApproverElevationRequest[]
   stats: { pending: number; active: number; rotationIssues: number; installIssues: number }
-  settings: { credentialModeEnabled: boolean; maxMinutes: number }
+  settings: {
+    credentialModeEnabled: boolean
+    maxMinutes: number
+    manageAgentAdmin: boolean
+    provider: ElevationDeviceProvider
+  }
 }
 
 export interface ElevationSettingsData {
@@ -136,6 +141,8 @@ export interface ElevationSettingsData {
   recentAuthMinutes: number
   maxRevealsPerGrant: number
   deviceProvider: ElevationDeviceProvider
+  manageAgentAdmin: boolean
+  agentAdminAccount: string
   teamsWebhookConfigured: boolean
   updatedAt: string
 }

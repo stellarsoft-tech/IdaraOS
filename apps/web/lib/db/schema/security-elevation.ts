@@ -8,9 +8,10 @@
  * - App install mode: an approved catalog app is installed (see security-software.ts)
  *
  * Each organization picks a device provider:
- * - intune: Windows LAPS in Entra and Intune installs
- * - agent: the IdaraOS Agent installs approved apps with winget (see security-agent.ts); no Intune needed
- * Admin passwords are never stored in any table.
+ * - intune: Windows LAPS in Entra and Intune installs; admin passwords live in Entra, never stored here
+ * - agent: the IdaraOS Agent installs approved apps with winget (see security-agent.ts); no Intune needed.
+ *   For the agent provider, the managed local admin password IS stored here (deviceAdminCredentials),
+ *   encrypted at rest (lib/encryption.ts), because there is no Entra LAPS to hold it.
  * See docs/modules/security/elevation-architecture.md
  */
 
@@ -102,6 +103,12 @@ export const elevationSettings = pgTable(
 
     // Device provider - see elevationDeviceProviderValues
     deviceProvider: text("device_provider", { enum: elevationDeviceProviderValues }).notNull().default("intune"),
+
+    // Agent provider: let the IdaraOS Agent manage the device's local admin password (rotate it to a
+    // unique value, escrow it, and allow credentials requests for agent devices). Off by default.
+    manageAgentAdmin: boolean("manage_agent_admin").notNull().default(false),
+    // The pre-existing local admin account the agent rotates. The agent never creates this account.
+    agentAdminAccount: text("agent_admin_account").notNull().default("StellarAdmin"),
 
     updatedById: uuid("updated_by_id").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -220,6 +227,51 @@ export const elevationGrants = pgTable(
 )
 
 // ============================================================================
+// AGENT-MANAGED ADMIN CREDENTIALS (escrow)
+// ============================================================================
+
+/**
+ * The local admin password the IdaraOS Agent manages for one device (agent provider).
+ *
+ * The agent generates a unique password on the device, sets it on the pre-existing local admin
+ * account (default "StellarAdmin" - never created by the agent), and escrows it here. The password
+ * is encrypted at rest (lib/encryption.ts) and only ever handed back through an active credentials
+ * grant reveal (audited) or a break-glass admin reveal. One row per device.
+ *
+ * device_id is an FK to security_software_update_devices in SQL; it is a plain uuid here to avoid a
+ * circular schema import (same approach as elevationRequests.agentDeviceId above).
+ */
+export const deviceAdminCredentials = pgTable(
+  "security_device_admin_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    deviceId: uuid("device_id").notNull(),
+
+    // The managed local admin account (pre-existing on the device)
+    accountName: text("account_name").notNull().default("StellarAdmin"),
+    // Current password, encrypted at rest. Null until the agent first reports one.
+    passwordEncrypted: text("password_encrypted"),
+
+    // Last report from the agent: "ok" | "missing" (account absent) | "error"
+    lastStatus: text("last_status"),
+    lastError: text("last_error"),
+
+    // When the agent last set (rotated) the password, when a rotation was asked for, and last report
+    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
+    rotateRequestedAt: timestamp("rotate_requested_at", { withTimezone: true }),
+    reportedAt: timestamp("reported_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_security_device_admin_credentials_device").on(table.deviceId),
+    index("idx_security_device_admin_credentials_org").on(table.orgId),
+  ]
+)
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -264,6 +316,13 @@ export const elevationGrantsRelations = relations(elevationGrants, ({ one }) => 
   }),
 }))
 
+export const deviceAdminCredentialsRelations = relations(deviceAdminCredentials, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [deviceAdminCredentials.orgId],
+    references: [organizations.id],
+  }),
+}))
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -276,3 +335,6 @@ export type NewElevationRequest = typeof elevationRequests.$inferInsert
 
 export type ElevationGrant = typeof elevationGrants.$inferSelect
 export type NewElevationGrant = typeof elevationGrants.$inferInsert
+
+export type DeviceAdminCredential = typeof deviceAdminCredentials.$inferSelect
+export type NewDeviceAdminCredential = typeof deviceAdminCredentials.$inferInsert

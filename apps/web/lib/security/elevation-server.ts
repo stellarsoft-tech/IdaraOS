@@ -9,6 +9,7 @@ import { elevationGrants, elevationRequests, elevationSettings, type ElevationSe
 import { createAuditLog } from "@/lib/audit"
 import { MAX_ROTATION_ATTEMPTS, isRotationVerified } from "./elevation"
 import { getLapsLastBackupAt, requestLapsRotation } from "./elevation-laps"
+import { requestAdminRotation } from "./admin-credential-server"
 import { RUN_TIMEOUT_MINUTES } from "./software"
 import { expireStaleRuns, processInstalls } from "./software-server"
 
@@ -86,14 +87,37 @@ async function logRotation(orgId: string, grantId: string, action: string, descr
 }
 
 /**
- * Request a LAPS rotation for one grant and record the outcome
+ * Request a password rotation for one grant and record the outcome.
+ * Agent provider: flag the device to rotate + escrow its managed local admin password at the next
+ * check-in (confirmed later by verifyAgentRotations). Intune provider: call Windows LAPS in Entra.
  */
 export async function rotateGrantPassword(
   grant: { id: string; orgId: string; rotationAttempts: number },
-  intuneDeviceId: string | null,
+  device: { intuneDeviceId: string | null; agentDeviceId: string | null },
   now: Date = new Date()
 ): Promise<boolean> {
-  if (!intuneDeviceId) {
+  if (device.agentDeviceId) {
+    await requestAdminRotation(grant.orgId, device.agentDeviceId, now)
+    await db
+      .update(elevationGrants)
+      .set({
+        rotationStatus: "requested",
+        rotationRequestedAt: now,
+        rotationAttempts: grant.rotationAttempts + 1,
+        rotationError: null,
+        updatedAt: now,
+      })
+      .where(eq(elevationGrants.id, grant.id))
+    await logRotation(
+      grant.orgId,
+      grant.id,
+      "rotate_requested",
+      "Asked the IdaraOS Agent to rotate the local admin password"
+    )
+    return true
+  }
+
+  if (!device.intuneDeviceId) {
     await db
       .update(elevationGrants)
       .set({
@@ -107,7 +131,7 @@ export async function rotateGrantPassword(
   }
 
   try {
-    await requestLapsRotation(intuneDeviceId)
+    await requestLapsRotation(device.intuneDeviceId)
     await db
       .update(elevationGrants)
       .set({
@@ -149,6 +173,7 @@ export async function processRotations(now: Date = new Date(), limit = 25): Prom
       orgId: elevationGrants.orgId,
       rotationAttempts: elevationGrants.rotationAttempts,
       intuneDeviceId: elevationRequests.intuneDeviceId,
+      agentDeviceId: elevationRequests.agentDeviceId,
     })
     .from(elevationGrants)
     .innerJoin(elevationRequests, eq(elevationGrants.requestId, elevationRequests.id))
@@ -159,7 +184,11 @@ export async function processRotations(now: Date = new Date(), limit = 25): Prom
     .limit(limit)
 
   for (const grant of toRotate) {
-    const ok = await rotateGrantPassword(grant, grant.intuneDeviceId, now)
+    const ok = await rotateGrantPassword(
+      grant,
+      { intuneDeviceId: grant.intuneDeviceId, agentDeviceId: grant.agentDeviceId },
+      now
+    )
     if (ok) result.requested++
     else result.failed++
   }
@@ -195,6 +224,40 @@ export async function processRotations(now: Date = new Date(), limit = 25): Prom
   }
 
   return result
+}
+
+/**
+ * Confirm agent-provider rotations. Once the IdaraOS Agent reports a freshly rotated local admin
+ * password for a device, any credentials grant for that device still in the "requested" state is
+ * verified. Called from the device check-in (agent devices have no Entra LAPS backup to poll).
+ * Returns how many grants were confirmed.
+ */
+export async function verifyAgentRotations(agentDeviceId: string, now: Date = new Date()): Promise<number> {
+  const verified = await db
+    .update(elevationGrants)
+    .set({ rotationStatus: "verified", rotationVerifiedAt: now, updatedAt: now })
+    .where(and(
+      eq(elevationGrants.rotationStatus, "requested"),
+      lte(elevationGrants.rotationRequestedAt, now),
+      inArray(
+        elevationGrants.requestId,
+        db
+          .select({ id: elevationRequests.id })
+          .from(elevationRequests)
+          .where(eq(elevationRequests.agentDeviceId, agentDeviceId))
+      )
+    ))
+    .returning({ id: elevationGrants.id, orgId: elevationGrants.orgId })
+
+  for (const grant of verified) {
+    await logRotation(
+      grant.orgId,
+      grant.id,
+      "rotate_verified",
+      "The IdaraOS Agent rotated and escrowed a new local admin password"
+    )
+  }
+  return verified.length
 }
 
 /**

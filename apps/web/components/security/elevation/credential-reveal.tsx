@@ -93,7 +93,7 @@ export function CredentialReveal({ grantId, revealCount, maxReveals }: Credentia
   if (reauthUrl) {
     return (
       <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-900/10 sm:flex-row sm:items-center sm:justify-between">
-        <span>For security, sign in with Microsoft again before revealing the password.</span>
+        <span>For security, sign in again before revealing the password.</span>
         <Button asChild size="sm">
           <a href={reauthUrl}>
             <LogIn className="mr-2 h-4 w-4" />

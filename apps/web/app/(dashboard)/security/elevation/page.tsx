@@ -51,7 +51,9 @@ function RequestHeader({ item }: { item: ApproverElevationRequest }) {
         <span>Device: {item.deviceName}</span>
         {item.requestedMinutes !== null && <span>{formatMinutes(item.requestedMinutes)} requested</span>}
         <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}</span>
-        {!item.intuneManaged && <span className="text-amber-600">Not Intune-managed - rotation must be manual</span>}
+        {!item.intuneManaged && !item.agentDevice && (
+          <span className="text-amber-600">Not Intune-managed - rotation must be manual</span>
+        )}
       </div>
       {item.reason && <p className="text-sm">{item.reason}</p>}
     </div>
@@ -152,7 +154,7 @@ export default function ElevationApprovalsPage() {
   const handleRotate = async (grantId: string) => {
     try {
       await rotate.mutateAsync(grantId)
-      toast.success("Rotation requested. The device applies it at its next Intune check-in.")
+      toast.success("Rotation requested. The device applies it at its next check-in.")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to request rotation")
     }
@@ -321,6 +323,7 @@ export default function ElevationApprovalsPage() {
         onOpenChange={(open) => !open && setApproving(null)}
         credentialModeEnabled={data?.settings.credentialModeEnabled ?? false}
         canUseCredentials={canUseCredentials}
+        agentAdminManaged={data?.settings.manageAgentAdmin ?? false}
         maxMinutes={data?.settings.maxMinutes ?? 240}
       />
       <NoteDialog
@@ -342,7 +345,7 @@ export default function ElevationApprovalsPage() {
             ? revoking.agentDevice
               ? "The agent won't be sent the install. If it already started, it finishes - uninstall the app on the device if needed."
               : "The device leaves the install group so Intune won't install the app. If it's already installed, uninstall it in Intune."
-            : "Access ends immediately. If the password was revealed, a LAPS rotation is requested right away."
+            : "Access ends immediately. If the password was revealed, it's rotated right away."
         }
         noteLabel="Reason (optional)"
         confirmLabel={revoking?.grant?.mode === "app_install" ? "Cancel install" : "Revoke access"}

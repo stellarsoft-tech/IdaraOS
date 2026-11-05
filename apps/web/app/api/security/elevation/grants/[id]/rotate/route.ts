@@ -44,11 +44,14 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         entityType: "elevation_grant",
         entityId: id,
         entityName: row.request.deviceName,
-        description: `Manually requested LAPS rotation for ${row.request.deviceName}`,
+        description: `Manually requested admin password rotation for ${row.request.deviceName}`,
       })
     }
 
-    const ok = await rotateGrantPassword(row.grant, row.request.intuneDeviceId)
+    const ok = await rotateGrantPassword(row.grant, {
+      intuneDeviceId: row.request.intuneDeviceId,
+      agentDeviceId: row.request.agentDeviceId,
+    })
     const [updated] = await db.select().from(elevationGrants).where(eq(elevationGrants.id, id)).limit(1)
 
     if (!ok) {

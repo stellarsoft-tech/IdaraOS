@@ -24,6 +24,9 @@ const updateSettingsSchema = z.object({
   recentAuthMinutes: z.number().int().min(1).max(120).optional(),
   maxRevealsPerGrant: z.number().int().min(1).max(20).optional(),
   deviceProvider: z.enum(elevationDeviceProviderValues).optional(),
+  // Agent provider: let the IdaraOS Agent manage the local admin password, and which account it rotates
+  manageAgentAdmin: z.boolean().optional(),
+  agentAdminAccount: z.string().trim().min(1, "Enter the admin account name").max(64).optional(),
   // null clears the webhook; omit to keep it
   teamsWebhookUrl: z
     .string()

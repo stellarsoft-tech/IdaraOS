@@ -44,7 +44,7 @@ export const elevationGrantStatusLabels: Record<ElevationGrantStatus, string> = 
 }
 
 export const elevationGrantModeLabels: Record<ElevationGrantMode, string> = {
-  credentials: "Reveal LAPS password",
+  credentials: "Reveal admin password",
   app_install: "Install app via Intune",
 }
 
@@ -235,4 +235,18 @@ export function rotationStatusAfterEnd(grant: Pick<GrantState, "mode" | "revealC
 export function isRotationVerified(lastBackupAt: Date | null, lastRevealedAt: Date | null): boolean {
   if (!lastBackupAt || !lastRevealedAt) return false
   return lastBackupAt.getTime() > lastRevealedAt.getTime()
+}
+
+/**
+ * Agent provider: whether the IdaraOS Agent should rotate the managed local admin password this
+ * check-in. Only when management is on, and either a rotation was requested (a grant ended) or
+ * nothing is escrowed yet (first adoption gets the device off the shared password).
+ */
+export function shouldRotateManagedAdmin(
+  manageAgentAdmin: boolean,
+  escrow: { hasPassword: boolean; rotateRequested: boolean } | null
+): boolean {
+  if (!manageAgentAdmin) return false
+  if (!escrow) return true
+  return !escrow.hasPassword || escrow.rotateRequested
 }

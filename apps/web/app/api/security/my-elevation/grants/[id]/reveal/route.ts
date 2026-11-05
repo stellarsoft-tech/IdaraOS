@@ -15,6 +15,7 @@ import type { SessionPayload } from "@/lib/auth/session"
 import { checkReveal, needsRecentAuth } from "@/lib/security/elevation"
 import { getElevationSettings } from "@/lib/security/elevation-server"
 import { LapsError, getLapsPassword } from "@/lib/security/elevation-laps"
+import { revealAdminCredential } from "@/lib/security/admin-credential-server"
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -51,32 +52,46 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: check.error }, { status: check.status })
     }
 
+    // Agent devices reveal the IdaraOS-managed admin password; Intune devices reveal Windows LAPS
+    const isAgent = !!row.request.agentDeviceId
+
     // Session JWTs carry the standard `iat` claim
     const issuedAt = (session as SessionPayload & { iat?: number }).iat
     if (needsRecentAuth(settings, issuedAt, now)) {
       return NextResponse.json(
         {
-          error: `Sign in with Microsoft again to reveal the password (required every ${settings.recentAuthMinutes} min)`,
+          error: `Sign in again to reveal the password (required every ${settings.recentAuthMinutes} min)`,
           code: "reauth_required",
-          reauthUrl: "/api/auth/login/azure-ad?reauth=1&returnTo=/security/my-elevation",
+          reauthUrl: isAgent
+            ? "/api/auth/login?reauth=1&returnTo=/security/my-elevation"
+            : "/api/auth/login/azure-ad?reauth=1&returnTo=/security/my-elevation",
         },
         { status: 401 }
       )
     }
 
-    // LAPS passwords live in Entra - agent devices without an Entra ID have nothing to reveal
-    if (!row.request.entraDeviceId) {
-      return NextResponse.json({ error: "This device isn't joined to Entra, so it has no LAPS password" }, { status: 409 })
-    }
-
-    let credential
-    try {
-      credential = await getLapsPassword(row.request.entraDeviceId)
-    } catch (error) {
-      if (error instanceof LapsError) {
-        return NextResponse.json({ error: error.message }, { status: lapsErrorStatus[error.code] })
+    let credential: { accountName: string; password: string }
+    if (isAgent) {
+      // The agent rotates + escrows this password; it's held encrypted at rest until revealed here
+      const escrow = await revealAdminCredential(session.orgId, row.request.agentDeviceId!)
+      if (!escrow) {
+        return NextResponse.json(
+          { error: "No admin password has been escrowed for this device yet - it'll be available after the device next checks in" },
+          { status: 409 }
+        )
       }
-      throw error
+      credential = escrow
+    } else if (row.request.entraDeviceId) {
+      try {
+        credential = await getLapsPassword(row.request.entraDeviceId)
+      } catch (error) {
+        if (error instanceof LapsError) {
+          return NextResponse.json({ error: error.message }, { status: lapsErrorStatus[error.code] })
+        }
+        throw error
+      }
+    } else {
+      return NextResponse.json({ error: "This device has no managed admin password" }, { status: 409 })
     }
 
     // Count the reveal only if the grant is still live and under the limit (guards concurrent reveals)
@@ -107,7 +122,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         entityType: "elevation_grant",
         entityId: id,
         entityName: row.request.deviceName,
-        description: `Revealed the LAPS password (${credential.accountName}) for ${row.request.deviceName} - reveal ${counted.revealCount} of ${settings.maxRevealsPerGrant}`,
+        description: `Revealed the admin password (${credential.accountName}) for ${row.request.deviceName} - reveal ${counted.revealCount} of ${settings.maxRevealsPerGrant}`,
       })
     }
 

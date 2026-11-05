@@ -26,6 +26,7 @@ interface ApproveRequestDialogProps {
   onOpenChange: (open: boolean) => void
   credentialModeEnabled: boolean
   canUseCredentials: boolean
+  agentAdminManaged: boolean
   maxMinutes: number
 }
 
@@ -34,6 +35,7 @@ export function ApproveRequestDialog({
   onOpenChange,
   credentialModeEnabled,
   canUseCredentials,
+  agentAdminManaged,
   maxMinutes,
 }: ApproveRequestDialogProps) {
   const approve = useApproveElevationRequest()
@@ -59,8 +61,10 @@ export function ApproveRequestDialog({
 
   const isInstallRequest = !!request?.catalogAppId
   const isAgent = !!request?.agentDevice
-  // Agent devices aren't in Entra, so they have no LAPS password
-  const credentialsAllowed = credentialModeEnabled && canUseCredentials && !isAgent
+  // Intune devices reveal Windows LAPS; agent devices reveal the IdaraOS-managed admin password,
+  // available only when managed admin passwords are turned on.
+  const credentialsAllowed =
+    credentialModeEnabled && canUseCredentials && (!isAgent || agentAdminManaged)
   const canSubmit =
     mode === "app_install" ? !!request?.installReady : credentialsAllowed && !!minutes
 
@@ -120,15 +124,17 @@ export function ApproveRequestDialog({
               <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
                 <RadioGroupItem value="credentials" id="mode-credentials" className="mt-1" disabled={!credentialsAllowed} />
                 <div className="space-y-1">
-                  <span className="text-sm font-medium">Reveal LAPS password</span>
+                  <span className="text-sm font-medium">Reveal admin password</span>
                   <p className="text-xs text-muted-foreground">
-                    {isAgent
-                      ? "Not available for IdaraOS Agent devices - they have no LAPS password."
+                    {isAgent && !agentAdminManaged
+                      ? "Turn on managed admin passwords in admin access settings to use this for IdaraOS Agent devices."
                       : !credentialModeEnabled
                       ? "Turned off in admin access settings."
                       : !canUseCredentials
                         ? "You don't have permission to approve with credentials."
-                        : "The requester sees the device's local admin password in IdaraOS. It's rotated when access ends."}
+                        : isAgent
+                          ? "The requester sees the device's managed admin password (e.g. StellarAdmin) in IdaraOS. It's rotated when access ends."
+                          : "The requester sees the device's local admin password in IdaraOS. It's rotated when access ends."}
                   </p>
                 </div>
               </label>

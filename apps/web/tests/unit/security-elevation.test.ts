@@ -12,6 +12,7 @@ import {
   needsRecentAuth,
   normalizeDurationOptions,
   rotationStatusAfterEnd,
+  shouldRotateManagedAdmin,
   type ApprovalInput,
   type GrantState,
 } from "../../lib/security/elevation"
@@ -223,5 +224,25 @@ describe("LAPS", () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe(`https://graph.microsoft.com/beta/deviceManagement/managedDevices/${DEVICE_ID}/rotateLocalAdminPassword`)
     expect(init.method).toBe("POST")
+  })
+})
+
+describe("shouldRotateManagedAdmin (agent provider)", () => {
+  it("never rotates when managed admin is off", () => {
+    expect(shouldRotateManagedAdmin(false, null)).toBe(false)
+    expect(shouldRotateManagedAdmin(false, { hasPassword: false, rotateRequested: true })).toBe(false)
+  })
+
+  it("rotates on adoption: no escrow row, or nothing escrowed yet", () => {
+    expect(shouldRotateManagedAdmin(true, null)).toBe(true)
+    expect(shouldRotateManagedAdmin(true, { hasPassword: false, rotateRequested: false })).toBe(true)
+  })
+
+  it("rotates when a rotation was requested (a grant ended)", () => {
+    expect(shouldRotateManagedAdmin(true, { hasPassword: true, rotateRequested: true })).toBe(true)
+  })
+
+  it("stays put when a password is escrowed and no rotation is pending", () => {
+    expect(shouldRotateManagedAdmin(true, { hasPassword: true, rotateRequested: false })).toBe(false)
   })
 })

@@ -183,8 +183,11 @@ export async function GET() {
         requireReason: settings.requireReason,
         maxRevealsPerGrant: settings.maxRevealsPerGrant,
         provider,
-        // LAPS passwords come from Entra, so admin access requests need the Intune provider
-        credentialsAvailable: provider === "intune" && settings.credentialModeEnabled,
+        // Intune devices reveal Windows LAPS from Entra; agent devices reveal the IdaraOS-managed
+        // StellarAdmin password, available only when managed admin passwords are turned on.
+        credentialsAvailable:
+          settings.credentialModeEnabled &&
+          (provider === "intune" || (provider === "agent" && settings.manageAgentAdmin)),
       },
     })
   } catch (error) {
@@ -258,9 +261,9 @@ export async function POST(request: NextRequest) {
       }
       catalogApp = { id: app.id, name: app.name, publisher: app.publisher }
     } else {
-      if (provider === "agent") {
+      if (provider === "agent" && !settings.manageAgentAdmin) {
         return NextResponse.json(
-          { error: "Admin access requests aren't available for IdaraOS Agent devices. Ask IT for help, or request an approved app." },
+          { error: "Admin access requests aren't enabled for IdaraOS Agent devices. Ask IT to turn on managed admin passwords, or request an approved app." },
           { status: 400 }
         )
       }
