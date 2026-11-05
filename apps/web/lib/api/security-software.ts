@@ -327,6 +327,42 @@ export function useQueueDeviceAction() {
   })
 }
 
+export interface BitlockerKeyEntry {
+  id: string
+  volume: string
+  recoveryKeyId: string | null
+  encryptionMethod: string | null
+  protectionOn: boolean
+  encryptionPercentage: number | null
+  reportedAt: string
+}
+
+export function useBitlockerKeys(deviceId: string | null) {
+  return useQuery({
+    queryKey: ["security-bitlocker-keys", deviceId],
+    queryFn: () =>
+      request<{ data: BitlockerKeyEntry[]; encryptionKeyConfigured: boolean }>(
+        `/api/security/software-updates/devices/${deviceId}/bitlocker-keys`,
+        undefined,
+        "Failed to load recovery keys"
+      ),
+    enabled: !!deviceId,
+    refetchInterval: 30_000,
+  })
+}
+
+/** Reveals a single recovery key (audited server-side). The decrypted key is never cached. */
+export function useRevealBitlockerKey() {
+  return useMutation({
+    mutationFn: ({ deviceId, keyId }: { deviceId: string; keyId: string }) =>
+      request<{ data: { volume: string; recoveryKey: string } }>(
+        `/api/security/software-updates/devices/${deviceId}/bitlocker-keys/${keyId}/reveal`,
+        { method: "POST" },
+        "Failed to reveal the recovery key"
+      ),
+  })
+}
+
 export function useUpdateSchedule() {
   return useUpdatesMutation<ScheduleUpdate>(
     (data) => ["/api/security/software-updates/settings", { method: "PATCH", body: JSON.stringify(data) }],

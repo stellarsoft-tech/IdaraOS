@@ -13,7 +13,7 @@ import { softwareUpdateDevices } from "@/lib/db/schema"
 import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { authenticateDevice, dispatchRunIfDue } from "@/lib/security/software-updates-server"
 import { dispatchJobs } from "@/lib/security/agent-server"
-import { getEffectivePolicies, recordDevicePolicyState } from "@/lib/security/policy-server"
+import { getEffectivePolicies, recordBitlockerKeys, recordDevicePolicyState } from "@/lib/security/policy-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
 import { isAgentVersionOlder } from "@/lib/security/device-policies"
 
@@ -37,6 +37,20 @@ const checkInSchema = z.object({
       })
     )
     .max(20)
+    .optional(),
+  // BitLocker recovery keys escrowed by the bitlocker policy (secret, encrypted at rest on arrival)
+  bitlocker: z
+    .array(
+      z.object({
+        volume: z.string().trim().min(1).max(16),
+        recoveryKeyId: z.string().trim().max(64).optional().nullable(),
+        recoveryKey: z.string().trim().min(1).max(256),
+        encryptionMethod: z.string().trim().max(32).optional().nullable(),
+        protectionOn: z.boolean().optional(),
+        encryptionPercentage: z.number().optional().nullable(),
+      })
+    )
+    .max(16)
     .optional(),
 })
 
@@ -73,6 +87,10 @@ export async function POST(request: NextRequest) {
     // Record what the agent applied for each policy last cycle
     if (body.policyResults?.length) {
       await recordDevicePolicyState(updatedDevice, body.policyResults, now)
+    }
+    // Escrow any BitLocker recovery keys the agent reported (encrypted at rest before storage)
+    if (body.bitlocker?.length) {
+      await recordBitlockerKeys(updatedDevice, body.bitlocker, now)
     }
 
     const settings = await getSoftwareUpdateSettings(device.orgId)

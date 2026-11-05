@@ -25,8 +25,20 @@ describe("policy allowlist", () => {
     for (const policy of POLICY_TYPES) {
       expect(policy.label.length).toBeGreaterThan(0)
       expect(policy.description.length).toBeGreaterThan(0)
+      expect(typeof policy.revertOnDisable).toBe("boolean")
       expect(getPolicyType(policy.type)).toBe(policy)
     }
+  })
+
+  it("ships firewall, Defender and BitLocker policies", () => {
+    for (const type of ["firewall-on", "defender-on", "bitlocker"]) {
+      expect(isValidPolicyType(type)).toBe(true)
+    }
+    // Only USB blocking is reverted when removed; the protective policies are left in place
+    expect(getPolicyType("usb-storage-block")?.revertOnDisable).toBe(true)
+    expect(getPolicyType("firewall-on")?.revertOnDisable).toBe(false)
+    expect(getPolicyType("defender-on")?.revertOnDisable).toBe(false)
+    expect(getPolicyType("bitlocker")?.revertOnDisable).toBe(false)
   })
 
   it("falls back to the type for an unknown name", () => {
@@ -40,6 +52,15 @@ describe("policy settings", () => {
     // usb-storage-block declares no settings
     expect(sanitizePolicySettings("usb-storage-block", { evil: true, blocked: true })).toEqual({})
     expect(sanitizePolicySettings("unknown", { a: true })).toEqual({})
+  })
+
+  it("keeps BitLocker's includeDataDrives setting and fills its default", () => {
+    expect(sanitizePolicySettings("bitlocker", { includeDataDrives: true, evil: true })).toEqual({
+      includeDataDrives: true,
+    })
+    // Missing or wrong-typed -> the declared default (false), and nothing else
+    expect(sanitizePolicySettings("bitlocker", {})).toEqual({ includeDataDrives: false })
+    expect(sanitizePolicySettings("bitlocker", { includeDataDrives: "yes" })).toEqual({ includeDataDrives: false })
   })
 })
 
@@ -56,6 +77,23 @@ describe("combinePolicies", () => {
   it("returns nothing when no enabled policy applies", () => {
     expect(combinePolicies([{ type: "usb-storage-block", enabled: false, settings: {} }])).toEqual([])
     expect(combinePolicies([])).toEqual([])
+  })
+
+  it("unions BitLocker's data-drives setting across groups (strictest wins)", () => {
+    const result = combinePolicies([
+      { type: "bitlocker", enabled: true, settings: { includeDataDrives: false } },
+      { type: "bitlocker", enabled: true, settings: { includeDataDrives: true } },
+    ])
+    expect(result).toEqual([{ type: "bitlocker", settings: { includeDataDrives: true } }])
+  })
+
+  it("keeps the allowlist order across several policy types", () => {
+    const result = combinePolicies([
+      { type: "bitlocker", enabled: true, settings: {} },
+      { type: "usb-storage-block", enabled: true, settings: {} },
+      { type: "firewall-on", enabled: true, settings: {} },
+    ])
+    expect(result.map((p) => p.type)).toEqual(["usb-storage-block", "firewall-on", "bitlocker"])
   })
 })
 

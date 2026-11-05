@@ -2,14 +2,20 @@
 
 import { useState } from "react"
 import { formatDistanceToNow } from "date-fns"
-import { CheckCircle2, ChevronDown, Clock, Loader2, Play, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Copy, Eye, EyeOff, KeyRound, Loader2, Play, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useDeviceActions, useQueueDeviceAction, type DeviceActionJobEntry } from "@/lib/api/security-software"
+import {
+  useBitlockerKeys,
+  useDeviceActions,
+  useQueueDeviceAction,
+  useRevealBitlockerKey,
+  type DeviceActionJobEntry,
+} from "@/lib/api/security-software"
 import { DEVICE_ACTIONS } from "@/lib/security/device-actions"
 import type { AgentJobStatus } from "@/lib/db/schema/security-agent"
 
@@ -63,6 +69,109 @@ function HistoryRow({ job }: { job: DeviceActionJobEntry }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Escrowed BitLocker recovery keys for the device, with an audited per-volume reveal. */
+function BitlockerSection({ deviceId }: { deviceId: string }) {
+  const { data, isLoading } = useBitlockerKeys(deviceId)
+  const reveal = useRevealBitlockerKey()
+  const [revealed, setRevealed] = useState<Record<string, string>>({})
+
+  const keys = data?.data ?? []
+  const encryptionKeyConfigured = data?.encryptionKeyConfigured ?? true
+
+  const toggleReveal = async (keyId: string) => {
+    if (revealed[keyId]) {
+      setRevealed((r) => {
+        const next = { ...r }
+        delete next[keyId]
+        return next
+      })
+      return
+    }
+    try {
+      const res = await reveal.mutateAsync({ deviceId, keyId })
+      setRevealed((r) => ({ ...r, [keyId]: res.data.recoveryKey }))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reveal the recovery key")
+    }
+  }
+
+  const copyKey = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success("Recovery key copied")
+    } catch {
+      toast.error("Couldn't copy to the clipboard")
+    }
+  }
+
+  if (isLoading || keys.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">BitLocker recovery keys</h3>
+      {!encryptionKeyConfigured && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            ENCRYPTION_KEY isn&apos;t set on the server, so these keys are only weakly protected at rest. Set it to
+            secure escrowed keys.
+          </span>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">Revealing a key is recorded in the audit log.</p>
+      <div className="space-y-2">
+        {keys.map((k) => (
+          <div key={k.id} className="rounded-md border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <KeyRound className="h-4 w-4 text-muted-foreground" />
+                  {k.volume}
+                  {k.protectionOn ? (
+                    <Badge variant="outline" className="text-[10px] text-green-600">
+                      Protected
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px]">
+                      Encrypting{typeof k.encryptionPercentage === "number" ? ` ${k.encryptionPercentage}%` : ""}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {[k.encryptionMethod, k.recoveryKeyId ? `ID ${k.recoveryKeyId.slice(0, 8)}…` : null]
+                    .filter(Boolean)
+                    .join(" · ") || "Recovery password protector"}
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => toggleReveal(k.id)} disabled={reveal.isPending}>
+                {revealed[k.id] ? (
+                  <>
+                    <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                    Hide
+                  </>
+                ) : (
+                  <>
+                    <Eye className="mr-1.5 h-3.5 w-3.5" />
+                    Reveal key
+                  </>
+                )}
+              </Button>
+            </div>
+            {revealed[k.id] && (
+              <div className="mt-2 flex items-center gap-2">
+                <code className="flex-1 break-all rounded bg-muted p-2 font-mono text-xs">{revealed[k.id]}</code>
+                <Button variant="ghost" size="sm" onClick={() => copyKey(revealed[k.id])} aria-label="Copy recovery key">
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -137,6 +246,8 @@ export function DeviceActionsDialog({ deviceId, hostname, onOpenChange }: Device
             )
           })}
         </div>
+
+        {deviceId && <BitlockerSection deviceId={deviceId} />}
 
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">Recent actions</h3>

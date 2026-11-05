@@ -118,9 +118,19 @@ function GroupCard({
   }
   const togglePolicy = async (type: string, enabled: boolean) => {
     try {
-      await setPolicy.mutateAsync({ groupId: group.id, type, enabled })
+      const current = group.policies.find((p) => p.type === type)
+      await setPolicy.mutateAsync({ groupId: group.id, type, enabled, settings: current?.settings })
     } catch (error) {
       onError(error, "Failed to change the policy")
+    }
+  }
+  const setSetting = async (type: string, key: string, value: boolean) => {
+    try {
+      const current = group.policies.find((p) => p.type === type)
+      const settings = { ...(current?.settings ?? {}), [key]: value }
+      await setPolicy.mutateAsync({ groupId: group.id, type, enabled: current?.enabled ?? true, settings })
+    } catch (error) {
+      onError(error, "Failed to change the setting")
     }
   }
   const handleDelete = async () => {
@@ -160,16 +170,32 @@ function GroupCard({
           const current = group.policies.find((p) => p.type === pt.type)
           const enabled = current?.enabled ?? false
           return (
-            <div key={pt.type} className="flex items-start justify-between gap-3 rounded-md border p-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{pt.label}</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{pt.description}</p>
+            <div key={pt.type} className="rounded-md border p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">{pt.label}</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{pt.description}</p>
+                </div>
+                <Switch
+                  checked={enabled}
+                  disabled={!canEdit || setPolicy.isPending}
+                  onCheckedChange={(checked) => togglePolicy(pt.type, checked)}
+                />
               </div>
-              <Switch
-                checked={enabled}
-                disabled={!canEdit || setPolicy.isPending}
-                onCheckedChange={(checked) => togglePolicy(pt.type, checked)}
-              />
+              {enabled && pt.settings.length > 0 && (
+                <div className="mt-2 space-y-1.5 border-t pt-2">
+                  {pt.settings.map((s) => (
+                    <label key={s.key} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="text-muted-foreground">{s.label}</span>
+                      <Switch
+                        checked={current?.settings?.[s.key] ?? s.default}
+                        disabled={!canEdit || setPolicy.isPending}
+                        onCheckedChange={(checked) => setSetting(pt.type, s.key, checked)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

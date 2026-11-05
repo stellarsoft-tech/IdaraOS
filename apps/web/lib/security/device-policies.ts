@@ -25,6 +25,13 @@ export interface PolicyTypeDef {
   /** What the policy does, shown before it is switched on */
   description: string
   settings: PolicySettingDef[]
+  /**
+   * Whether turning the policy off undoes it on the device. Access restrictions (block USB) are
+   * reverted - the whole point is to restore access. Protective policies (firewall on, Defender on,
+   * BitLocker) are NOT torn down when removed: the agent just stops forcing them. It never turns a
+   * firewall off, disables antivirus, or decrypts a disk on its own.
+   */
+  revertOnDisable: boolean
 }
 
 /**
@@ -39,6 +46,33 @@ export const POLICY_TYPES: PolicyTypeDef[] = [
     description:
       "Disables USB mass-storage devices (USB sticks, external drives) so they can't mount. Keyboards, mice, webcams and other non-storage USB devices keep working. Reversible - turning the policy off restores USB storage. Applies to everyone on the device, including the signed-in user.",
     settings: [],
+    revertOnDisable: true,
+  },
+  {
+    type: "firewall-on",
+    label: "Firewall always on",
+    description:
+      "Keeps Windows Defender Firewall turned on for all profiles (Domain, Private, Public) with inbound connections blocked by default, re-applied at every check-in. If someone turns the firewall off, the agent turns it back on within one check-in. Turning the policy off stops enforcing it but never leaves the firewall off itself.",
+    settings: [],
+    revertOnDisable: false,
+  },
+  {
+    type: "defender-on",
+    label: "Microsoft Defender always on",
+    description:
+      "Keeps Microsoft Defender Antivirus running with real-time protection on, re-applied at every check-in, and reports whether Windows Tamper Protection is enabled. Note: Tamper Protection can only be switched on from Intune/MDM, and while it is on Windows blocks scripted changes - so this gives practical protection by re-applying each check-in, not Microsoft Tamper Protection. Turning the policy off stops enforcing it but never disables antivirus.",
+    settings: [],
+    revertOnDisable: false,
+  },
+  {
+    type: "bitlocker",
+    label: "Encrypt disk (BitLocker) + escrow key",
+    description:
+      "Turns on BitLocker for the operating-system drive (XTS-AES-256, using the TPM plus a recovery password) and escrows the recovery key to IdaraOS, encrypted at rest. The key can be revealed later from the device's actions, and every reveal is audited. Needs a TPM; encryption runs in the background. Turning the policy off stops enforcing it but never decrypts the disk.",
+    settings: [
+      { key: "includeDataDrives", label: "Also encrypt fixed data drives", type: "boolean", default: false },
+    ],
+    revertOnDisable: false,
   },
 ]
 

@@ -14,7 +14,7 @@
  * See docs/modules/security/elevation-architecture.md
  */
 
-import { pgTable, uuid, text, timestamp, index, jsonb, boolean, uniqueIndex } from "drizzle-orm/pg-core"
+import { pgTable, uuid, text, timestamp, index, jsonb, boolean, integer, uniqueIndex } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { organizations } from "./organizations"
 import { users } from "./users"
@@ -116,6 +116,42 @@ export const devicePolicyState = pgTable(
 )
 
 // ============================================================================
+// BITLOCKER RECOVERY KEY ESCROW (one row per device volume)
+// ============================================================================
+
+/**
+ * BitLocker recovery keys escrowed by the agent when the "bitlocker" policy encrypts a device.
+ * The recovery password is stored ENCRYPTED AT REST (lib/encryption.ts, AES-256, keyed by
+ * ENCRYPTION_KEY) in recovery_key_encrypted. It is never returned to the browser except through the
+ * audited reveal endpoint. recovery_key_id is the protector GUID (not secret) that identifies which
+ * key unlocks the volume. The rest is status the portal shows (protection on, % encrypted).
+ */
+export const deviceBitlockerKeys = pgTable(
+  "security_device_bitlocker_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    deviceId: uuid("device_id").notNull().references(() => softwareUpdateDevices.id, { onDelete: "cascade" }),
+    // Drive letter / mount point, e.g. "C:"
+    volume: text("volume").notNull(),
+    // BitLocker recovery-password protector GUID - identifies the key, not secret
+    recoveryKeyId: text("recovery_key_id"),
+    // The 48-digit recovery password, encrypted at rest. Never sent to the client un-revealed.
+    recoveryKeyEncrypted: text("recovery_key_encrypted").notNull(),
+    // Encryption method reported by Windows, e.g. "XtsAes256"
+    encryptionMethod: text("encryption_method"),
+    protectionOn: boolean("protection_on").notNull().default(false),
+    encryptionPercentage: integer("encryption_percentage"),
+    reportedAt: timestamp("reported_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_security_device_bitlocker_keys_device").on(table.deviceId),
+    uniqueIndex("idx_security_device_bitlocker_keys_device_volume").on(table.deviceId, table.volume),
+  ]
+)
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -138,6 +174,10 @@ export const devicePolicyStateRelations = relations(devicePolicyState, ({ one })
   device: one(softwareUpdateDevices, { fields: [devicePolicyState.deviceId], references: [softwareUpdateDevices.id] }),
 }))
 
+export const deviceBitlockerKeysRelations = relations(deviceBitlockerKeys, ({ one }) => ({
+  device: one(softwareUpdateDevices, { fields: [deviceBitlockerKeys.deviceId], references: [softwareUpdateDevices.id] }),
+}))
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -146,3 +186,4 @@ export type PolicyGroup = typeof policyGroups.$inferSelect
 export type PolicyGroupMember = typeof policyGroupMembers.$inferSelect
 export type Policy = typeof policies.$inferSelect
 export type DevicePolicyState = typeof devicePolicyState.$inferSelect
+export type DeviceBitlockerKey = typeof deviceBitlockerKeys.$inferSelect

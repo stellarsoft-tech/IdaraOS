@@ -12,6 +12,7 @@
 import { and, eq, inArray, or } from "drizzle-orm"
 import { db } from "@/lib/db"
 import {
+  deviceBitlockerKeys,
   devicePolicyState,
   policies,
   policyGroupMembers,
@@ -21,6 +22,7 @@ import {
   type PolicyGroup,
   type SoftwareUpdateDevice,
 } from "@/lib/db/schema"
+import { decrypt, encrypt } from "@/lib/encryption"
 import {
   combinePolicies,
   isValidPolicyType,
@@ -428,4 +430,110 @@ export async function listDevicePolicyState(device: SoftwareUpdateDevice): Promi
     message: r.message,
     reportedAt: r.reportedAt,
   }))
+}
+
+// ============================================================================
+// BITLOCKER RECOVERY KEY ESCROW
+// ============================================================================
+
+/** One BitLocker volume as the agent reports it. recoveryKey is the secret, encrypted on arrival. */
+export interface ReportedBitlockerVolume {
+  volume: string
+  recoveryKeyId?: string | null
+  recoveryKey: string
+  encryptionMethod?: string | null
+  protectionOn?: boolean
+  encryptionPercentage?: number | null
+}
+
+/**
+ * Store the recovery keys the agent escrowed for a device. The recovery password is encrypted at
+ * rest (lib/encryption.ts) before it touches the database and is never kept in plaintext. Called
+ * from the device-authenticated check-in; one row per (device, volume), upserted.
+ */
+export async function recordBitlockerKeys(
+  device: SoftwareUpdateDevice,
+  volumes: ReportedBitlockerVolume[],
+  now: Date = new Date()
+): Promise<void> {
+  for (const v of volumes) {
+    const volume = v.volume?.trim()
+    const recoveryKey = v.recoveryKey?.trim()
+    // A row only makes sense with both a volume and a key to escrow
+    if (!volume || !recoveryKey) continue
+    const percentage =
+      typeof v.encryptionPercentage === "number" && Number.isFinite(v.encryptionPercentage)
+        ? Math.max(0, Math.min(100, Math.round(v.encryptionPercentage)))
+        : null
+    await db
+      .insert(deviceBitlockerKeys)
+      .values({
+        orgId: device.orgId,
+        deviceId: device.id,
+        volume,
+        recoveryKeyId: v.recoveryKeyId?.trim() || null,
+        recoveryKeyEncrypted: encrypt(recoveryKey),
+        encryptionMethod: v.encryptionMethod?.trim() || null,
+        protectionOn: v.protectionOn ?? false,
+        encryptionPercentage: percentage,
+        reportedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [deviceBitlockerKeys.deviceId, deviceBitlockerKeys.volume],
+        set: {
+          recoveryKeyId: v.recoveryKeyId?.trim() || null,
+          recoveryKeyEncrypted: encrypt(recoveryKey),
+          encryptionMethod: v.encryptionMethod?.trim() || null,
+          protectionOn: v.protectionOn ?? false,
+          encryptionPercentage: percentage,
+          reportedAt: now,
+        },
+      })
+  }
+}
+
+/** A BitLocker volume for the portal, WITHOUT the recovery key (revealed only via its own endpoint) */
+export interface BitlockerKeyView {
+  id: string
+  volume: string
+  recoveryKeyId: string | null
+  encryptionMethod: string | null
+  protectionOn: boolean
+  encryptionPercentage: number | null
+  reportedAt: Date
+}
+
+/** Escrowed BitLocker volumes for a device (no secrets) */
+export async function listBitlockerKeys(device: SoftwareUpdateDevice): Promise<BitlockerKeyView[]> {
+  const rows = await db
+    .select()
+    .from(deviceBitlockerKeys)
+    .where(eq(deviceBitlockerKeys.deviceId, device.id))
+    .orderBy(deviceBitlockerKeys.volume)
+  return rows.map((r) => ({
+    id: r.id,
+    volume: r.volume,
+    recoveryKeyId: r.recoveryKeyId,
+    encryptionMethod: r.encryptionMethod,
+    protectionOn: r.protectionOn,
+    encryptionPercentage: r.encryptionPercentage,
+    reportedAt: r.reportedAt,
+  }))
+}
+
+/**
+ * Decrypt and return one escrowed recovery key. The caller MUST audit every call - this hands back
+ * a secret. Returns the volume for the audit record, or null if the key isn't found for this device.
+ */
+export async function revealBitlockerKey(
+  device: SoftwareUpdateDevice,
+  keyId: string
+): Promise<{ volume: string; recoveryKey: string } | null> {
+  const [row] = await db
+    .select()
+    .from(deviceBitlockerKeys)
+    .where(and(eq(deviceBitlockerKeys.id, keyId), eq(deviceBitlockerKeys.deviceId, device.id)))
+    .limit(1)
+  if (!row) return null
+  return { volume: row.volume, recoveryKey: decrypt(row.recoveryKeyEncrypted) }
 }

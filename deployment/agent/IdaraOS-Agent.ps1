@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.4.1"
+$AgentVersion = "1.5.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -122,7 +122,7 @@ function Get-State {
     if (-not $state) { $state = [pscustomobject]@{ lastCheckIn = $null; checkInMinutes = 15; lastError = $null } }
     # Policy bookkeeping, added in 1.4.0: policy types we've applied (to revert when removed) and the
     # last results to report at the next check-in. Add them to state loaded from an older file.
-    foreach ($prop in @("managedPolicies", "policyResults")) {
+    foreach ($prop in @("managedPolicies", "policyResults", "bitlocker")) {
         if (-not ($state.PSObject.Properties.Name -contains $prop)) {
             $state | Add-Member -NotePropertyName $prop -NotePropertyValue @() -Force
         }
@@ -748,27 +748,189 @@ function Set-UsbStorageBlock([bool]$Blocked) {
     return @{ type = "usb-storage-block"; ok = $true; message = $message; state = @{ blocked = $Blocked } }
 }
 
+# Firewall: keep Windows Defender Firewall on for all profiles with inbound blocked by default.
+# Idempotent and re-applied each check-in, so a firewall someone turned off comes back on. This is a
+# protective policy - it only ever forces "on" and never turns the firewall off.
+function Set-FirewallOn {
+    $errors = @()
+    try {
+        Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled True -DefaultInboundAction Block -ErrorAction Stop
+    } catch {
+        # Fall back to netsh where the NetSecurity module isn't available
+        try {
+            & netsh advfirewall set allprofiles state on | Out-Null
+            & netsh advfirewall set allprofiles firewallpolicy blockinbound,allowoutbound | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "netsh advfirewall returned $LASTEXITCODE" }
+        } catch { $errors += $_.Exception.Message }
+    }
+    $profilesOn = $null
+    try { $profilesOn = @(Get-NetFirewallProfile -ErrorAction Stop | ForEach-Object { "{0}={1}" -f $_.Name, $_.Enabled }) } catch { }
+    if ($errors.Count -gt 0) {
+        return @{ type = "firewall-on"; ok = $false; message = ("Error: " + ($errors -join "; ")); state = @{ enabled = $false } }
+    }
+    $msg = if ($profilesOn) { "Firewall on: " + ($profilesOn -join ", ") } else { "Firewall on (all profiles, inbound blocked)" }
+    return @{ type = "firewall-on"; ok = $true; message = $msg; state = @{ enabled = $true } }
+}
+
+# Microsoft Defender: ensure the service runs and real-time protection is on, and report whether
+# Windows Tamper Protection is enabled. Tamper Protection can only be switched on from Intune/MDM,
+# and while it is on Windows blocks scripted changes to Defender - so when it's on we report rather
+# than force. Protective policy: never disables antivirus.
+function Set-DefenderOn {
+    $errors = @()
+    $tamper = $null
+    $realtimeOn = $null
+    try {
+        $svc = Get-Service -Name WinDefend -ErrorAction Stop
+        if ($svc.Status -ne "Running") { Start-Service -Name WinDefend -ErrorAction Stop }
+    } catch { $errors += ("WinDefend service: " + $_.Exception.Message) }
+    try { Set-MpPreference -DisableRealtimeMonitoring $false -ErrorAction Stop } catch { $errors += ("real-time: " + $_.Exception.Message) }
+    try {
+        $status = Get-MpComputerStatus -ErrorAction Stop
+        $realtimeOn = [bool]$status.RealTimeProtectionEnabled
+        $tamper = [bool]$status.IsTamperProtected
+    } catch { }
+    $state = @{ realtimeOn = $realtimeOn; tamperProtected = $tamper }
+    if ($realtimeOn -eq $true) {
+        $msg = "Defender real-time protection on"
+        if ($tamper -eq $true) { $msg += " (Tamper Protection on)" }
+        return @{ type = "defender-on"; ok = $true; message = $msg; state = $state }
+    }
+    if ($realtimeOn -eq $false) {
+        # Expected when Tamper Protection is on - Windows then blocks our scripted change
+        $msg = "Real-time protection is OFF"
+        if ($tamper -eq $true) { $msg += " (Tamper Protection on - managed by Windows)" }
+        return @{ type = "defender-on"; ok = $false; message = $msg; state = $state }
+    }
+    # Couldn't read the status (Defender cmdlets missing, or the read failed)
+    $msg = "Couldn't confirm Defender status"
+    if ($errors.Count -gt 0) { $msg += ": " + ($errors -join "; ") }
+    return @{ type = "defender-on"; ok = $false; message = $msg; state = $state }
+}
+
+# BitLocker: turn encryption on for the OS drive (and optionally fixed data drives), make sure a
+# recovery-password protector exists, and hand the recovery key back so the server can escrow it.
+# Protective policy: it never decrypts a disk. Returns @{ result = <policy result>; volumes = @(...) }
+# where each volume carries its recovery key - the key is kept out of the policy result's state.
+function Set-BitLocker([bool]$IncludeDataDrives) {
+    $errors = @()
+    $volumes = @()
+    if (-not (Get-Command Get-BitLockerVolume -ErrorAction SilentlyContinue)) {
+        return @{ result = @{ type = "bitlocker"; ok = $false; message = "BitLocker isn't available on this edition of Windows"; state = @{} }; volumes = @() }
+    }
+
+    $tpmReady = $false
+    try { $t = Get-Tpm -ErrorAction Stop; $tpmReady = ($t.TpmPresent -and $t.TpmReady) } catch { }
+
+    $targets = @()
+    try {
+        foreach ($v in @(Get-BitLockerVolume -ErrorAction Stop)) {
+            if ($v.VolumeType -eq "OperatingSystem") {
+                $targets += $v
+            } elseif ($IncludeDataDrives -and $v.VolumeType -eq "Data") {
+                # Only fixed data drives (never removable media)
+                $dt = $null
+                try { $dt = (Get-Volume -DriveLetter ($v.MountPoint.TrimEnd(":")) -ErrorAction Stop).DriveType } catch { }
+                if ($dt -eq "Fixed" -or $null -eq $dt) { $targets += $v }
+            }
+        }
+    } catch { $errors += $_.Exception.Message }
+
+    foreach ($v in $targets) {
+        $mp = $v.MountPoint
+        $isOs = ($v.VolumeType -eq "OperatingSystem")
+        try {
+            if ($v.VolumeStatus -eq "FullyDecrypted") {
+                if ($isOs) {
+                    if (-not $tpmReady) { throw "no usable TPM for the OS drive" }
+                    Enable-BitLocker -MountPoint $mp -EncryptionMethod XtsAes256 -UsedSpaceOnly -TpmProtector -SkipHardwareTest -ErrorAction Stop | Out-Null
+                } else {
+                    Enable-BitLocker -MountPoint $mp -EncryptionMethod XtsAes256 -UsedSpaceOnly -RecoveryPasswordProtector -SkipHardwareTest -ErrorAction Stop | Out-Null
+                    try { Enable-BitLockerAutoUnlock -MountPoint $mp -ErrorAction Stop | Out-Null } catch { }
+                }
+            }
+            # Make sure a recovery-password protector exists, so there's always a key to escrow
+            $cur = Get-BitLockerVolume -MountPoint $mp -ErrorAction Stop
+            $rp = @($cur.KeyProtector | Where-Object { $_.KeyProtectorType -eq "RecoveryPassword" })
+            if ($rp.Count -eq 0) {
+                Add-BitLockerKeyProtector -MountPoint $mp -RecoveryPasswordProtector -ErrorAction Stop | Out-Null
+                $cur = Get-BitLockerVolume -MountPoint $mp -ErrorAction Stop
+                $rp = @($cur.KeyProtector | Where-Object { $_.KeyProtectorType -eq "RecoveryPassword" })
+            }
+            $protector = $rp | Select-Object -First 1
+            if ($protector -and $protector.RecoveryPassword) {
+                $volumes += @{
+                    volume = [string]$mp
+                    recoveryKeyId = [string]$protector.KeyProtectorId
+                    recoveryKey = [string]$protector.RecoveryPassword
+                    encryptionMethod = [string]$cur.EncryptionMethod
+                    protectionOn = ($cur.ProtectionStatus -eq "On")
+                    encryptionPercentage = [int]$cur.EncryptionPercentage
+                }
+            } else {
+                $errors += ("{0}: no recovery password protector" -f $mp)
+            }
+        } catch {
+            $errors += ("{0}: {1}" -f $mp, $_.Exception.Message)
+        }
+    }
+
+    $protectedCount = @($volumes | Where-Object { $_.protectionOn }).Count
+    $state = @{ volumes = $volumes.Count; protected = $protectedCount }
+    if ($errors.Count -gt 0) {
+        return @{ result = @{ type = "bitlocker"; ok = $false; message = ("Error: " + ($errors -join "; ")); state = $state }; volumes = $volumes }
+    }
+    $msg = "BitLocker: {0} volume(s), {1} protected, key escrowed" -f $volumes.Count, $protectedCount
+    return @{ result = @{ type = "bitlocker"; ok = $true; message = $msg; state = $state }; volumes = $volumes }
+}
+
+# Apply the effective desired state. USB blocking is reverted when removed; the protective policies
+# (firewall, Defender, BitLocker) are only ever forced on and never torn down. Returns the policy
+# results and any BitLocker volumes to escrow (handled separately so keys stay out of the results).
 function Invoke-Policies($Policies, $State) {
     $desired = @{}
-    foreach ($p in @($Policies)) { if ($p -and $p.type) { $desired[[string]$p.type] = $true } }
+    foreach ($p in @($Policies)) { if ($p -and $p.type) { $desired[[string]$p.type] = $p } }
     $managed = @{}
     foreach ($t in @($State.managedPolicies)) { if ($t) { $managed[[string]$t] = $true } }
 
     $results = @()
+    $bitlocker = @()
     $nowManaged = @()
 
-    # usb-storage-block: present => block; no longer present => revert once (only if we applied it)
+    # usb-storage-block (revertable): present => block; removed => revert once (only if we applied it)
     if ($desired.ContainsKey("usb-storage-block")) {
-        $result = Set-UsbStorageBlock $true
-        $results += $result
-        if ($result.ok) { $nowManaged += "usb-storage-block" }
+        $r = Set-UsbStorageBlock $true
+        $results += $r
+        if ($r.ok) { $nowManaged += "usb-storage-block" }
     } elseif ($managed.ContainsKey("usb-storage-block")) {
         $results += (Set-UsbStorageBlock $false)
     }
 
+    # firewall-on (protective): force on while present, otherwise leave the firewall as it is
+    if ($desired.ContainsKey("firewall-on")) {
+        $results += (Set-FirewallOn)
+    }
+
+    # defender-on (protective)
+    if ($desired.ContainsKey("defender-on")) {
+        $results += (Set-DefenderOn)
+    }
+
+    # bitlocker (protective): encrypt and escrow the recovery key while present
+    if ($desired.ContainsKey("bitlocker")) {
+        $settings = $desired["bitlocker"].settings
+        $includeData = $false
+        if ($settings -and ($settings.PSObject.Properties.Name -contains "includeDataDrives")) {
+            $includeData = [bool]$settings.includeDataDrives
+        }
+        $bl = Set-BitLocker $includeData
+        $results += $bl.result
+        $bitlocker = @($bl.volumes)
+    }
+
     $State.managedPolicies = @($nowManaged)
     foreach ($result in $results) { Write-Log ("  policy {0}: {1}" -f $result.type, $result.message) }
-    return $results
+    return @{ results = $results; bitlocker = $bitlocker }
 }
 
 # Replace this script with the version the server ships, after verifying its SHA-256. The server
@@ -841,6 +1003,23 @@ try {
     $body["lastError"] = $state.lastError
     # Report what we applied for each policy last cycle (the server records it per device)
     $body["policyResults"] = @($state.policyResults)
+    # BitLocker recovery keys collected last cycle: kept DPAPI-protected on disk, sent over HTTPS here
+    # (the server encrypts them at rest). Re-sent each cycle so status/percentage stay current.
+    $body["bitlocker"] = @()
+    foreach ($bl in @($state.bitlocker)) {
+        if (-not $bl -or -not $bl.recoveryKeyProtected) { continue }
+        $key = $null
+        try { $key = Unprotect-Text ([string]$bl.recoveryKeyProtected) } catch { }
+        if (-not $key) { continue }
+        $body["bitlocker"] += @{
+            volume = [string]$bl.volume
+            recoveryKeyId = [string]$bl.recoveryKeyId
+            recoveryKey = $key
+            encryptionMethod = [string]$bl.encryptionMethod
+            protectionOn = [bool]$bl.protectionOn
+            encryptionPercentage = [int]$bl.encryptionPercentage
+        }
+    }
     try {
         $response = Invoke-IdaraOS -Path "/api/updater/v1/check-in" -Body $body -Authorization $authorization
     } catch {
@@ -868,7 +1047,24 @@ try {
     }
 
     # Policies: apply the effective desired state idempotently, remember the results for next check-in
-    $state.policyResults = @(Invoke-Policies $response.policies $state)
+    $policyOutput = Invoke-Policies $response.policies $state
+    $state.policyResults = @($policyOutput.results)
+    # Keep collected BitLocker keys DPAPI-protected on disk (SYSTEM/Admin-only folder); send next cycle
+    $state.bitlocker = @()
+    foreach ($vol in @($policyOutput.bitlocker)) {
+        if (-not $vol -or -not $vol.recoveryKey) { continue }
+        $protected = $null
+        try { $protected = Protect-Text ([string]$vol.recoveryKey) } catch { }
+        if (-not $protected) { continue }
+        $state.bitlocker += [pscustomobject]@{
+            volume = [string]$vol.volume
+            recoveryKeyId = [string]$vol.recoveryKeyId
+            recoveryKeyProtected = $protected
+            encryptionMethod = [string]$vol.encryptionMethod
+            protectionOn = [bool]$vol.protectionOn
+            encryptionPercentage = [int]$vol.encryptionPercentage
+        }
+    }
     Write-Json $StatePath $state
 
     # Agent self-update: only when the server offered a newer version (admin-triggered or auto-update)

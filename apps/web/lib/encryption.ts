@@ -9,7 +9,16 @@
 import crypto from "node:crypto"
 
 // Encryption key from environment or default for development
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "demo-key-change-in-production-32c"
+const DEV_FALLBACK_KEY = "demo-key-change-in-production-32c"
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || DEV_FALLBACK_KEY
+
+/**
+ * Whether a real ENCRYPTION_KEY is configured (not the insecure development fallback). Sensitive
+ * escrow such as BitLocker recovery keys relies on this; the portal warns when it is false.
+ */
+export function isEncryptionKeyConfigured(): boolean {
+  return !!process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY !== DEV_FALLBACK_KEY
+}
 
 // AES-256-CBC algorithm (backward compatible with existing encrypted data)
 const ALGORITHM = "aes-256-cbc" as const
