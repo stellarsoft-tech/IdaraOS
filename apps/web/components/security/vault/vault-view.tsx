@@ -24,6 +24,7 @@ import { toast } from "sonner"
 import { PageShell } from "@/components/primitives/page-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   DropdownMenu,
@@ -62,6 +63,7 @@ export function VaultView() {
   const items = useMemo(() => data?.items ?? [], [data])
   const folders = useMemo(() => data?.folders ?? [], [data])
   const encryptionConfigured = data?.encryptionKeyConfigured ?? true
+  const health = data?.health
 
   const [search, setSearch] = useState("")
   const [folderFilter, setFolderFilter] = useState<string>("all")
@@ -206,6 +208,16 @@ export function VaultView() {
             ENCRYPTION_KEY isn&apos;t set on the server, so vault secrets are only weakly protected at rest. Set it to
             secure the vault.
           </span>
+        </div>
+      )}
+
+      {health && health.total > 0 && health.weak + health.reused + health.old > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 p-3 text-sm">
+          <span className="font-medium">Vault health:</span>
+          {health.weak > 0 && <Badge variant="outline" className="border-red-400 text-red-600">{health.weak} weak</Badge>}
+          {health.reused > 0 && <Badge variant="outline" className="border-red-400 text-red-600">{health.reused} reused</Badge>}
+          {health.old > 0 && <Badge variant="outline" className="border-amber-400 text-amber-600">{health.old} old</Badge>}
+          <span className="text-muted-foreground">of {health.total} with passwords — update these to stay compliant.</span>
         </div>
       )}
 

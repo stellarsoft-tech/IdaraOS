@@ -8,6 +8,7 @@ import { z } from "zod"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { createVaultItem } from "@/lib/security/vault-server"
+import { VaultPolicyError } from "@/lib/vault/audit-server"
 import { vaultItemTypeValues } from "@/lib/db/schema"
 
 const itemSchema = z.object({
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ data: item }, { status: 201 })
   } catch (error) {
+    if (error instanceof VaultPolicyError) return NextResponse.json({ error: error.message }, { status: 400 })
     const apiError = handleApiError(error)
     if (apiError) return apiError
     console.error("Error creating vault item:", error)

@@ -11,7 +11,7 @@
  * Security Audit, and admin recovery (see the module plan).
  */
 
-import { pgTable, uuid, text, timestamp, boolean, index, type AnyPgColumn } from "drizzle-orm/pg-core"
+import { pgTable, uuid, text, timestamp, boolean, integer, smallint, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import { organizations } from "./organizations"
 import { users } from "./users"
@@ -23,6 +23,15 @@ import { users } from "./users"
 /** The kind of record a vault item holds. Phase 1 focuses on logins; the rest share the same storage. */
 export const vaultItemTypeValues = ["login", "note", "card", "identity"] as const
 export type VaultItemType = (typeof vaultItemTypeValues)[number]
+
+/**
+ * How the org password policy is enforced (Phase 2 Security Audit):
+ * - off:   policy is not applied; nothing is flagged or blocked
+ * - warn:  violations are allowed but counted in the Security Audit
+ * - block: a password that violates the policy is rejected when saving an item
+ */
+export const vaultEnforcementValues = ["off", "warn", "block"] as const
+export type VaultEnforcement = (typeof vaultEnforcementValues)[number]
 
 // ============================================================================
 // FOLDERS
@@ -78,6 +87,10 @@ export const vaultItems = pgTable(
     notesEncrypted: text("notes_encrypted"),
     // Type-specific secret fields (card number/cvv, identity fields, custom fields) as an encrypted JSON blob
     extraEncrypted: text("extra_encrypted"),
+    // Non-secret derived values for the Security Audit (never decrypt to compute these):
+    // keyed HMAC of the password (reuse detection) and a 0-4 strength score, set at save time.
+    passwordFingerprint: text("password_fingerprint"),
+    passwordStrength: smallint("password_strength"),
     // When the password last changed (for the max-age policy / audit); null for non-login items
     lastPasswordChangeAt: timestamp("last_password_change_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -139,8 +152,40 @@ export const vaultItemHistoryRelations = relations(vaultItemHistory, ({ one }) =
 }))
 
 // ============================================================================
+// ORG POLICY SETTINGS (Phase 2)
+// ============================================================================
+
+/** One row per organisation: the vault password policy the Security Audit enforces/reports against. */
+export const vaultSettings = pgTable(
+  "security_vault_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    minLength: integer("min_length").notNull().default(12),
+    requireUpper: boolean("require_upper").notNull().default(true),
+    requireLower: boolean("require_lower").notNull().default(true),
+    requireDigit: boolean("require_digit").notNull().default(true),
+    requireSymbol: boolean("require_symbol").notNull().default(false),
+    // Every credential must be unique within the user's own vault
+    noReuse: boolean("no_reuse").notNull().default(true),
+    // Flag passwords older than this many days (0 = no limit)
+    maxAgeDays: integer("max_age_days").notNull().default(0),
+    enforcement: text("enforcement", { enum: vaultEnforcementValues }).notNull().default("warn"),
+    updatedById: uuid("updated_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("idx_security_vault_settings_org").on(table.orgId)]
+)
+
+// ============================================================================
 // INFERRED TYPES
 // ============================================================================
+
+export type VaultSettings = typeof vaultSettings.$inferSelect
+export type NewVaultSettings = typeof vaultSettings.$inferInsert
 
 export type VaultFolder = typeof vaultFolders.$inferSelect
 export type NewVaultFolder = typeof vaultFolders.$inferInsert

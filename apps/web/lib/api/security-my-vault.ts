@@ -62,6 +62,14 @@ export interface VaultItemInput {
   extra?: Record<string, unknown> | null
 }
 
+export interface VaultHealth {
+  total: number
+  weak: number
+  reused: number
+  old: number
+  maxAgeDays: number
+}
+
 // ============================================================================
 // FETCH HELPER
 // ============================================================================
@@ -91,7 +99,7 @@ export function useVault() {
   return useQuery({
     queryKey: keys.vault,
     queryFn: () =>
-      request<{ folders: VaultFolder[]; items: VaultItemSummary[]; encryptionKeyConfigured: boolean }>(
+      request<{ folders: VaultFolder[]; items: VaultItemSummary[]; health: VaultHealth; encryptionKeyConfigured: boolean }>(
         "/api/security/my-vault",
         undefined,
         "Failed to load the vault"

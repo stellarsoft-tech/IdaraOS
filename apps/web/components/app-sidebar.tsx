@@ -129,6 +129,7 @@ const navigationData: NavItem[] = [
       { title: "Approved Software", url: "/security/software", module: "security.software" },
       { title: "Software Updates", url: "/security/software-updates", module: "security.software-updates" },
       { title: "Vault", url: "/security/vault", module: "security.my-vault" },
+      { title: "Vault Administration", url: "/security/vault-admin", module: "security.vault" },
       { 
         title: "Frameworks", 
         url: "/security/frameworks", 

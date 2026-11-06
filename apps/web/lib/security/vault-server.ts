@@ -11,6 +11,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
 import { vaultFolders, vaultItems, vaultItemHistory, type VaultItemType } from "@/lib/db/schema"
 import { decryptOptional, decryptSecret, encryptOptional, encryptSecret } from "@/lib/vault/crypto-server"
+import { derivePasswordFields, enforceVaultPolicy } from "@/lib/vault/audit-server"
 
 // ============================================================================
 // VIEW TYPES (what routes return)
@@ -179,6 +180,10 @@ export async function createVaultItem(orgId: string, userId: string, input: Vaul
   const now = new Date()
   const folderId = input.folderId && (await folderBelongsToUser(orgId, userId, input.folderId)) ? input.folderId : null
   const extraJson = input.extra && Object.keys(input.extra).length > 0 ? JSON.stringify(input.extra) : null
+  const password = input.password?.trim() || ""
+  // Enforce the org password policy (throws VaultPolicyError on enforcement "block" with violations)
+  if (password) await enforceVaultPolicy(orgId, userId, password, null)
+  const derived = derivePasswordFields(password || null)
   const [row] = await db
     .insert(vaultItems)
     .values({
@@ -190,10 +195,12 @@ export async function createVaultItem(orgId: string, userId: string, input: Vaul
       username: input.username?.trim() || null,
       url: input.url?.trim() || null,
       favorite: input.favorite ?? false,
-      passwordEncrypted: encryptOptional(input.password),
+      passwordEncrypted: password ? encryptSecret(password) : null,
       notesEncrypted: encryptOptional(input.notes),
       extraEncrypted: encryptOptional(extraJson),
-      lastPasswordChangeAt: input.password?.trim() ? now : null,
+      passwordFingerprint: derived.passwordFingerprint,
+      passwordStrength: derived.passwordStrength,
+      lastPasswordChangeAt: password ? now : null,
       createdAt: now,
       updatedAt: now,
     })
@@ -242,7 +249,11 @@ export async function updateVaultItem(
     const currentPassword = decryptOptional(current.passwordEncrypted) ?? ""
     if (nextPassword !== currentPassword) {
       passwordChanged = true
+      if (nextPassword) await enforceVaultPolicy(orgId, userId, nextPassword, itemId)
+      const derived = derivePasswordFields(nextPassword || null)
       set.passwordEncrypted = nextPassword ? encryptSecret(nextPassword) : null
+      set.passwordFingerprint = derived.passwordFingerprint
+      set.passwordStrength = derived.passwordStrength
       if (nextPassword) set.lastPasswordChangeAt = now
     }
   }

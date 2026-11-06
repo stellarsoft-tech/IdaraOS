@@ -10,6 +10,7 @@ import { z } from "zod"
 import { requirePermission, handleApiError, getAuditLogger } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { deleteVaultItem, getVaultItem, updateVaultItem } from "@/lib/security/vault-server"
+import { VaultPolicyError } from "@/lib/vault/audit-server"
 import { vaultItemTypeValues } from "@/lib/db/schema"
 
 interface RouteContext {
@@ -82,6 +83,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ data: item })
   } catch (error) {
+    if (error instanceof VaultPolicyError) return NextResponse.json({ error: error.message }, { status: 400 })
     const apiError = handleApiError(error)
     if (apiError) return apiError
     console.error("Error updating vault item:", error)

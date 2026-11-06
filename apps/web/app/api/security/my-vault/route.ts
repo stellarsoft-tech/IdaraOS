@@ -9,13 +9,17 @@ import { NextResponse } from "next/server"
 import { requirePermission, handleApiError } from "@/lib/api/context"
 import { P } from "@/lib/rbac/resources"
 import { listVault } from "@/lib/security/vault-server"
+import { getUserVaultHealth } from "@/lib/vault/audit-server"
 import { isEncryptionKeyConfigured } from "@/lib/vault/crypto-server"
 
 export async function GET() {
   try {
     const session = await requirePermission(...P.security.myVault.view())
-    const { folders, items } = await listVault(session.orgId, session.userId)
-    return NextResponse.json({ folders, items, encryptionKeyConfigured: isEncryptionKeyConfigured() })
+    const [{ folders, items }, health] = await Promise.all([
+      listVault(session.orgId, session.userId),
+      getUserVaultHealth(session.orgId, session.userId),
+    ])
+    return NextResponse.json({ folders, items, health, encryptionKeyConfigured: isEncryptionKeyConfigured() })
   } catch (error) {
     const apiError = handleApiError(error)
     if (apiError) return apiError
