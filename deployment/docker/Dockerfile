@@ -91,6 +91,10 @@ COPY deployment/agent/Install-IdaraOSAgent.ps1 ./apps/web/agent/Install-IdaraOSA
 ENV AGENT_INSTALLER_PATH=/app/apps/web/agent/Install-IdaraOSAgent.ps1
 COPY deployment/agent/filter-lists ./apps/web/agent/filter-lists
 ENV FILTER_LISTS_PATH=/app/apps/web/agent/filter-lists
+# The signed Vault browser extension (served at /api/updater/v1/extension/idaraos-vault.crx for the
+# agent force-install policy). Same reason: Next's standalone output doesn't trace files outside apps/web.
+COPY deployment/extension/idaraos-vault.crx ./apps/web/agent/idaraos-vault.crx
+ENV VAULT_EXTENSION_CRX_PATH=/app/apps/web/agent/idaraos-vault.crx
 
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app

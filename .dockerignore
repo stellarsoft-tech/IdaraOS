@@ -64,6 +64,9 @@ deployment/**
 !deployment/agent/Install-IdaraOSAgent.ps1
 !deployment/agent/filter-lists
 !deployment/agent/filter-lists/*.txt
+# Served for the self-hosted Vault browser extension (/api/updater/v1/extension/...)
+!deployment/extension
+!deployment/extension/*.crx
 .github
 
 # Specs and scripts (development only)
