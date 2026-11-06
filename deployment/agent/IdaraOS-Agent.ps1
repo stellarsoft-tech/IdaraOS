@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.10.1"
+$AgentVersion = "1.10.2"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -847,6 +847,7 @@ function Set-Quarantine {
 
     # Rebuild our rule set from scratch (idempotent; picks up new server IPs)
     try { Get-NetFirewallRule -Group $QuarantineGroup -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue } catch { }
+    $idaraRuleOk = $false
     try {
         New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - DNS UDP" -Direction Outbound -Action Allow -Protocol UDP -RemotePort 53 -ErrorAction Stop | Out-Null
         New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - DNS TCP" -Direction Outbound -Action Allow -Protocol TCP -RemotePort 53 -ErrorAction Stop | Out-Null
@@ -854,16 +855,32 @@ function Set-Quarantine {
         New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - Loopback" -Direction Outbound -Action Allow -RemoteAddress "127.0.0.0/8", "::1" -ErrorAction Stop | Out-Null
         if ($serverIps.Count -gt 0) {
             New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - IdaraOS" -Direction Outbound -Action Allow -Protocol TCP -RemotePort 443 -RemoteAddress $serverIps -ErrorAction Stop | Out-Null
+            $idaraRuleOk = $true
         } else {
             $errors += "couldn't resolve the IdaraOS server IP"
         }
     } catch { $errors += ("rules: " + $_.Exception.Message) }
 
-    # Flip the default outbound action to Block (after the allow rules exist)
-    try { Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Block -ErrorAction Stop }
-    catch { $errors += ("outbound block: " + $_.Exception.Message) }
+    # Only flip the default outbound action to Block when the IdaraOS allow rule is actually in place.
+    # Otherwise we'd cut the device off from EVERYTHING, IdaraOS included - it couldn't even receive an
+    # unlock (exactly the lockout we must never cause). If the allow rule isn't there, leave outbound
+    # open, report it, and retry next cycle (DNS may resolve then). Block is all-or-nothing.
+    $applied = $false
+    if ($idaraRuleOk) {
+        try {
+            Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Block -ErrorAction Stop
+            $applied = $true
+        } catch { $errors += ("outbound block: " + $_.Exception.Message) }
+    } else {
+        $errors += "skipped outbound block - IdaraOS allow rule not in place (would cut the device off)"
+        # Never leave the device blocked without the allow rule in place
+        try { Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Allow -ErrorAction SilentlyContinue } catch { }
+    }
 
-    $state = @{ quarantined = $true; serverIps = $serverIps.Count }
+    $state = @{ quarantined = $applied; serverIps = $serverIps.Count }
+    if (-not $applied) {
+        return @{ type = "quarantine"; ok = $false; message = ("Not quarantined (left open): " + ($errors -join "; ")); state = $state }
+    }
     if ($errors.Count -gt 0) {
         return @{ type = "quarantine"; ok = $false; message = ("Applied with issues: " + ($errors -join "; ")); state = $state }
     }
@@ -1549,7 +1566,9 @@ try {
     try {
         if ([bool]$response.quarantine) {
             $q = Set-Quarantine
-            $state.quarantine = $true
+            # Reflect whether the block ACTUALLY applied (false if we skipped it to avoid a lockout), so
+            # quarantineApplied is honest and the portal shows "applying" until the device truly blocks.
+            $state.quarantine = [bool]$q.state.quarantined
             Write-Log ("  quarantine: {0}" -f $q.message)
         } elseif ([bool]$state.quarantine) {
             $q = Remove-Quarantine
