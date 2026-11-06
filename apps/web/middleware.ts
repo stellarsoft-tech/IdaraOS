@@ -111,6 +111,7 @@ const publicRoutes = [
   "/api/public", // Public branding endpoints (app name, logo only)
   "/api/internal", // Scheduled jobs - protected by INTERNAL_CRON_SECRET header
   "/api/updater", // IdaraOS Updater on devices - enrollment token / per-device secret auth
+  "/api/vault-ext", // Vault browser extension - per-user bearer token auth (not cookies)
   "/registration-incomplete",
   "/set-password",
 ]

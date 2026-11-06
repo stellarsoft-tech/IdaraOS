@@ -354,3 +354,45 @@ export function useImportVault() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.vault }),
   })
 }
+
+// ============================================================================
+// BROWSER EXTENSION TOKENS
+// ============================================================================
+
+export interface ExtensionToken {
+  id: string
+  name: string
+  lastUsedAt: string | null
+  createdAt: string
+}
+
+const extTokensKey = ["security-vault-ext-tokens"]
+
+export function useExtensionTokens() {
+  return useQuery({
+    queryKey: extTokensKey,
+    queryFn: () => request<{ data: ExtensionToken[] }>("/api/security/my-vault/extension-token", undefined, "Failed to load tokens"),
+  })
+}
+
+export function useCreateExtensionToken() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (name?: string) =>
+      request<{ data: { id: string; name: string; token: string; createdAt: string } }>(
+        "/api/security/my-vault/extension-token",
+        { method: "POST", body: JSON.stringify({ name }) },
+        "Failed to create the token"
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: extTokensKey }),
+  })
+}
+
+export function useRevokeExtensionToken() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      request<{ data: { id: string } }>(`/api/security/my-vault/extension-token/${id}`, { method: "DELETE" }, "Failed to revoke"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: extTokensKey }),
+  })
+}

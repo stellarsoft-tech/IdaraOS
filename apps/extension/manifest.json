@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "IdaraOS Vault",
+  "version": "1.0.0",
+  "description": "Autofill logins from your IdaraOS password vault, and save new ones.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "IdaraOS Vault" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

@@ -298,6 +298,33 @@ export type NewVaultShare = typeof vaultShares.$inferInsert
 export type VaultAttachment = typeof vaultAttachments.$inferSelect
 export type NewVaultAttachment = typeof vaultAttachments.$inferInsert
 
+// ============================================================================
+// EXTENSION TOKENS (Phase 5)
+// ============================================================================
+
+export const vaultExtensionTokens = pgTable(
+  "security_vault_extension_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_security_vault_extension_tokens_hash").on(table.tokenHash),
+    index("idx_security_vault_extension_tokens_user").on(table.userId),
+  ]
+)
+
+export type VaultExtensionToken = typeof vaultExtensionTokens.$inferSelect
+
 export type VaultFolder = typeof vaultFolders.$inferSelect
 export type NewVaultFolder = typeof vaultFolders.$inferInsert
 export type VaultItem = typeof vaultItems.$inferSelect

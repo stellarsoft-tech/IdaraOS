@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font: 13px system-ui, sans-serif; width: 320px; margin: 0; padding: 12px; color: #111827; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      input { width: 100%; box-sizing: border-box; padding: 6px; margin: 2px 0 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+      button { padding: 6px 10px; border: none; border-radius: 6px; background: #111827; color: #fff; cursor: pointer; }
+      button.secondary { background: #e5e7eb; color: #111827; }
+      .row { display: flex; gap: 6px; }
+      .muted { color: #6b7280; font-size: 12px; }
+      .item { display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 6px; }
+      .item .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      hr { border: none; border-top: 1px solid #e5e7eb; margin: 12px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>IdaraOS Vault</h1>
+    <div id="status" class="muted"></div>
+
+    <div id="matches"></div>
+
+    <hr />
+    <details id="settings">
+      <summary class="muted">Settings</summary>
+      <label>Server URL</label>
+      <input id="serverUrl" placeholder="https://idaraos.com" />
+      <label>Extension token</label>
+      <input id="token" type="password" placeholder="vext_…" />
+      <div class="row">
+        <button id="save">Save &amp; sync</button>
+        <button id="sync" class="secondary">Sync now</button>
+      </div>
+      <p class="muted">Generate a token in IdaraOS → Security → Vault → Browser extension.</p>
+    </details>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

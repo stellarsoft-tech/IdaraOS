@@ -12,6 +12,7 @@ import {
   MoreVertical,
   Pencil,
   Plus,
+  Puzzle,
   Search,
   Share2,
   Star,
@@ -46,6 +47,7 @@ import {
 } from "@/lib/api/security-my-vault"
 import { VaultItemDialog } from "./vault-item-dialog"
 import { VaultImportDialog } from "./vault-import-dialog"
+import { VaultExtensionDialog } from "./vault-extension-dialog"
 
 const TYPE_ICON = { login: KeyRound, note: StickyNote, card: CreditCard, identity: UserRound } as const
 
@@ -74,6 +76,7 @@ export function VaultView() {
   const [folderFilter, setFolderFilter] = useState<string>("all")
   const [dialog, setDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
   const [importOpen, setImportOpen] = useState(false)
+  const [extOpen, setExtOpen] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const update = useUpdateVaultItem()
@@ -210,6 +213,9 @@ export function VaultView() {
       action={
         canCreate ? (
           <>
+            <Button variant="ghost" size="icon" onClick={() => setExtOpen(true)} aria-label="Browser extension" title="Browser extension">
+              <Puzzle className="h-4 w-4" />
+            </Button>
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="mr-1.5 h-4 w-4" /> Import
             </Button>
@@ -414,6 +420,8 @@ export function VaultView() {
       />
 
       <VaultImportDialog open={importOpen} onOpenChange={setImportOpen} />
+
+      <VaultExtensionDialog open={extOpen} onOpenChange={setExtOpen} />
     </PageShell>
   )
 }
