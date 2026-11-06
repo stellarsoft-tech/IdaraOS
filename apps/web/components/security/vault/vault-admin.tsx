@@ -21,6 +21,7 @@ import {
   type VaultEnforcement,
   type VaultPolicyInput,
 } from "@/lib/api/security-vault-admin"
+import { VaultGroups } from "./vault-groups"
 
 interface PolicyForm {
   minLength: number
@@ -223,6 +224,7 @@ export function VaultAdmin() {
           </>
         )}
       </div>
+      <VaultGroups canEdit={canEdit} />
     </PageShell>
   )
 }

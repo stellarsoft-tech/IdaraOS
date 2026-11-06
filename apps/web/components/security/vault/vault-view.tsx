@@ -13,6 +13,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Share2,
   Star,
   StickyNote,
   Trash2,
@@ -40,6 +41,7 @@ import {
   useUpdateVaultItem,
   useVault,
   type VaultItemSummary,
+  type VaultSharedItem,
 } from "@/lib/api/security-my-vault"
 import { VaultItemDialog } from "./vault-item-dialog"
 
@@ -62,6 +64,7 @@ export function VaultView() {
   const { data, isLoading } = useVault()
   const items = useMemo(() => data?.items ?? [], [data])
   const folders = useMemo(() => data?.folders ?? [], [data])
+  const shared = useMemo(() => data?.shared ?? [], [data])
   const encryptionConfigured = data?.encryptionKeyConfigured ?? true
   const health = data?.health
 
@@ -89,11 +92,19 @@ export function VaultView() {
     const q = search.trim().toLowerCase()
     return items.filter((it) => {
       if (folderFilter === "favorites" && !it.favorite) return false
-      if (folderFilter !== "all" && folderFilter !== "favorites" && it.folderId !== folderFilter) return false
+      if (folderFilter !== "all" && folderFilter !== "favorites" && folderFilter !== "shared" && it.folderId !== folderFilter) return false
       if (!q) return true
       return [it.title, it.username, it.url].some((v) => v?.toLowerCase().includes(q))
     })
   }, [items, search, folderFilter])
+
+  const sharedFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return shared.filter((it) => !q || [it.title, it.username, it.url].some((v) => v?.toLowerCase().includes(q)))
+  }, [shared, search])
+
+  const isShared = folderFilter === "shared"
+  const rows: (VaultItemSummary | VaultSharedItem)[] = isShared ? sharedFiltered : filtered
 
   const toggleFavorite = async (it: VaultItemSummary) => {
     try {
@@ -226,6 +237,7 @@ export function VaultView() {
         <nav className="space-y-0.5 lg:w-56 lg:shrink-0">
           {railButton("all", "All items", items.length, <KeyRound className="h-4 w-4" />)}
           {railButton("favorites", "Favorites", counts.favorites, <Star className="h-4 w-4" />)}
+          {shared.length > 0 && railButton("shared", "Shared with me", shared.length, <Share2 className="h-4 w-4" />)}
           {folders.length > 0 && <div className="my-1 border-t" />}
           {folders.map((f) => (
             <div key={f.id} className="group flex items-center">
@@ -294,15 +306,20 @@ export function VaultView() {
                 <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : filtered.length === 0 ? (
+          ) : rows.length === 0 ? (
             <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-              {items.length === 0 ? "Your vault is empty. Add your first item to get started." : "No items match your search."}
+              {isShared
+                ? "Nothing has been shared with you yet."
+                : items.length === 0
+                  ? "Your vault is empty. Add your first item to get started."
+                  : "No items match your search."}
             </div>
           ) : (
             <div className="space-y-2">
-              {filtered.map((it) => {
+              {rows.map((it) => {
                 const Icon = TYPE_ICON[it.type] ?? KeyRound
                 const host = hostOf(it.url)
+                const ownerName = isShared ? (it as VaultSharedItem).ownerName : null
                 return (
                   <div
                     key={it.id}
@@ -319,24 +336,33 @@ export function VaultView() {
                       <span className="min-w-0">
                         <span className="flex items-center gap-1.5 text-sm font-medium">
                           <span className="truncate">{it.title}</span>
-                          {it.favorite && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
+                          {!isShared && it.favorite && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
+                          {isShared && (
+                            <Badge variant="outline" className="shrink-0 text-[10px]">
+                              {(it as VaultSharedItem).access}
+                            </Badge>
+                          )}
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {[it.username, host].filter(Boolean).join(" · ") || "—"}
+                          {isShared
+                            ? `from ${ownerName ?? "someone"}${it.username ? ` · ${it.username}` : ""}`
+                            : [it.username, host].filter(Boolean).join(" · ") || "—"}
                         </span>
                       </span>
                     </button>
 
                     <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        aria-label="Toggle favorite"
-                        onClick={() => toggleFavorite(it)}
-                      >
-                        <Star className={`h-4 w-4 ${it.favorite ? "fill-amber-400 text-amber-400" : ""}`} />
-                      </Button>
+                      {!isShared && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label="Toggle favorite"
+                          onClick={() => toggleFavorite(it)}
+                        >
+                          <Star className={`h-4 w-4 ${it.favorite ? "fill-amber-400 text-amber-400" : ""}`} />
+                        </Button>
+                      )}
                       {it.username && (
                         <Button
                           variant="ghost"

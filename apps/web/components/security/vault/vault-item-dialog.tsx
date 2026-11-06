@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
-import { Copy, Eye, EyeOff, History, Loader2, RefreshCw, Trash2, Wand2 } from "lucide-react"
+import { Copy, Eye, EyeOff, History, Loader2, RefreshCw, Share2, Trash2, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/security-my-vault"
 import { DEFAULT_PASSWORD_OPTIONS, MAX_LENGTH, MIN_LENGTH, generatePassword, type PasswordOptions } from "@/lib/vault/generator"
 import { estimateStrength } from "@/lib/vault/strength"
+import { VaultShareDialog } from "./vault-share-dialog"
 
 const NO_FOLDER = "none"
 
@@ -79,6 +80,7 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
   const [showGenerator, setShowGenerator] = useState(false)
   const [gen, setGen] = useState<PasswordOptions>(DEFAULT_PASSWORD_OPTIONS)
   const [showHistory, setShowHistory] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const history = useVaultItemHistory(itemId, open && showHistory)
 
@@ -112,8 +114,10 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
     }
   }, [open])
 
+  const access = detail.data?.data?.access
+  const isOwnerItem = !isEdit || access === "owner"
   const loadingDetail = isEdit && detail.isLoading
-  const readOnly = isEdit && !canEdit
+  const readOnly = isEdit && (access === "view" || !canEdit)
   const saving = create.isPending || update.isPending
   const strength = estimateStrength(form.password)
 
@@ -174,6 +178,7 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
     setGen((g) => ({ ...g, [key]: v === true }))
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -401,13 +406,18 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
         )}
 
         <DialogFooter className="gap-2 sm:justify-between">
-          {isEdit && canDelete ? (
-            <Button type="button" variant="ghost" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={remove.isPending}>
-              <Trash2 className="mr-1.5 h-4 w-4" /> Delete
-            </Button>
-          ) : (
-            <span />
-          )}
+          <div className="flex gap-2">
+            {isEdit && isOwnerItem && canDelete && (
+              <Button type="button" variant="ghost" className="text-red-600 hover:text-red-700" onClick={doDelete} disabled={remove.isPending}>
+                <Trash2 className="mr-1.5 h-4 w-4" /> Delete
+              </Button>
+            )}
+            {isEdit && isOwnerItem && canEdit && (
+              <Button type="button" variant="outline" onClick={() => setShareOpen(true)}>
+                <Share2 className="mr-1.5 h-4 w-4" /> Share
+              </Button>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {readOnly ? "Close" : "Cancel"}
@@ -422,5 +432,8 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <VaultShareDialog open={shareOpen} itemId={itemId} onOpenChange={setShareOpen} />
+    </>
   )
 }

@@ -42,6 +42,27 @@ export interface VaultItemDetail extends VaultItemSummary {
   password: string | null
   notes: string | null
   extra: Record<string, unknown> | null
+  access: "owner" | "edit" | "view"
+}
+
+export interface VaultSharedItem extends VaultItemSummary {
+  access: "edit" | "view"
+  ownerName: string | null
+}
+
+export interface ShareTargets {
+  users: { id: string; name: string | null; email: string | null }[]
+  groups: { id: string; name: string }[]
+}
+
+export interface ItemShare {
+  id: string
+  targetUserId: string | null
+  targetGroupId: string | null
+  targetName: string | null
+  permission: "view" | "edit"
+  expiresAt: string | null
+  createdAt: string
 }
 
 export interface VaultHistoryEntry {
@@ -99,11 +120,13 @@ export function useVault() {
   return useQuery({
     queryKey: keys.vault,
     queryFn: () =>
-      request<{ folders: VaultFolder[]; items: VaultItemSummary[]; health: VaultHealth; encryptionKeyConfigured: boolean }>(
-        "/api/security/my-vault",
-        undefined,
-        "Failed to load the vault"
-      ),
+      request<{
+        folders: VaultFolder[]
+        items: VaultItemSummary[]
+        shared: VaultSharedItem[]
+        health: VaultHealth
+        encryptionKeyConfigured: boolean
+      }>("/api/security/my-vault", undefined, "Failed to load the vault"),
   })
 }
 
@@ -210,5 +233,52 @@ export function useDeleteVaultFolder() {
     mutationFn: (id: string) =>
       request<{ data: { id: string } }>(`/api/security/my-vault/folders/${id}`, { method: "DELETE" }, "Failed to delete the folder"),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.vault }),
+  })
+}
+
+// ============================================================================
+// SHARING
+// ============================================================================
+
+export function useShareTargets() {
+  return useQuery({
+    queryKey: ["security-vault-share-targets"],
+    queryFn: () => request<{ data: ShareTargets }>("/api/security/my-vault/share-targets", undefined, "Failed to load share targets"),
+  })
+}
+
+export function useItemShares(itemId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["security-vault-item-shares", itemId],
+    queryFn: () => request<{ data: ItemShare[] }>(`/api/security/my-vault/items/${itemId}/shares`, undefined, "Failed to load shares"),
+    enabled: !!itemId && enabled,
+  })
+}
+
+export function useShareItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ itemId, ...body }: { itemId: string; targetUserId?: string | null; targetGroupId?: string | null; permission: "view" | "edit"; expiresAt?: string | null }) =>
+      request<{ data: ItemShare }>(
+        `/api/security/my-vault/items/${itemId}/shares`,
+        { method: "POST", body: JSON.stringify(body) },
+        "Failed to share the item"
+      ),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["security-vault-item-shares", vars.itemId] })
+      queryClient.invalidateQueries({ queryKey: keys.vault })
+    },
+  })
+}
+
+export function useRevokeShare() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ shareId }: { shareId: string; itemId: string }) =>
+      request<{ data: { id: string } }>(`/api/security/my-vault/shares/${shareId}`, { method: "DELETE" }, "Failed to revoke the share"),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["security-vault-item-shares", vars.itemId] })
+      queryClient.invalidateQueries({ queryKey: keys.vault })
+    },
   })
 }

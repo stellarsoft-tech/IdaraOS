@@ -181,11 +181,94 @@ export const vaultSettings = pgTable(
 )
 
 // ============================================================================
+// SHARING (Phase 3): groups + item/folder shares to members or groups
+// ============================================================================
+
+export const vaultSharePermissionValues = ["view", "edit"] as const
+export type VaultSharePermission = (typeof vaultSharePermissionValues)[number]
+
+export const vaultShareStatusValues = ["active", "revoked"] as const
+export type VaultShareStatus = (typeof vaultShareStatusValues)[number]
+
+/** A reusable sharing group (a named set of members), managed by an admin. */
+export const vaultGroups = pgTable(
+  "security_vault_groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdById: uuid("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_security_vault_groups_org").on(table.orgId)]
+)
+
+export const vaultGroupMembers = pgTable(
+  "security_vault_group_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => vaultGroups.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("idx_security_vault_group_members_unique").on(table.groupId, table.userId),
+    index("idx_security_vault_group_members_user").on(table.userId),
+  ]
+)
+
+/**
+ * A share of one item OR one folder (exactly one set) to one member OR one group (exactly one set),
+ * created by the item's owner. Because decryption is server-side, a share is just an ACL - no key
+ * wrapping. Optional expiresAt gives time-boxed access; status "revoked" ends it early.
+ */
+export const vaultShares = pgTable(
+  "security_vault_shares",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id").references(() => vaultItems.id, { onDelete: "cascade" }),
+    folderId: uuid("folder_id").references(() => vaultFolders.id, { onDelete: "cascade" }),
+    targetUserId: uuid("target_user_id").references(() => users.id, { onDelete: "cascade" }),
+    targetGroupId: uuid("target_group_id").references(() => vaultGroups.id, { onDelete: "cascade" }),
+    permission: text("permission", { enum: vaultSharePermissionValues }).notNull().default("view"),
+    sharedById: uuid("shared_by_id").references(() => users.id, { onDelete: "set null" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    status: text("status", { enum: vaultShareStatusValues }).notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_security_vault_shares_org").on(table.orgId),
+    index("idx_security_vault_shares_item").on(table.itemId),
+    index("idx_security_vault_shares_folder").on(table.folderId),
+    index("idx_security_vault_shares_target_user").on(table.targetUserId),
+    index("idx_security_vault_shares_target_group").on(table.targetGroupId),
+  ]
+)
+
+// ============================================================================
 // INFERRED TYPES
 // ============================================================================
 
 export type VaultSettings = typeof vaultSettings.$inferSelect
 export type NewVaultSettings = typeof vaultSettings.$inferInsert
+export type VaultGroup = typeof vaultGroups.$inferSelect
+export type VaultGroupMember = typeof vaultGroupMembers.$inferSelect
+export type VaultShare = typeof vaultShares.$inferSelect
+export type NewVaultShare = typeof vaultShares.$inferInsert
 
 export type VaultFolder = typeof vaultFolders.$inferSelect
 export type NewVaultFolder = typeof vaultFolders.$inferInsert

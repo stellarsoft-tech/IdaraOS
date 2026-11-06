@@ -7,11 +7,12 @@
  * getVaultItemHistory) hand back secrets, so their routes MUST audit every call.
  */
 
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { vaultFolders, vaultItems, vaultItemHistory, type VaultItemType } from "@/lib/db/schema"
+import { users, vaultFolders, vaultItems, vaultItemHistory, type VaultItemType } from "@/lib/db/schema"
 import { decryptOptional, decryptSecret, encryptOptional, encryptSecret } from "@/lib/vault/crypto-server"
 import { derivePasswordFields, enforceVaultPolicy } from "@/lib/vault/audit-server"
+import { getSharedItemAccess, resolveSharedAccess, type VaultAccessLevel } from "@/lib/security/vault-share-server"
 
 // ============================================================================
 // VIEW TYPES (what routes return)
@@ -46,6 +47,14 @@ export interface VaultItemDetail extends VaultItemSummary {
   password: string | null
   notes: string | null
   extra: Record<string, unknown> | null
+  // The requester's access to this item: "owner" | "edit" | "view"
+  access: VaultAccessLevel
+}
+
+/** An item shared TO the user (not owned): summary + their access level + the owner's name. */
+export interface VaultSharedItemSummary extends VaultItemSummary {
+  access: "edit" | "view"
+  ownerName: string | null
 }
 
 export interface VaultItemInput {
@@ -109,8 +118,9 @@ function parseExtra(blob: string | null): Record<string, unknown> | null {
 export async function listVault(orgId: string, userId: string): Promise<{
   folders: VaultFolderView[]
   items: VaultItemSummary[]
+  shared: VaultSharedItemSummary[]
 }> {
-  const [folderRows, itemRows] = await Promise.all([
+  const [folderRows, itemRows, sharedAccess] = await Promise.all([
     db
       .select()
       .from(vaultFolders)
@@ -121,20 +131,50 @@ export async function listVault(orgId: string, userId: string): Promise<{
       .from(vaultItems)
       .where(and(eq(vaultItems.orgId, orgId), eq(vaultItems.userId, userId)))
       .orderBy(desc(vaultItems.favorite), vaultItems.title),
+    getSharedItemAccess(orgId, userId),
   ])
-  return { folders: folderRows.map(toFolderView), items: itemRows.map(toSummary) }
+
+  // Items shared TO this user (owned by others)
+  let shared: VaultSharedItemSummary[] = []
+  const sharedIds = [...sharedAccess.keys()]
+  if (sharedIds.length) {
+    const rows = await db
+      .select()
+      .from(vaultItems)
+      .where(and(eq(vaultItems.orgId, orgId), inArray(vaultItems.id, sharedIds)))
+      .orderBy(vaultItems.title)
+    const ownerIds = [...new Set(rows.map((r) => r.userId))]
+    const owners = ownerIds.length
+      ? await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray(users.id, ownerIds))
+      : []
+    const ownerMap = new Map(owners.map((o) => [o.id, o.name ?? o.email]))
+    shared = rows.map((r) => ({ ...toSummary(r), access: sharedAccess.get(r.id)!, ownerName: ownerMap.get(r.userId) ?? null }))
+  }
+
+  return { folders: folderRows.map(toFolderView), items: itemRows.map(toSummary), shared }
 }
 
-/** Full item with decrypted secrets. Returns null if it doesn't exist or isn't the user's. */
+/** Full item with decrypted secrets. Returns null if it doesn't exist or the user has no access. */
 export async function getVaultItem(orgId: string, userId: string, itemId: string): Promise<VaultItemDetail | null> {
   const [row] = await db
     .select()
     .from(vaultItems)
-    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId), eq(vaultItems.userId, userId)))
+    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId)))
     .limit(1)
   if (!row) return null
+
+  let access: VaultAccessLevel
+  if (row.userId === userId) {
+    access = "owner"
+  } else {
+    const shared = await resolveSharedAccess(orgId, userId, { id: row.id, folderId: row.folderId })
+    if (!shared) return null
+    access = shared
+  }
+
   return {
     ...toSummary(row),
+    access,
     password: decryptOptional(row.passwordEncrypted),
     notes: decryptOptional(row.notesEncrypted),
     extra: parseExtra(row.extraEncrypted),
@@ -150,11 +190,15 @@ export interface VaultHistoryEntry {
 /** Decrypted password history for an item (newest first). A reveal - audit it in the route. */
 export async function getVaultItemHistory(orgId: string, userId: string, itemId: string): Promise<VaultHistoryEntry[] | null> {
   const [item] = await db
-    .select({ id: vaultItems.id })
+    .select({ id: vaultItems.id, userId: vaultItems.userId, folderId: vaultItems.folderId })
     .from(vaultItems)
-    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId), eq(vaultItems.userId, userId)))
+    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId)))
     .limit(1)
   if (!item) return null
+  if (item.userId !== userId) {
+    const shared = await resolveSharedAccess(orgId, userId, { id: item.id, folderId: item.folderId })
+    if (!shared) return null
+  }
   const rows = await db
     .select()
     .from(vaultItemHistory)
@@ -222,9 +266,17 @@ export async function updateVaultItem(
   const [current] = await db
     .select()
     .from(vaultItems)
-    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId), eq(vaultItems.userId, userId)))
+    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId)))
     .limit(1)
   if (!current) return null
+
+  // Access: the owner, or someone the item is shared to with "edit"
+  const isOwner = current.userId === userId
+  if (!isOwner) {
+    const shared = await resolveSharedAccess(orgId, userId, { id: current.id, folderId: current.folderId })
+    if (shared !== "edit") return null
+  }
+  const ownerId = current.userId
 
   const now = new Date()
   const set: Partial<typeof vaultItems.$inferInsert> = { updatedAt: now }
@@ -239,8 +291,9 @@ export async function updateVaultItem(
     const extraJson = input.extra && Object.keys(input.extra).length > 0 ? JSON.stringify(input.extra) : null
     set.extraEncrypted = encryptOptional(extraJson)
   }
-  if (input.folderId !== undefined) {
-    set.folderId = input.folderId && (await folderBelongsToUser(orgId, userId, input.folderId)) ? input.folderId : null
+  // Only the owner can move an item between folders (folders belong to the owner)
+  if (input.folderId !== undefined && isOwner) {
+    set.folderId = input.folderId && (await folderBelongsToUser(orgId, ownerId, input.folderId)) ? input.folderId : null
   }
 
   let passwordChanged = false
@@ -249,7 +302,8 @@ export async function updateVaultItem(
     const currentPassword = decryptOptional(current.passwordEncrypted) ?? ""
     if (nextPassword !== currentPassword) {
       passwordChanged = true
-      if (nextPassword) await enforceVaultPolicy(orgId, userId, nextPassword, itemId)
+      // Enforce the owner's policy (reuse is checked within the owner's vault)
+      if (nextPassword) await enforceVaultPolicy(orgId, ownerId, nextPassword, itemId)
       const derived = derivePasswordFields(nextPassword || null)
       set.passwordEncrypted = nextPassword ? encryptSecret(nextPassword) : null
       set.passwordFingerprint = derived.passwordFingerprint
@@ -261,7 +315,7 @@ export async function updateVaultItem(
   const [row] = await db
     .update(vaultItems)
     .set(set)
-    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId), eq(vaultItems.userId, userId)))
+    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId)))
     .returning()
 
   // Keep the previous password in history (only when there was one and it actually changed)
