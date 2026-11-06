@@ -77,6 +77,11 @@ export interface UpdaterDevice {
   // IdaraOS Agent self-update
   agentUpdateRequestedAt: string | null
   agentUpdateAvailable: boolean
+  // Location + compliance quarantine
+  lastPublicIp: string | null
+  nonCompliantSince: string | null
+  quarantinedAt: string | null
+  quarantineManual: boolean
 }
 
 export interface SoftwareUpdatesData {
@@ -89,6 +94,8 @@ export interface SoftwareUpdatesData {
     scheduleTimezone: string
     checkInMinutes: number
     agentAutoUpdate: boolean
+    quarantineEnabled: boolean
+    quarantineGraceDays: number
     releasedAgentVersion: string | null
     enrollmentTokenHint: string | null
     enrollmentTokenCreatedAt: string | null
@@ -97,10 +104,60 @@ export interface SoftwareUpdatesData {
   stats: { devices: number; failing: number; offline: number }
 }
 
+export type DevicePolicyStatus = "compliant" | "error" | "pending"
+
+export interface DevicePolicyCompliance {
+  type: string
+  name: string
+  status: DevicePolicyStatus
+  ok: boolean | null
+  message: string | null
+  reportedAt: string | null
+  state: Record<string, unknown> | null
+}
+
+export interface DeviceInternetStatus {
+  status: "compliant" | "grace" | "quarantined"
+  manual: boolean
+  quarantineEnabled: boolean
+  graceDays: number
+  nonCompliantSince: string | null
+  graceEndsAt: string | null
+  hasIp: boolean
+}
+
+export interface UpdaterDeviceDetail {
+  data: UpdaterDevice
+  compliance: DevicePolicyCompliance[]
+  internet: DeviceInternetStatus
+}
+
+export interface DeviceLocation {
+  ip: string
+  city: string | null
+  region: string | null
+  country: string | null
+  lat: number | null
+  lng: number | null
+  source: string
+}
+
+export interface DeviceLocationResponse {
+  data: DeviceLocation | null
+  ip: string | null
+}
+
 export type ScheduleUpdate = Partial<
   Pick<
     SoftwareUpdatesData["settings"],
-    "scheduleEnabled" | "scheduleDays" | "scheduleTime" | "scheduleTimezone" | "checkInMinutes" | "agentAutoUpdate"
+    | "scheduleEnabled"
+    | "scheduleDays"
+    | "scheduleTime"
+    | "scheduleTimezone"
+    | "checkInMinutes"
+    | "agentAutoUpdate"
+    | "quarantineEnabled"
+    | "quarantineGraceDays"
   >
 >
 
@@ -212,6 +269,47 @@ export function useSoftwareUpdates() {
     queryKey: keys.updates,
     queryFn: () => request<SoftwareUpdatesData>("/api/security/software-updates", undefined, "Failed to fetch devices"),
     refetchInterval: 60_000,
+  })
+}
+
+export function useUpdaterDevice(id: string) {
+  return useQuery({
+    queryKey: ["security-software-device", id],
+    queryFn: () =>
+      request<UpdaterDeviceDetail>(`/api/security/software-updates/devices/${id}`, undefined, "Failed to fetch the device"),
+    enabled: !!id,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useDeviceLocation(id: string) {
+  return useQuery({
+    queryKey: ["device-location", id],
+    queryFn: () =>
+      request<DeviceLocationResponse>(
+        `/api/security/software-updates/devices/${id}/location`,
+        undefined,
+        "Failed to locate the device"
+      ),
+    enabled: false,
+  })
+}
+
+export function useLockDeviceInternet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      request(`/api/security/software-updates/devices/${id}/lock`, { method: "POST" }, "Failed to lock the device"),
+    onSettled: (_data, _err, id) => queryClient.invalidateQueries({ queryKey: ["security-software-device", id] }),
+  })
+}
+
+export function useUnlockDeviceInternet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      request(`/api/security/software-updates/devices/${id}/unlock`, { method: "POST" }, "Failed to unlock the device"),
+    onSettled: (_data, _err, id) => queryClient.invalidateQueries({ queryKey: ["security-software-device", id] }),
   })
 }
 

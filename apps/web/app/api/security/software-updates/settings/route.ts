@@ -20,6 +20,8 @@ const updateSchema = z.object({
   scheduleTimezone: z.string().refine(isValidTimeZone, "Unknown time zone").optional(),
   checkInMinutes: z.number().int().min(5).max(240).optional(),
   agentAutoUpdate: z.boolean().optional(),
+  quarantineEnabled: z.boolean().optional(),
+  quarantineGraceDays: z.number().int().min(0).max(365).optional(),
 })
 
 export async function PATCH(request: NextRequest) {
@@ -54,6 +56,8 @@ export async function PATCH(request: NextRequest) {
       scheduleTimezone: s.scheduleTimezone,
       checkInMinutes: s.checkInMinutes,
       agentAutoUpdate: s.agentAutoUpdate,
+      quarantineEnabled: s.quarantineEnabled,
+      quarantineGraceDays: s.quarantineGraceDays,
     })
     const audit = await getAuditLogger()
     if (audit) {

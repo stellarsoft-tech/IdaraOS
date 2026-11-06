@@ -28,6 +28,9 @@ async function fetchAuditLogs(filters: AuditLogFilters): Promise<AuditLogRespons
   if (filters.entityId) {
     params.set("entityId", filters.entityId)
   }
+  if (filters.policyType) {
+    params.set("policyType", filters.policyType)
+  }
   if (filters.actorId) {
     params.set("actorId", filters.actorId)
   }

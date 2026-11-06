@@ -162,6 +162,20 @@
       "when": 1794096000000,
       "tag": "0023_web_access_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794182400000,
+      "tag": "0024_web_block_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1794268800000,
+      "tag": "0025_location_quarantine",
+      "breakpoints": true
     }
   ]
 }

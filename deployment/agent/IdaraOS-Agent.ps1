@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.7.0"
+$AgentVersion = "1.9.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -134,6 +134,14 @@ function Get-State {
     # Web filtering state (1.7.0): what we last applied (for visibility), or null when not filtering.
     if (-not ($state.PSObject.Properties.Name -contains "webFiltering")) {
         $state | Add-Member -NotePropertyName "webFiltering" -NotePropertyValue $null -Force
+    }
+    # Web block-event bookmark (1.8.0): the DNS-log read cursor, or null.
+    if (-not ($state.PSObject.Properties.Name -contains "webBlock")) {
+        $state | Add-Member -NotePropertyName "webBlock" -NotePropertyValue $null -Force
+    }
+    # Internet quarantine flag (1.9.0): whether we currently block outbound except IdaraOS.
+    if (-not ($state.PSObject.Properties.Name -contains "quarantine")) {
+        $state | Add-Member -NotePropertyName "quarantine" -NotePropertyValue $false -Force
     }
     return $state
 }
@@ -780,6 +788,73 @@ function Set-FirewallOn {
     return @{ type = "firewall-on"; ok = $true; message = $msg; state = @{ enabled = $true } }
 }
 
+# ============================================================================
+# INTERNET QUARANTINE (1.9.0)
+#   When the server says a device stayed non-compliant past the grace period (or an admin locked it),
+#   block ALL outbound except the IdaraOS server + DNS/DHCP/loopback, so the agent keeps checking in and
+#   the user can still reach IdaraOS. Revertable - Remove-Quarantine restores normal outbound.
+# ============================================================================
+
+$QuarantineGroup = "IdaraOS Quarantine"
+
+# Allow IdaraOS + DNS/DHCP/loopback outbound, THEN flip the default outbound action to Block. Resolve
+# the server IPs and add the allow rules FIRST so the agent never loses IdaraOS/DNS. Re-applied each
+# cycle while quarantined so rotating/CDN server IPs stay allowed.
+function Set-Quarantine {
+    $errors = @()
+    if (-not (Get-Command New-NetFirewallRule -ErrorAction SilentlyContinue)) {
+        return @{ type = "quarantine"; ok = $false; message = "NetSecurity module unavailable"; state = @{ quarantined = $false } }
+    }
+
+    # Resolve the IdaraOS server host to IPs (DNS still works here: outbound is Allow on first apply, and
+    # our DNS allow rule is present on re-apply).
+    $serverIps = @()
+    try {
+        $h = ([uri](Get-ServerUrl)).Host
+        if ($h) {
+            foreach ($t in @("A", "AAAA")) {
+                try { $serverIps += @(Resolve-DnsName -Name $h -Type $t -ErrorAction Stop | Where-Object { $_.IPAddress } | ForEach-Object { [string]$_.IPAddress }) } catch { }
+            }
+        }
+    } catch { }
+    $serverIps = @($serverIps | Select-Object -Unique)
+
+    # Rebuild our rule set from scratch (idempotent; picks up new server IPs)
+    try { Get-NetFirewallRule -Group $QuarantineGroup -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue } catch { }
+    try {
+        New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - DNS UDP" -Direction Outbound -Action Allow -Protocol UDP -RemotePort 53 -ErrorAction Stop | Out-Null
+        New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - DNS TCP" -Direction Outbound -Action Allow -Protocol TCP -RemotePort 53 -ErrorAction Stop | Out-Null
+        New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - DHCP" -Direction Outbound -Action Allow -Protocol UDP -RemotePort 67 -ErrorAction Stop | Out-Null
+        New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - Loopback" -Direction Outbound -Action Allow -RemoteAddress "127.0.0.0/8", "::1" -ErrorAction Stop | Out-Null
+        if ($serverIps.Count -gt 0) {
+            New-NetFirewallRule -Group $QuarantineGroup -DisplayName "IdaraOS Quarantine - IdaraOS" -Direction Outbound -Action Allow -Protocol TCP -RemotePort 443 -RemoteAddress $serverIps -ErrorAction Stop | Out-Null
+        } else {
+            $errors += "couldn't resolve the IdaraOS server IP"
+        }
+    } catch { $errors += ("rules: " + $_.Exception.Message) }
+
+    # Flip the default outbound action to Block (after the allow rules exist)
+    try { Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Block -ErrorAction Stop }
+    catch { $errors += ("outbound block: " + $_.Exception.Message) }
+
+    $state = @{ quarantined = $true; serverIps = $serverIps.Count }
+    if ($errors.Count -gt 0) {
+        return @{ type = "quarantine"; ok = $false; message = ("Applied with issues: " + ($errors -join "; ")); state = $state }
+    }
+    return @{ type = "quarantine"; ok = $true; message = ("Quarantined: outbound blocked except IdaraOS ({0} IP) + DNS" -f $serverIps.Count); state = $state }
+}
+
+# Lift the quarantine: restore the default outbound action to Allow and delete our rules by group.
+function Remove-Quarantine {
+    $errors = @()
+    try { Set-NetFirewallProfile -Profile Domain, Public, Private -DefaultOutboundAction Allow -ErrorAction Stop }
+    catch { $errors += $_.Exception.Message }
+    try { Get-NetFirewallRule -Group $QuarantineGroup -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue } catch { $errors += $_.Exception.Message }
+    $ok = ($errors.Count -eq 0)
+    $msg = if ($ok) { "Quarantine lifted - outbound restored" } else { "Quarantine lifted with issues: " + ($errors -join "; ") }
+    return @{ type = "quarantine"; ok = $ok; message = $msg; state = @{ quarantined = $false } }
+}
+
 # Microsoft Defender: ensure the service runs and real-time protection is on, and report whether
 # Windows Tamper Protection is enabled. Tamper Protection can only be switched on from Intune/MDM,
 # and while it is on Windows blocks scripted changes to Defender - so when it's on we report rather
@@ -1181,6 +1256,48 @@ function Remove-WebFiltering($State) {
     return @{ type = "web-filtering"; ok = $ok; message = $msg; state = @{} }
 }
 
+# Collect "blocked site attempt" events for web filtering: domains that resolved to 0.0.0.0 (our
+# hosts sinkhole and Cloudflare-for-Families' block answer are both 0.0.0.0). Reads the Windows
+# DNS-Client operational log (enabling it if needed), from a saved bookmark, and returns deduped
+# @{ domain; count; lastSeen } to report at check-in. Best-effort: only blocked (0.0.0.0) answers are
+# read - never full browsing - and cached repeat lookups may not re-log.
+function Get-WebBlockEvents($State) {
+    $logName = "Microsoft-Windows-DNS-Client/Operational"
+    try {
+        $log = Get-WinEvent -ListLog $logName -ErrorAction Stop
+        if (-not $log.IsEnabled) { $log.IsEnabled = $true; $log.SaveChanges() }
+    } catch { return @() }
+
+    $since = $null
+    if ($State.webBlock -and $State.webBlock.lastRead) { try { $since = [datetime]$State.webBlock.lastRead } catch { } }
+    if (-not $since) { $since = (Get-Date).AddMinutes(-60) }
+
+    $events = @()
+    try {
+        $events = @(Get-WinEvent -FilterHashtable @{ LogName = $logName; Id = 3008; StartTime = $since } -MaxEvents 2000 -ErrorAction Stop)
+    } catch { }
+
+    $counts = @{}
+    $lastSeen = @{}
+    foreach ($e in $events) {
+        # QueryName is the first property; scan all properties for a 0.0.0.0 answer (layout-independent)
+        $answer = (@($e.Properties) | ForEach-Object { [string]$_.Value }) -join ";"
+        if ($answer -notmatch '0\.0\.0\.0') { continue }
+        $d = ([string]$e.Properties[0].Value).TrimEnd('.').ToLower()
+        if (-not $d -or $d -notmatch '^[a-z0-9.-]+\.[a-z]{2,}$') { continue }
+        if (-not $counts.ContainsKey($d)) { $counts[$d] = 0; $lastSeen[$d] = $e.TimeCreated }
+        $counts[$d]++
+        if ($e.TimeCreated -gt $lastSeen[$d]) { $lastSeen[$d] = $e.TimeCreated }
+    }
+
+    $out = @()
+    foreach ($d in (@($counts.Keys) | Select-Object -First 100)) {
+        $out += @{ domain = $d; count = $counts[$d]; lastSeen = $lastSeen[$d].ToUniversalTime().ToString("o") }
+    }
+    $State.webBlock = [pscustomobject]@{ lastRead = (Get-Date).ToUniversalTime().ToString("o") }
+    return $out
+}
+
 # Apply the effective desired state. USB blocking and web filtering are reverted when removed; the
 # protective policies (firewall, Defender, BitLocker) are only ever forced on and never torn down.
 # Returns the policy results and any BitLocker volumes to escrow (handled separately so keys stay
@@ -1348,6 +1465,14 @@ try {
             $reportedAdmin = $true
         }
     }
+    # Website block events: domains web filtering blocked (resolved to 0.0.0.0), when filtering is on
+    if ($state.webFiltering) {
+        try {
+            $blocked = Get-WebBlockEvents $state
+            if (@($blocked).Count -gt 0) { $body["blockedDomains"] = @($blocked) }
+        } catch { }
+    }
+
     try {
         $response = Invoke-IdaraOS -Path "/api/updater/v1/check-in" -Body $body -Authorization $authorization
     } catch {
@@ -1379,6 +1504,20 @@ try {
     # Policies: apply the effective desired state idempotently, remember the results for next check-in
     $policyOutput = Invoke-Policies $response.policies $state $response.webFilteringLists $authorization
     $state.policyResults = @($policyOutput.results)
+
+    # Internet quarantine: block all outbound except IdaraOS when the server asks; lift when it clears.
+    # Re-applied each cycle while active so rotating/CDN server IPs stay allowed.
+    try {
+        if ([bool]$response.quarantine) {
+            $q = Set-Quarantine
+            $state.quarantine = $true
+            Write-Log ("  quarantine: {0}" -f $q.message)
+        } elseif ([bool]$state.quarantine) {
+            $q = Remove-Quarantine
+            $state.quarantine = $false
+            Write-Log ("  quarantine: {0}" -f $q.message)
+        }
+    } catch { Write-Log ("  quarantine error: " + $_.Exception.Message) "ERROR" }
     # Keep collected BitLocker keys DPAPI-protected on disk (SYSTEM/Admin-only folder); send next cycle
     $state.bitlocker = @()
     foreach ($vol in @($policyOutput.bitlocker)) {

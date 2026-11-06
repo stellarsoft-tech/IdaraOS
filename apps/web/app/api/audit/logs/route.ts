@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get("action")
     const entityType = searchParams.get("entityType")
     const entityId = searchParams.get("entityId")
+    const policyType = searchParams.get("policyType")
     const actorId = searchParams.get("actorId")
     const from = searchParams.get("from")
     const to = searchParams.get("to")
@@ -84,7 +85,12 @@ export async function GET(request: NextRequest) {
     if (entityId) {
       conditions.push(eq(auditLogs.entityId, entityId))
     }
-    
+
+    if (policyType) {
+      // Device policy events tag the policy type in metadata so they can be filtered per policy
+      conditions.push(sql`${auditLogs.metadata} ->> 'policyType' = ${policyType}`)
+    }
+
     if (actorId) {
       conditions.push(eq(auditLogs.actorId, actorId))
     }

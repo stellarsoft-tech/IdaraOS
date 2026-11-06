@@ -209,6 +209,10 @@ export const softwareUpdateSettings = pgTable(
     // Keep IdaraOS Agents on the version this server ships, updating them automatically at check-in
     agentAutoUpdate: boolean("agent_auto_update").notNull().default(false),
 
+    // Cut a device off the internet (except IdaraOS) once it stays non-compliant past the grace period
+    quarantineEnabled: boolean("quarantine_enabled").notNull().default(false),
+    quarantineGraceDays: integer("quarantine_grace_days").notNull().default(3),
+
     // Enrollment token (only the hash is kept; the token is shown once)
     enrollmentTokenHash: text("enrollment_token_hash"),
     enrollmentTokenHint: text("enrollment_token_hint"),
@@ -270,6 +274,14 @@ export const softwareUpdateDevices = pgTable(
     userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
     // Windows user signed in at the last check-in
     lastLoggedOnUser: text("last_logged_on_user"),
+
+    // Public IP seen at the last check-in (for approximate geolocation)
+    lastPublicIp: text("last_public_ip"),
+    // Compliance quarantine: when the device first went non-compliant, when it was quarantined, and
+    // whether an admin locked it manually
+    nonCompliantSince: timestamp("non_compliant_since", { withTimezone: true }),
+    quarantinedAt: timestamp("quarantined_at", { withTimezone: true }),
+    quarantineManual: boolean("quarantine_manual").notNull().default(false),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

@@ -105,6 +105,8 @@ export interface AuditLogFilters {
   entityType?: string
   entityId?: string
   actorId?: string
+  /** Match entries tagged with this policy type in metadata (device policy events) */
+  policyType?: string
   from?: Date
   to?: Date
   search?: string

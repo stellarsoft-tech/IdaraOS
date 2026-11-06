@@ -84,3 +84,14 @@ device they're signed in to.
 True one-visit semantics ("block again on the very next visit") are not possible natively - there is
 no proxy to count individual visits - so "for that moment" is a short time-boxed window (default
 options 10 / 30 / 60 / 120 minutes).
+
+## Blocked-site attempts & the device page
+
+The per-device page (`…/software-updates/devices/[id]`) has a **Web filtering** tab showing the
+policy's compliance, the member's access requests (approve/deny inline), and **blocked-site
+attempts**. The agent (**1.8.0+**) reads the Windows DNS-Client operational log and reports domains
+that resolved to `0.0.0.0` - both the hosts sinkhole and Cloudflare-for-Families' block answer are
+`0.0.0.0`, so this is a unified "tried to reach a blocked site" signal. Stored in
+`security_web_block_events` (one row per device + domain, with a hit count). Best-effort: the DNS log
+is off by default (the agent enables it), only blocked answers are read (not full browsing), and
+cached repeat lookups may under-count.

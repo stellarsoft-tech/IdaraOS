@@ -45,6 +45,30 @@ export interface WebAccessApprovalsData {
   options: { durationOptions: number[] }
 }
 
+export interface WebBlockEvent {
+  domain: string
+  hitCount: number
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+export interface DeviceAccessRequest {
+  id: string
+  domain: string
+  status: WebAccessStatus
+  requestedMinutes: number
+  reason: string | null
+  decisionNote: string | null
+  decidedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+}
+
+export interface DeviceWebFilteringData {
+  blockEvents: WebBlockEvent[]
+  accessRequests: DeviceAccessRequest[]
+}
+
 async function request<T>(url: string, init?: RequestInit, fallbackError = "Request failed"): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -60,6 +84,15 @@ async function request<T>(url: string, init?: RequestInit, fallbackError = "Requ
 
 const MY_KEY = ["web-access-my"]
 const ADMIN_KEY = ["web-access-admin"]
+
+export function useDeviceWebFiltering(deviceId: string) {
+  return useQuery({
+    queryKey: ["device-web-filtering", deviceId],
+    queryFn: () =>
+      request<DeviceWebFilteringData>(`/api/security/software-updates/devices/${deviceId}/web-filtering`),
+    enabled: !!deviceId,
+  })
+}
 
 export function useMyWebAccess() {
   return useQuery({ queryKey: MY_KEY, queryFn: () => request<MyWebAccessData>("/api/security/web-access/my") })

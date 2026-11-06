@@ -67,6 +67,8 @@ export async function GET() {
         scheduleTimezone: settings.scheduleTimezone,
         checkInMinutes: settings.checkInMinutes,
         agentAutoUpdate: settings.agentAutoUpdate,
+        quarantineEnabled: settings.quarantineEnabled,
+        quarantineGraceDays: settings.quarantineGraceDays,
         releasedAgentVersion,
         enrollmentTokenHint: settings.enrollmentTokenHint,
         enrollmentTokenCreatedAt: settings.enrollmentTokenCreatedAt,

@@ -121,10 +121,13 @@ function DevicesTab({
           {devices.map((d) => (
             <TableRow key={d.id} className={d.status === "revoked" ? "opacity-60" : undefined}>
               <TableCell>
-                <div className="flex items-center gap-2 font-medium">
+                <Link
+                  href={`/security/software-updates/devices/${d.id}`}
+                  className="flex items-center gap-2 font-medium hover:underline"
+                >
                   <Laptop className="h-4 w-4 text-muted-foreground" />
                   {d.hostname}
-                </div>
+                </Link>
                 <div className="text-xs text-muted-foreground">
                   {[d.assetName, d.assetTag, d.serialNumber].filter(Boolean).join(" · ")}
                 </div>
@@ -321,6 +324,8 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
     scheduleTime: data.settings.scheduleTime,
     scheduleTimezone: data.settings.scheduleTimezone,
     checkInMinutes: data.settings.checkInMinutes,
+    quarantineEnabled: data.settings.quarantineEnabled,
+    quarantineGraceDays: data.settings.quarantineGraceDays,
   })
   const [autoUpdate, setAutoUpdate] = useState(data.settings.agentAutoUpdate)
 
@@ -331,6 +336,8 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
       scheduleTime: data.settings.scheduleTime,
       scheduleTimezone: data.settings.scheduleTimezone,
       checkInMinutes: data.settings.checkInMinutes,
+      quarantineEnabled: data.settings.quarantineEnabled,
+      quarantineGraceDays: data.settings.quarantineGraceDays,
     })
     setAutoUpdate(data.settings.agentAutoUpdate)
   }, [data.settings])
@@ -364,7 +371,9 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
     SCHEDULE_TIME_PATTERN.test(form.scheduleTime) &&
     (!form.scheduleEnabled || form.scheduleDays.length > 0) &&
     form.checkInMinutes >= 5 &&
-    form.checkInMinutes <= 240
+    form.checkInMinutes <= 240 &&
+    form.quarantineGraceDays >= 0 &&
+    form.quarantineGraceDays <= 365
 
   const handleSave = async () => {
     try {
@@ -484,6 +493,51 @@ function ScheduleTab({ data, canEdit }: { data: SoftwareUpdatesData; canEdit: bo
             </p>
           </div>
           <Switch id="agent-auto-update" checked={autoUpdate} onCheckedChange={handleAutoUpdate} disabled={!canEdit} />
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="quarantine-enabled" className="text-base font-semibold">
+              Quarantine non-compliant devices
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              If a device stays non-compliant with its policies past the grace period, the agent blocks all internet
+              except IdaraOS until it&apos;s fixed. The agent keeps checking in throughout, and it clears automatically
+              once the device is compliant.
+            </p>
+          </div>
+          <Switch
+            id="quarantine-enabled"
+            checked={form.quarantineEnabled}
+            onCheckedChange={(v) => setForm((f) => ({ ...f, quarantineEnabled: v }))}
+            disabled={!canEdit}
+          />
+        </div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="grace-days">Grace period (days)</Label>
+            <Input
+              id="grace-days"
+              type="number"
+              min={0}
+              max={365}
+              className="w-32"
+              value={form.quarantineGraceDays}
+              onChange={(e) => setForm((f) => ({ ...f, quarantineGraceDays: Number(e.target.value) }))}
+              disabled={!canEdit || !form.quarantineEnabled}
+            />
+            <p className="text-xs text-muted-foreground">
+              Days a device may stay non-compliant before it&apos;s quarantined.
+            </p>
+          </div>
+          {canEdit && (
+            <Button onClick={handleSave} disabled={!valid || update.isPending}>
+              {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          )}
         </div>
       </div>
 

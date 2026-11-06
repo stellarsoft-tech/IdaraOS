@@ -397,17 +397,42 @@ export async function completeJob(
     }
   }
 
-  await createAuditLog(
-    { orgId: device.orgId, actor: AGENT_ACTOR },
-    {
-      module: "security.software",
-      action: result.succeeded ? "agent_job_succeeded" : "agent_job_failed",
-      entityType: "agent_job",
-      entityId: job.id,
-      entityName: device.hostname,
-      description: `${job.payload.name ?? job.type} on ${device.hostname}: ${result.message}`,
-    }
-  )
+  if (job.type === "action") {
+    // Action output goes to the device's Audit log tab: keyed to the device, with the command
+    // output in metadata so it renders readably instead of a raw log blob buried in a dialog.
+    const p = job.payload as { actionKey?: string | null; name?: string | null; param?: string | null }
+    await createAuditLog(
+      { orgId: device.orgId, actor: AGENT_ACTOR },
+      {
+        module: "security.software-updates",
+        action: result.succeeded ? "device_action_completed" : "device_action_failed",
+        entityType: "software_update_device",
+        entityId: device.id,
+        entityName: device.hostname,
+        description: `${p.name ?? "Action"} on ${device.hostname}: ${result.message}`,
+        metadata: {
+          actionKey: p.actionKey ?? null,
+          actionName: p.name ?? null,
+          param: p.param ?? null,
+          exitCode: result.exitCode,
+          message: result.message ?? null,
+          output: truncateLog(report.log),
+        },
+      }
+    )
+  } else {
+    await createAuditLog(
+      { orgId: device.orgId, actor: AGENT_ACTOR },
+      {
+        module: "security.software",
+        action: result.succeeded ? "agent_job_succeeded" : "agent_job_failed",
+        entityType: "agent_job",
+        entityId: job.id,
+        entityName: device.hostname,
+        description: `${job.payload.name ?? job.type} on ${device.hostname}: ${result.message}`,
+      }
+    )
+  }
 
   return { ok: true, job: finished }
 }

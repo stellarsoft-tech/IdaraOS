@@ -23,6 +23,7 @@ import {
   type SoftwareUpdateDevice,
 } from "@/lib/db/schema"
 import { decrypt, encrypt } from "@/lib/encryption"
+import { createAuditLog } from "@/lib/audit"
 import {
   combinePolicies,
   isValidPolicyType,
@@ -379,6 +380,8 @@ export interface PolicyApplyResult {
   state?: Record<string, unknown> | null
 }
 
+const POLICY_AGENT_ACTOR = { id: null, email: "system", name: "IdaraOS Agent", ip: null, userAgent: null }
+
 /** Record what the agent reported applying, per device and policy type */
 export async function recordDevicePolicyState(
   device: SoftwareUpdateDevice,
@@ -387,6 +390,11 @@ export async function recordDevicePolicyState(
 ): Promise<void> {
   for (const result of results) {
     if (!isValidPolicyType(result.type)) continue
+    const [existing] = await db
+      .select({ ok: devicePolicyState.ok })
+      .from(devicePolicyState)
+      .where(and(eq(devicePolicyState.deviceId, device.id), eq(devicePolicyState.type, result.type)))
+      .limit(1)
     await db
       .insert(devicePolicyState)
       .values({
@@ -407,6 +415,22 @@ export async function recordDevicePolicyState(
           reportedAt: now,
         },
       })
+    // Audit a compliance change (first report, or ok<->error flip) so it shows per-policy in the
+    // device's Audit log tab, filterable by policy type (metadata.policyType).
+    if (!existing || existing.ok !== result.ok) {
+      await createAuditLog(
+        { orgId: device.orgId, actor: POLICY_AGENT_ACTOR },
+        {
+          module: "security.software-updates",
+          action: result.ok ? "policy_reported_ok" : "policy_reported_error",
+          entityType: "software_update_device",
+          entityId: device.id,
+          entityName: device.hostname,
+          description: `${policyName(result.type)} on ${device.hostname}: ${result.ok ? "compliant" : result.message ?? "error"}`,
+          metadata: { policyType: result.type, ok: result.ok, message: result.message?.slice(0, 500) ?? null },
+        }
+      )
+    }
   }
 }
 
@@ -431,6 +455,42 @@ export async function listDevicePolicyState(device: SoftwareUpdateDevice): Promi
     message: r.message,
     reportedAt: r.reportedAt,
   }))
+}
+
+export interface DevicePolicyComplianceView {
+  type: string
+  name: string
+  status: "compliant" | "error" | "pending"
+  ok: boolean | null
+  message: string | null
+  reportedAt: Date | null
+  state: Record<string, unknown> | null
+}
+
+/**
+ * Per-policy compliance for a device: every effective (desired) policy joined to what the device last
+ * reported. 'compliant' = reported ok; 'error' = reported but not ok (with message); 'pending' = the
+ * policy applies but the device hasn't reported it yet. Returned in POLICY_TYPES order.
+ */
+export async function getDevicePolicyCompliance(device: SoftwareUpdateDevice): Promise<DevicePolicyComplianceView[]> {
+  const [effective, reported] = await Promise.all([
+    getEffectivePolicies(device),
+    db.select().from(devicePolicyState).where(eq(devicePolicyState.deviceId, device.id)),
+  ])
+  const byType = new Map(reported.map((r) => [r.type, r]))
+  return effective.map((p) => {
+    const r = byType.get(p.type)
+    const status: DevicePolicyComplianceView["status"] = !r ? "pending" : r.ok ? "compliant" : "error"
+    return {
+      type: p.type,
+      name: policyName(p.type),
+      status,
+      ok: r ? r.ok : null,
+      message: r?.message ?? null,
+      reportedAt: r?.reportedAt ?? null,
+      state: (r?.state as Record<string, unknown>) ?? null,
+    }
+  })
 }
 
 // ============================================================================

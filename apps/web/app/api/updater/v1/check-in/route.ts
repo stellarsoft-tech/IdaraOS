@@ -13,13 +13,14 @@ import { softwareUpdateDevices } from "@/lib/db/schema"
 import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { authenticateDevice, dispatchRunIfDue } from "@/lib/security/software-updates-server"
 import { dispatchJobs } from "@/lib/security/agent-server"
-import { getEffectivePolicies, recordBitlockerKeys, recordDevicePolicyState } from "@/lib/security/policy-server"
+import { getDevicePolicyCompliance, getEffectivePolicies, recordBitlockerKeys, recordDevicePolicyState } from "@/lib/security/policy-server"
 import { expireDueGrants, getElevationSettings, requestDueAgentRotations, verifyAgentRotations } from "@/lib/security/elevation-server"
 import { getAdminCredentialSignal, recordAdminCredential } from "@/lib/security/admin-credential-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
 import { isAgentVersionOlder, WEB_FILTERING_TYPE } from "@/lib/security/device-policies"
 import { getFilterListManifest } from "@/lib/security/filter-lists"
 import { getActiveWebAccessDomains } from "@/lib/security/web-access-server"
+import { recordWebBlockEvents } from "@/lib/security/web-block-server"
 
 const checkInSchema = z.object({
   hostname: z.string().trim().min(1).max(63).optional(),
@@ -67,6 +68,17 @@ const checkInSchema = z.object({
       error: z.string().max(2000).optional().nullable(),
     })
     .optional(),
+  // Domains the agent saw resolve to 0.0.0.0 (blocked by web filtering) since the last check-in
+  blockedDomains: z
+    .array(
+      z.object({
+        domain: z.string().trim().min(1).max(253),
+        count: z.number().int().optional().nullable(),
+        lastSeen: z.string().trim().max(40).optional().nullable(),
+      })
+    )
+    .max(100)
+    .optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -83,10 +95,17 @@ export async function POST(request: NextRequest) {
     const body = parsed.data
 
     const now = new Date()
+    // The agent's public IP as seen by our edge/proxy (for approximate geolocation)
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      request.headers.get("cf-connecting-ip") ||
+      null
     const [updatedDevice] = await db
       .update(softwareUpdateDevices)
       .set({
         lastSeenAt: now,
+        ...(clientIp && { lastPublicIp: clientIp }),
         ...(body.hostname && { hostname: body.hostname }),
         ...(body.osVersion !== undefined && { osVersion: body.osVersion }),
         ...(body.updaterVersion !== undefined && { updaterVersion: body.updaterVersion }),
@@ -116,11 +135,44 @@ export async function POST(request: NextRequest) {
         await verifyAgentRotations(updatedDevice.id, now)
       }
     }
+    // Website block events: domains that resolved to 0.0.0.0 (blocked by the web-filtering policy)
+    if (body.blockedDomains?.length) {
+      await recordWebBlockEvents(updatedDevice, body.blockedDomains, now)
+    }
 
     const settings = await getSoftwareUpdateSettings(device.orgId)
     const run = await dispatchRunIfDue(updatedDevice, settings, now)
     const jobs = await dispatchJobs(updatedDevice, now)
     const policies = await getEffectivePolicies(updatedDevice)
+
+    // Compliance quarantine: a device is non-compliant if any effective policy is in error or not yet
+    // reported. Track when it first went non-compliant; quarantine when an admin locked it manually, or
+    // it stayed non-compliant past the configured grace period. The agent then blocks all internet
+    // except IdaraOS. Auto-clears once the device is compliant again.
+    const compliance = await getDevicePolicyCompliance(updatedDevice)
+    const nonCompliant = compliance.some((c) => c.status === "error" || c.status === "pending")
+    let nonCompliantSince: Date | null = updatedDevice.nonCompliantSince
+    if (nonCompliant && !nonCompliantSince) nonCompliantSince = now
+    else if (!nonCompliant) nonCompliantSince = null
+    const graceMs = settings.quarantineGraceDays * 24 * 60 * 60 * 1000
+    const autoQuarantine =
+      settings.quarantineEnabled &&
+      nonCompliant &&
+      !!nonCompliantSince &&
+      now.getTime() - nonCompliantSince.getTime() >= graceMs
+    const quarantine = updatedDevice.quarantineManual || autoQuarantine
+    let quarantinedAt: Date | null = updatedDevice.quarantinedAt
+    if (quarantine && !quarantinedAt) quarantinedAt = now
+    else if (!quarantine) quarantinedAt = null
+    if (
+      (nonCompliantSince?.getTime() ?? null) !== (updatedDevice.nonCompliantSince?.getTime() ?? null) ||
+      (quarantinedAt?.getTime() ?? null) !== (updatedDevice.quarantinedAt?.getTime() ?? null)
+    ) {
+      await db
+        .update(softwareUpdateDevices)
+        .set({ nonCompliantSince, quarantinedAt, updatedAt: now })
+        .where(eq(softwareUpdateDevices.id, updatedDevice.id))
+    }
 
     // Web filtering: advertise the SHA-256 of each selected category list so the agent re-downloads
     // only the lists that changed since it last applied them. The list contents are fetched from
@@ -181,6 +233,7 @@ export async function POST(request: NextRequest) {
       agentUpdate,
       adminCredential,
       webFilteringLists,
+      quarantine,
     })
   } catch (error) {
     console.error("[Updater] Check-in failed:", error)
