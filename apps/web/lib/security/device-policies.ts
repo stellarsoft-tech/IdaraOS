@@ -69,6 +69,9 @@ export interface PolicyTypeDef {
 /** The curated category lists IdaraOS ships (deployment/agent/filter-lists/<category>.txt). */
 export const WEB_FILTERING_TYPE = "web-filtering"
 
+/** Force-install the self-hosted IdaraOS Vault browser extension via Chrome/Edge policy. */
+export const BROWSER_EXTENSION_TYPE = "browser-extension"
+
 export const WEB_FILTERING_CATEGORIES = [
   "gambling",
   "social",
@@ -186,6 +189,17 @@ export const POLICY_TYPES: PolicyTypeDef[] = [
         default: true,
       },
       { key: "lockDns", label: "Pin and re-apply the filtering DNS each check-in", kind: "boolean", default: true },
+    ],
+    revertOnDisable: true,
+  },
+  {
+    type: BROWSER_EXTENSION_TYPE,
+    label: "Deploy Vault browser extension",
+    description:
+      "Force-installs the IdaraOS Vault browser extension on this device's Chrome and/or Edge, so users get password autofill without installing anything by hand. The agent sets the browser's ExtensionInstallForcelist policy, pointing at the signed copy IdaraOS self-hosts - no web store and no Intune. Reversible: turning the policy off removes the forced install. Each user still signs the extension in to their own vault with a token.",
+    settings: [
+      { key: "chrome", label: "Install on Google Chrome", kind: "boolean", default: true },
+      { key: "edge", label: "Install on Microsoft Edge", kind: "boolean", default: true },
     ],
     revertOnDisable: true,
   },

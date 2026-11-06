@@ -17,7 +17,8 @@ import { getDevicePolicyCompliance, getEffectivePolicies, recordBitlockerKeys, r
 import { expireDueGrants, getElevationSettings, requestDueAgentRotations, verifyAgentRotations } from "@/lib/security/elevation-server"
 import { getAdminCredentialSignal, recordAdminCredential } from "@/lib/security/admin-credential-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
-import { isAgentVersionOlder, WEB_FILTERING_TYPE } from "@/lib/security/device-policies"
+import { BROWSER_EXTENSION_TYPE, isAgentVersionOlder, WEB_FILTERING_TYPE } from "@/lib/security/device-policies"
+import { VAULT_EXTENSION_ID } from "@/lib/security/vault-extension-dist"
 import { getFilterListManifest } from "@/lib/security/filter-lists"
 import { getActiveWebAccessDomains } from "@/lib/security/web-access-server"
 import { recordWebBlockEvents } from "@/lib/security/web-block-server"
@@ -202,6 +203,13 @@ export async function POST(request: NextRequest) {
         const current = Array.isArray(webPolicy.settings.allowlist) ? webPolicy.settings.allowlist : []
         webPolicy.settings.allowlist = [...new Set([...current, ...exceptions])]
       }
+    }
+
+    // Browser-extension policy: hand the agent the self-hosted extension's stable id so it can set the
+    // ExtensionInstallForcelist. The agent builds the update URL from its own server URL.
+    const extPolicy = policies.find((p) => p.type === BROWSER_EXTENSION_TYPE)
+    if (extPolicy) {
+      ;(extPolicy.settings as Record<string, unknown>).extensionId = VAULT_EXTENSION_ID
     }
 
     // Tell the agent whether to manage (rotate + escrow) the local admin account this cycle

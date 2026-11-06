@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.10.2"
+$AgentVersion = "1.11.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -1350,6 +1350,53 @@ function Get-WebBlockEvents($State) {
     return $out
 }
 
+# ============================================================================
+# BROWSER EXTENSION (1.11.0)
+#   Force-install the self-hosted IdaraOS Vault extension via Chrome/Edge's ExtensionInstallForcelist
+#   policy. The server sends the stable extension id; we build the update URL from our own server.
+#   Revertable - Remove-BrowserExtension clears the forced install. Value name 1000 is ours, so other
+#   forced extensions (named 1, 2, ...) are left untouched.
+# ============================================================================
+$ExtForcelistValueName = "1000"
+
+function Set-ExtForcelist([string]$PolicyKey, [string]$Entry, [bool]$Enabled) {
+    $key = Join-Path $PolicyKey "ExtensionInstallForcelist"
+    if ($Enabled) {
+        if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+        Set-ItemProperty -Path $key -Name $ExtForcelistValueName -Value $Entry -Type String -ErrorAction Stop
+    } elseif (Test-Path $key) {
+        Remove-ItemProperty -Path $key -Name $ExtForcelistValueName -ErrorAction SilentlyContinue
+    }
+}
+
+function Set-BrowserExtension($Settings) {
+    $errors = @()
+    $extId = ""
+    if ($Settings -and ($Settings.PSObject.Properties.Name -contains "extensionId")) { $extId = [string]$Settings.extensionId }
+    if (-not $extId) { return @{ type = "browser-extension"; ok = $false; message = "No extension id from the server"; state = @{} } }
+    $chrome = $true; $edge = $true
+    if ($Settings.PSObject.Properties.Name -contains "chrome") { $chrome = [bool]$Settings.chrome }
+    if ($Settings.PSObject.Properties.Name -contains "edge") { $edge = [bool]$Settings.edge }
+    $updateUrl = "{0}/api/updater/v1/extension/update.xml" -f (Get-ServerUrl)
+    $entry = "$extId;$updateUrl"
+    try { Set-ExtForcelist $ChromeKey $entry $chrome } catch { $errors += ("chrome: " + $_.Exception.Message) }
+    try { Set-ExtForcelist $EdgeKey $entry $edge } catch { $errors += ("edge: " + $_.Exception.Message) }
+    $targets = @(); if ($chrome) { $targets += "Chrome" }; if ($edge) { $targets += "Edge" }
+    $state = @{ chrome = $chrome; edge = $edge }
+    if ($errors.Count -gt 0) { return @{ type = "browser-extension"; ok = $false; message = ("Applied with issues: " + ($errors -join "; ")); state = $state } }
+    $msg = if ($targets.Count) { "Vault extension force-installed on " + ($targets -join ", ") } else { "No browser selected" }
+    return @{ type = "browser-extension"; ok = $true; message = $msg; state = $state }
+}
+
+function Remove-BrowserExtension {
+    $errors = @()
+    try { Set-ExtForcelist $ChromeKey "" $false } catch { $errors += $_.Exception.Message }
+    try { Set-ExtForcelist $EdgeKey "" $false } catch { $errors += $_.Exception.Message }
+    $ok = ($errors.Count -eq 0)
+    $msg = if ($ok) { "Vault extension force-install removed" } else { "Removed with issues: " + ($errors -join "; ") }
+    return @{ type = "browser-extension"; ok = $ok; message = $msg; state = @{} }
+}
+
 # Apply the effective desired state. USB blocking and web filtering are reverted when removed; the
 # protective policies (firewall, Defender, BitLocker) are only ever forced on and never torn down.
 # Returns the policy results and any BitLocker volumes to escrow (handled separately so keys stay
@@ -1402,6 +1449,15 @@ function Invoke-Policies($Policies, $State, $WebFilteringLists, [string]$Authori
         if ($wf.ok) { $nowManaged += "web-filtering" }
     } elseif ($managed.ContainsKey("web-filtering")) {
         $results += (Remove-WebFiltering $State)
+    }
+
+    # browser-extension (revertable): force-install while present; remove once when withdrawn
+    if ($desired.ContainsKey("browser-extension")) {
+        $be = Set-BrowserExtension $desired["browser-extension"].settings
+        $results += $be
+        if ($be.ok) { $nowManaged += "browser-extension" }
+    } elseif ($managed.ContainsKey("browser-extension")) {
+        $results += (Remove-BrowserExtension)
     }
 
     $State.managedPolicies = @($nowManaged)

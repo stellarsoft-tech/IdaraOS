@@ -1,0 +1,3 @@
+# Extension signing key (NEVER commit) and packed output
+.keys/
+dist/

@@ -35,6 +35,28 @@ Both are token-authed (`Authorization: Bearer <vext token>`), CORS-open, and car
 2. **Load unpacked** → select this `apps/extension` folder.
 3. Configure the server URL + token in the popup.
 
+## Deploy to the fleet (self-hosted, via the IdaraOS agent)
+
+No web store and no Intune — the agent force-installs it. Browsers only force-install a **signed,
+ID-stable** package by its **update URL**, so you pack it once and IdaraOS serves it:
+
+1. **Pack it** (one-time; needs the signing key at `.keys/signing.key`, generated already):
+   ```
+   cd apps/extension && npm i crx3 && node pack.mjs
+   ```
+   This produces `apps/extension/dist/idaraos-vault.crx` (extension id `fjlcilgleihnoonfmbofcfidpimedbof`,
+   baked into the manifest `key`).
+2. **Place the `.crx`** where IdaraOS serves it: copy it to `deployment/extension/idaraos-vault.crx`
+   (so it ships in the prod image), or set `VAULT_EXTENSION_CRX_PATH` to its location. IdaraOS then serves
+   it at `/api/updater/v1/extension/idaraos-vault.crx` with an update manifest at
+   `/api/updater/v1/extension/update.xml`.
+3. **Turn on the policy:** Security → Software Updates → Groups & policies → enable **Deploy Vault browser
+   extension** (pick Chrome and/or Edge) for the groups/devices you want. The agent (1.11.0+) writes the
+   browser's `ExtensionInstallForcelist` pointing at IdaraOS. Turning the policy off removes it.
+
+The signing key is private — keep `apps/extension/.keys/signing.key` out of git (it is `.gitignore`d) and
+back it up (e.g. Key Vault). Re-packing with a different key changes the extension id.
+
 ## Caveats
 
 - Form detection is heuristic (best-effort); unusual or multi-step login flows may not be detected.

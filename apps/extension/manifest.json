@@ -3,6 +3,7 @@
   "name": "IdaraOS Vault",
   "version": "1.0.0",
   "description": "Autofill logins from your IdaraOS password vault, and save new ones.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAudF6zemhzvTDVX3WLwIZ+FF5mT4oWfIUvvcVVTIy5JH7nZUnHJBhyWdA4x0ge+CcnlcHFQo9seNpm/ZXrveJPduYDLX+YNpoFjQlRL0etXKvfRwqTr96aEGvGVrs6dMrY24wGiHk6kNXrPIGJo/s6OUPPwAQtWPTu5A5JoULtnKK67GhiiI61fnA/PS0zCWkCBOIl20MUu8RNnDzA90gLa9/a3IsgenNJKetLBWRpvatWss4/DxnfiMbYSq4llZ0WFCXYGSw5S7F2sa/Sw4pPS5kM1hxC89u87WUWG8zyxa/W5Wjf+op2serg/8Zn/bAza4/fJ7d0jtSEm6wG1yRUwIDAQAB",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": { "service_worker": "background.js" },
