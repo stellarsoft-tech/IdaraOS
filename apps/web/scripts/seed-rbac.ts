@@ -93,6 +93,8 @@ const SYSTEM_ROLES: Record<string, {
       "security.my-elevation": { view: true, create: true },
       "security.software": { view: true, create: true, edit: true, delete: true },
       "security.software-updates": { view: true, edit: true },
+      "security.my-vault": { view: true, create: true, edit: true, delete: true },
+      "security.vault": { view: true, edit: true },
       // Workflows - Full access
       "workflows.overview": { view: true, write: true, create: true, edit: true, delete: true },
       "workflows.templates": { view: true, write: true, create: true, edit: true, delete: true },
@@ -144,6 +146,7 @@ const SYSTEM_ROLES: Record<string, {
       "security.risks": { view: true, create: false, edit: false, delete: false },
       "security.my-training": { view: true },
       "security.my-elevation": { view: true, create: true },
+      "security.my-vault": { view: true, create: true, edit: true, delete: true },
       // Workflows - View and manage instances/tasks
       "workflows.overview": { view: true, create: false, edit: false, delete: false },
       "workflows.templates": { view: true, create: true, edit: true, delete: false },
@@ -175,6 +178,7 @@ const SYSTEM_ROLES: Record<string, {
       // Security - Take assigned training courses, request temporary admin access
       "security.my-training": { view: true },
       "security.my-elevation": { view: true, create: true },
+      "security.my-vault": { view: true, create: true, edit: true, delete: true },
       // Workflows - View and complete own tasks
       "workflows.overview": { view: true, create: false, edit: false, delete: false },
       "workflows.tasks": { view: true, create: false, edit: true, delete: false }, // Can complete assigned tasks

@@ -128,6 +128,7 @@ const navigationData: NavItem[] = [
       { title: "My Admin Access", url: "/security/my-elevation", module: "security.my-elevation" },
       { title: "Approved Software", url: "/security/software", module: "security.software" },
       { title: "Software Updates", url: "/security/software-updates", module: "security.software-updates" },
+      { title: "Vault", url: "/security/vault", module: "security.my-vault" },
       { 
         title: "Frameworks", 
         url: "/security/frameworks", 

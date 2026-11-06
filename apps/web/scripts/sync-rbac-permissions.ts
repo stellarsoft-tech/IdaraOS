@@ -85,6 +85,8 @@ export const MODULE_REGISTRY: readonly ModuleRegistryEntry[] = [
   { slug: MODULES.SECURITY_MY_ELEVATION, name: "My Admin Access", description: "Request temporary local admin access for your devices", category: "Security", icon: "KeyRound", sortOrder: "308.95", actions: [ACTIONS.VIEW, ACTIONS.CREATE] },
   { slug: MODULES.SECURITY_SOFTWARE, name: "Approved Software", description: "Manage the approved software catalog and its Intune install groups", category: "Security", icon: "PackageCheck", sortOrder: "308.96", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
   { slug: MODULES.SECURITY_SOFTWARE_UPDATES, name: "Software Updates", description: "Schedule and trigger winget updates on devices and review per-device update logs", category: "Security", icon: "RefreshCw", sortOrder: "308.97", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
+  { slug: MODULES.SECURITY_MY_VAULT, name: "My Vault", description: "Personal password vault - store, generate and organise credentials", category: "Security", icon: "KeyRound", sortOrder: "308.98", actions: [ACTIONS.VIEW, ACTIONS.CREATE, ACTIONS.EDIT, ACTIONS.DELETE] },
+  { slug: MODULES.SECURITY_VAULT, name: "Vault Administration", description: "Configure vault policies and review the organisation's password Security Audit", category: "Security", icon: "ShieldCheck", sortOrder: "308.99", actions: [ACTIONS.VIEW, ACTIONS.EDIT] },
   { slug: MODULES.SECURITY_AUDITLOG, name: "Audit Log", description: "View audit trail for Security module", category: "Security", icon: "ScrollText", sortOrder: "309", actions: [ACTIONS.VIEW] },
   
   // Documentation

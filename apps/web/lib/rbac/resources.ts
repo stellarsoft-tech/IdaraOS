@@ -68,6 +68,8 @@ export const MODULES = {
   SECURITY_MY_ELEVATION: "security.my-elevation",
   SECURITY_SOFTWARE: "security.software",
   SECURITY_SOFTWARE_UPDATES: "security.software-updates",
+  SECURITY_MY_VAULT: "security.my-vault",
+  SECURITY_VAULT: "security.vault",
   SECURITY_AUDITLOG: "security.auditlog",
 
   // Documentation
@@ -326,6 +328,16 @@ export const P = {
     softwareUpdates: {
       view: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE_UPDATES, ACTIONS.VIEW],
       edit: (): PermissionTuple => [MODULES.SECURITY_SOFTWARE_UPDATES, ACTIONS.EDIT],
+    },
+    myVault: {
+      view: (): PermissionTuple => [MODULES.SECURITY_MY_VAULT, ACTIONS.VIEW],
+      create: (): PermissionTuple => [MODULES.SECURITY_MY_VAULT, ACTIONS.CREATE],
+      edit: (): PermissionTuple => [MODULES.SECURITY_MY_VAULT, ACTIONS.EDIT],
+      delete: (): PermissionTuple => [MODULES.SECURITY_MY_VAULT, ACTIONS.DELETE],
+    },
+    vault: {
+      view: (): PermissionTuple => [MODULES.SECURITY_VAULT, ACTIONS.VIEW],
+      edit: (): PermissionTuple => [MODULES.SECURITY_VAULT, ACTIONS.EDIT],
     },
     auditlog: {
       view: (): PermissionTuple => [MODULES.SECURITY_AUDITLOG, ACTIONS.VIEW],
