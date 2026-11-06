@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { formatDistanceToNow } from "date-fns"
-import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Copy, Eye, EyeOff, KeyRound, Loader2, Play, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Copy, Eye, EyeOff, KeyRound, Loader2, Play, RefreshCw, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -16,6 +16,7 @@ import {
   useQueueDeviceAction,
   useRevealAdminCredential,
   useRevealBitlockerKey,
+  useRotateAdminCredential,
   type DeviceActionJobEntry,
 } from "@/lib/api/security-software"
 import { DEVICE_ACTIONS } from "@/lib/security/device-actions"
@@ -194,7 +195,18 @@ export function BitlockerSection({ deviceId, showEmpty = false }: { deviceId: st
 export function AdminPasswordSection({ deviceId, showEmpty = false }: { deviceId: string; showEmpty?: boolean }) {
   const { data, isLoading } = useDeviceAdminCredential(deviceId)
   const reveal = useRevealAdminCredential()
+  const rotate = useRotateAdminCredential()
   const [revealed, setRevealed] = useState<{ accountName: string; password: string } | null>(null)
+
+  const doRotate = async () => {
+    if (!window.confirm("Rotate this device's managed admin password at its next check-in? The current password will stop working once it rotates.")) return
+    try {
+      await rotate.mutateAsync(deviceId)
+      toast.success("Rotation requested — it happens at the next check-in")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't request the rotation")
+    }
+  }
 
   const view = data?.data ?? null
   const encryptionKeyConfigured = data?.encryptionKeyConfigured ?? true
@@ -269,20 +281,29 @@ export function AdminPasswordSection({ deviceId, showEmpty = false }: { deviceId
                 : "Managed local administrator"}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={toggleReveal} disabled={reveal.isPending}>
-            {revealed ? (
-              <>
-                <EyeOff className="mr-1.5 h-3.5 w-3.5" />
-                Hide
-              </>
-            ) : (
-              <>
-                <Eye className="mr-1.5 h-3.5 w-3.5" />
-                Reveal password
-              </>
-            )}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="sm" onClick={doRotate} disabled={rotate.isPending || !!view.rotateRequestedAt}>
+              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${rotate.isPending ? "animate-spin" : ""}`} />
+              {view.rotateRequestedAt ? "Rotation pending" : "Rotate"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={toggleReveal} disabled={reveal.isPending}>
+              {revealed ? (
+                <>
+                  <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
+                  Reveal password
+                </>
+              )}
+            </Button>
+          </div>
         </div>
+        {view.rotateRequestedAt && (
+          <p className="mt-2 text-xs text-muted-foreground">A rotation is queued — the password changes at the device&apos;s next check-in.</p>
+        )}
         {revealed && (
           <div className="mt-2 flex items-center gap-2">
             <code className="flex-1 break-all rounded bg-muted p-2 font-mono text-xs">{revealed.password}</code>

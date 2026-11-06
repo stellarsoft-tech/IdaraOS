@@ -529,6 +529,21 @@ export function useRevealAdminCredential() {
   })
 }
 
+/** Flags the device to rotate its managed admin password at the next check-in. */
+export function useRotateAdminCredential() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (deviceId: string) =>
+      request<{ data: { id: string; rotateRequested: boolean } }>(
+        `/api/security/software-updates/devices/${deviceId}/admin-credential/rotate`,
+        { method: "POST" },
+        "Failed to request the rotation"
+      ),
+    onSuccess: (_data, deviceId) =>
+      queryClient.invalidateQueries({ queryKey: ["security-device-admin-credential", deviceId] }),
+  })
+}
+
 export function useUpdateSchedule() {
   return useUpdatesMutation<ScheduleUpdate>(
     (data) => ["/api/security/software-updates/settings", { method: "PATCH", body: JSON.stringify(data) }],
