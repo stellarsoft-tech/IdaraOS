@@ -60,6 +60,10 @@ deployment/**
 !deployment/docker/start-dev.sh
 # Served to agent devices for self-update and read by the app at build/runtime
 !deployment/agent/IdaraOS-Agent.ps1
+# Served for self-install (installer) and web-filtering category lists (/api/updater/v1/...)
+!deployment/agent/Install-IdaraOSAgent.ps1
+!deployment/agent/filter-lists
+!deployment/agent/filter-lists/*.txt
 .github
 
 # Specs and scripts (development only)

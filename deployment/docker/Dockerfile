@@ -84,6 +84,13 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 # so copy it in explicitly and point the app at it (lib/security/agent-release.ts reads this path).
 COPY deployment/agent/IdaraOS-Agent.ps1 ./apps/web/agent/IdaraOS-Agent.ps1
 ENV AGENT_SCRIPT_PATH=/app/apps/web/agent/IdaraOS-Agent.ps1
+# The installer (served at /api/updater/v1/install/installer for member self-install) and the curated
+# web-filtering category lists (served at /api/updater/v1/filter-list/<category>). Same reason as
+# above: Next's standalone output doesn't trace files outside apps/web, so copy them in explicitly.
+COPY deployment/agent/Install-IdaraOSAgent.ps1 ./apps/web/agent/Install-IdaraOSAgent.ps1
+ENV AGENT_INSTALLER_PATH=/app/apps/web/agent/Install-IdaraOSAgent.ps1
+COPY deployment/agent/filter-lists ./apps/web/agent/filter-lists
+ENV FILTER_LISTS_PATH=/app/apps/web/agent/filter-lists
 
 # Set correct ownership
 RUN chown -R nextjs:nodejs /app
