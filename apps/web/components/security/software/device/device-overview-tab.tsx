@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { BitlockerSection } from "@/components/security/software/device-actions-dialog"
+import { AdminPasswordSection, BitlockerSection } from "@/components/security/software/device-actions-dialog"
 import {
   useDeviceLocation,
   useLockDeviceInternet,
@@ -208,7 +208,10 @@ export function DeviceOverviewTab({
             {internet && <InternetCard device={device} internet={internet} canEdit={canEdit} />}
             <LocationCard device={device} />
           </div>
-          <BitlockerSection deviceId={device.id} showEmpty />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <AdminPasswordSection deviceId={device.id} showEmpty />
+            <BitlockerSection deviceId={device.id} showEmpty />
+          </div>
         </>
       )}
     </div>

@@ -493,6 +493,42 @@ export function useRevealBitlockerKey() {
   })
 }
 
+export interface AdminCredentialEntry {
+  accountName: string
+  hasPassword: boolean
+  lastStatus: string | null
+  lastError: string | null
+  rotatedAt: string | null
+  reportedAt: string | null
+  rotateRequestedAt: string | null
+}
+
+export function useDeviceAdminCredential(deviceId: string | null) {
+  return useQuery({
+    queryKey: ["security-device-admin-credential", deviceId],
+    queryFn: () =>
+      request<{ data: AdminCredentialEntry | null; encryptionKeyConfigured: boolean }>(
+        `/api/security/software-updates/devices/${deviceId}/admin-credential`,
+        undefined,
+        "Failed to load the admin password"
+      ),
+    enabled: !!deviceId,
+    refetchInterval: 30_000,
+  })
+}
+
+/** Reveals the managed local admin password (audited server-side). The decrypted value is never cached. */
+export function useRevealAdminCredential() {
+  return useMutation({
+    mutationFn: (deviceId: string) =>
+      request<{ data: { accountName: string; password: string } }>(
+        `/api/security/software-updates/devices/${deviceId}/admin-credential/reveal`,
+        { method: "POST" },
+        "Failed to reveal the admin password"
+      ),
+  })
+}
+
 export function useUpdateSchedule() {
   return useUpdatesMutation<ScheduleUpdate>(
     (data) => ["/api/security/software-updates/settings", { method: "PATCH", body: JSON.stringify(data) }],

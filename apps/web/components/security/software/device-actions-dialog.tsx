@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   useBitlockerKeys,
   useDeviceActions,
+  useDeviceAdminCredential,
   useQueueDeviceAction,
+  useRevealAdminCredential,
   useRevealBitlockerKey,
   type DeviceActionJobEntry,
 } from "@/lib/api/security-software"
@@ -180,6 +182,115 @@ export function BitlockerSection({ deviceId, showEmpty = false }: { deviceId: st
             )}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The device's managed local admin password, with an audited break-glass reveal. Lets an admin read
+ * the password to sign in locally when the device is offline or internet-quarantined.
+ */
+export function AdminPasswordSection({ deviceId, showEmpty = false }: { deviceId: string; showEmpty?: boolean }) {
+  const { data, isLoading } = useDeviceAdminCredential(deviceId)
+  const reveal = useRevealAdminCredential()
+  const [revealed, setRevealed] = useState<{ accountName: string; password: string } | null>(null)
+
+  const view = data?.data ?? null
+  const encryptionKeyConfigured = data?.encryptionKeyConfigured ?? true
+
+  const toggleReveal = async () => {
+    if (revealed) {
+      setRevealed(null)
+      return
+    }
+    try {
+      const res = await reveal.mutateAsync(deviceId)
+      setRevealed(res.data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to reveal the admin password")
+    }
+  }
+
+  const copyPassword = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success("Admin password copied")
+    } catch {
+      toast.error("Couldn't copy to the clipboard")
+    }
+  }
+
+  if (isLoading) return null
+
+  if (!view || !view.hasPassword) {
+    if (!showEmpty) return null
+    const reason = !view
+      ? "The managed admin password isn't enabled, or the agent hasn't reported one yet."
+      : view.lastStatus === "missing"
+        ? `No password escrowed yet — the "${view.accountName}" account doesn't exist on the device.`
+        : view.lastStatus === "error"
+          ? `No password escrowed yet — the agent couldn't set it${view.lastError ? `: ${view.lastError}` : "."}`
+          : "No password escrowed for this device yet."
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">Local admin password</h3>
+        <p className="text-sm text-muted-foreground">{reason}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">Local admin password</h3>
+      {!encryptionKeyConfigured && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            ENCRYPTION_KEY isn&apos;t set on the server, so this password is only weakly protected at rest. Set it to
+            secure escrowed credentials.
+          </span>
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Revealing the password is recorded in the audit log. Use it to sign in locally when the device is offline or
+        internet-quarantined.
+      </p>
+      <div className="rounded-md border p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <KeyRound className="h-4 w-4 text-muted-foreground" />
+              {view.accountName}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {view.rotatedAt
+                ? `Local administrator · rotated ${formatDistanceToNow(new Date(view.rotatedAt), { addSuffix: true })}`
+                : "Managed local administrator"}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={toggleReveal} disabled={reveal.isPending}>
+            {revealed ? (
+              <>
+                <EyeOff className="mr-1.5 h-3.5 w-3.5" />
+                Hide
+              </>
+            ) : (
+              <>
+                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                Reveal password
+              </>
+            )}
+          </Button>
+        </div>
+        {revealed && (
+          <div className="mt-2 flex items-center gap-2">
+            <code className="flex-1 break-all rounded bg-muted p-2 font-mono text-xs">{revealed.password}</code>
+            <Button variant="ghost" size="sm" onClick={() => copyPassword(revealed.password)} aria-label="Copy admin password">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

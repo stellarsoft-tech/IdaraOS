@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.10.0"
+$AgentVersion = "1.10.1"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -1611,6 +1611,24 @@ try {
         Update-AgentScript $response.agentUpdate $authorization
     }
 } catch {
+    # Fail-open self-heal: if we're quarantined but haven't reached IdaraOS for a while, the device may
+    # have locked itself out (e.g. the server's IP rotated out of our firewall allow rule, or the device
+    # moved networks). Lift the quarantine so the agent can reach the server again; it re-quarantines on
+    # the next successful check-in if the device is still non-compliant. Better to fail open than to
+    # strand a device with no way to receive an unlock.
+    try {
+        if ([bool]$state.quarantine) {
+            $staleMin = if ($state.lastCheckIn) {
+                ((Get-Date).ToUniversalTime() - ([datetime]$state.lastCheckIn).ToUniversalTime()).TotalMinutes
+            } else { [double]::MaxValue }
+            $failOpenMin = [math]::Max(45, [int]$state.checkInMinutes * 3)
+            if ($staleMin -ge $failOpenMin) {
+                $q = Remove-Quarantine
+                $state.quarantine = $false
+                Write-Log ("  quarantine self-heal: couldn't reach IdaraOS for {0:n0} min - lifted quarantine so the agent can reconnect. {1}" -f $staleMin, $q.message) "WARN"
+            }
+        }
+    } catch { Write-Log ("  quarantine self-heal error: " + $_.Exception.Message) "ERROR" }
     $state.lastError = "$($_.Exception.Message)"
     Write-Json $StatePath $state
     Write-Log $state.lastError "ERROR"
