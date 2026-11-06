@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
-import { Copy, Eye, EyeOff, History, Loader2, RefreshCw, Share2, Trash2, Wand2 } from "lucide-react"
+import { Copy, Eye, EyeOff, History, Loader2, Paperclip, RefreshCw, Share2, ShieldCheck, Trash2, Upload, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -19,11 +19,16 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
+  useAttachments,
   useCreateVaultItem,
+  useDeleteAttachment,
   useDeleteVaultItem,
+  useItemTotp,
   useUpdateVaultItem,
+  useUploadAttachment,
   useVaultItem,
   useVaultItemHistory,
   type VaultFolder,
@@ -41,6 +46,7 @@ interface FormState {
   username: string
   url: string
   password: string
+  totp: string
   notes: string
   folderId: string
   favorite: boolean
@@ -52,12 +58,119 @@ const EMPTY_FORM: FormState = {
   username: "",
   url: "",
   password: "",
+  totp: "",
   notes: "",
   folderId: NO_FOLDER,
   favorite: false,
 }
 
 const STRENGTH_COLORS = ["bg-red-500", "bg-orange-500", "bg-amber-500", "bg-lime-500", "bg-green-500"]
+
+function TotpDisplay({ itemId, open }: { itemId: string; open: boolean }) {
+  const totp = useItemTotp(itemId, open)
+  const data = totp.data?.data
+  const refetch = totp.refetch
+  const [remaining, setRemaining] = useState(0)
+
+  useEffect(() => {
+    if (!data) return
+    setRemaining(data.remaining)
+    const t = window.setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          refetch()
+          return data.period
+        }
+        return r - 1
+      })
+    }, 1000)
+    return () => window.clearInterval(t)
+  }, [data, refetch])
+
+  if (totp.isLoading) return null
+  if (!data) return <p className="mt-1 text-xs text-muted-foreground">Couldn&apos;t read the 2FA secret.</p>
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(data.code)
+      toast.success("Code copied")
+    } catch {
+      toast.error("Couldn't copy to the clipboard")
+    }
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-3 rounded-md border bg-muted/30 p-2">
+      <ShieldCheck className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <code className="text-lg font-semibold tracking-widest">{data.code}</code>
+      <span className="text-xs text-muted-foreground">{remaining}s</span>
+      <Button type="button" variant="ghost" size="icon" className="ml-auto h-7 w-7" onClick={copy} aria-label="Copy code">
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  )
+}
+
+function AttachmentsSection({ itemId, open, canEdit }: { itemId: string; open: boolean; canEdit: boolean }) {
+  const attachments = useAttachments(itemId, open)
+  const upload = useUploadAttachment()
+  const del = useDeleteAttachment()
+  const list = attachments.data?.data ?? []
+
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      await upload.mutateAsync({ itemId, file })
+      toast.success("File attached")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed")
+    }
+    e.target.value = ""
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>Attachments</Label>
+      {attachments.isLoading ? (
+        <Skeleton className="h-8 w-full" />
+      ) : list.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No files attached.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {list.map((a) => (
+            <div key={a.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+              <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <a href={`/api/security/my-vault/attachments/${a.id}`} className="min-w-0 flex-1 truncate hover:underline">
+                {a.filename}
+              </a>
+              <span className="shrink-0 text-xs text-muted-foreground">{Math.max(1, Math.round(a.sizeBytes / 1024))} KB</span>
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => del.mutate({ attachmentId: a.id, itemId })}
+                  aria-label="Delete attachment"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {canEdit && (
+        <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          {upload.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          Attach file (max 5 MB)
+          <input type="file" className="hidden" onChange={onUpload} disabled={upload.isPending} />
+        </label>
+      )}
+    </div>
+  )
+}
 
 interface Props {
   open: boolean
@@ -96,6 +209,7 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
           username: d.username ?? "",
           url: d.url ?? "",
           password: d.password ?? "",
+          totp: d.totp ?? "",
           notes: d.notes ?? "",
           folderId: d.folderId ?? NO_FOLDER,
           favorite: d.favorite,
@@ -146,6 +260,7 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
       favorite: form.favorite,
       folderId: form.folderId === NO_FOLDER ? null : form.folderId,
       password: form.password || null,
+      totp: form.totp || null,
       notes: form.notes || null,
     }
     try {
@@ -347,6 +462,21 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
               )}
             </div>
 
+            {form.type === "login" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="vault-totp">Two-factor (TOTP)</Label>
+                <Input
+                  id="vault-totp"
+                  value={form.totp}
+                  onChange={(e) => setForm((f) => ({ ...f, totp: e.target.value }))}
+                  placeholder="otpauth:// URI or base32 secret"
+                  className="font-mono"
+                  disabled={readOnly}
+                />
+                {isEdit && detail.data?.data?.hasTotp && itemId && <TotpDisplay itemId={itemId} open={open} />}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label htmlFor="vault-notes">Notes</Label>
               <Textarea
@@ -367,6 +497,8 @@ export function VaultItemDialog({ open, itemId, folders, canEdit, canDelete, onO
                 disabled={readOnly}
               />
             </div>
+
+            {isEdit && itemId && <AttachmentsSection itemId={itemId} open={open} canEdit={!readOnly} />}
 
             {isEdit && (
               <div className="rounded-md border">

@@ -33,6 +33,7 @@ export interface VaultItemSummary {
   folderId: string | null
   hasPassword: boolean
   hasNotes: boolean
+  hasTotp: boolean
   lastPasswordChangeAt: string | null
   createdAt: string
   updatedAt: string
@@ -41,8 +42,23 @@ export interface VaultItemSummary {
 export interface VaultItemDetail extends VaultItemSummary {
   password: string | null
   notes: string | null
+  totp: string | null
   extra: Record<string, unknown> | null
   access: "owner" | "edit" | "view"
+}
+
+export interface TotpCode {
+  code: string
+  period: number
+  remaining: number
+}
+
+export interface VaultAttachment {
+  id: string
+  filename: string
+  contentType: string | null
+  sizeBytes: number
+  createdAt: string
 }
 
 export interface VaultSharedItem extends VaultItemSummary {
@@ -80,6 +96,7 @@ export interface VaultItemInput {
   folderId?: string | null
   password?: string | null
   notes?: string | null
+  totp?: string | null
   extra?: Record<string, unknown> | null
 }
 
@@ -280,5 +297,60 @@ export function useRevokeShare() {
       queryClient.invalidateQueries({ queryKey: ["security-vault-item-shares", vars.itemId] })
       queryClient.invalidateQueries({ queryKey: keys.vault })
     },
+  })
+}
+
+// ============================================================================
+// TOTP / ATTACHMENTS / IMPORT
+// ============================================================================
+
+export function useItemTotp(itemId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["security-vault-item-totp", itemId],
+    queryFn: () => request<{ data: TotpCode | null }>(`/api/security/my-vault/items/${itemId}/totp`, undefined, "Failed to get the code"),
+    enabled: !!itemId && enabled,
+    gcTime: 0,
+    staleTime: 0,
+  })
+}
+
+export function useAttachments(itemId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ["security-vault-attachments", itemId],
+    queryFn: () => request<{ data: VaultAttachment[] }>(`/api/security/my-vault/items/${itemId}/attachments`, undefined, "Failed to load attachments"),
+    enabled: !!itemId && enabled,
+  })
+}
+
+export function useUploadAttachment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ itemId, file }: { itemId: string; file: File }) => {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch(`/api/security/my-vault/items/${itemId}/attachments`, { method: "POST", body: fd })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((body as { error?: string })?.error || "Upload failed")
+      return body as { data: VaultAttachment }
+    },
+    onSuccess: (_data, vars) => queryClient.invalidateQueries({ queryKey: ["security-vault-attachments", vars.itemId] }),
+  })
+}
+
+export function useDeleteAttachment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ attachmentId }: { attachmentId: string; itemId: string }) =>
+      request<{ data: { id: string } }>(`/api/security/my-vault/attachments/${attachmentId}`, { method: "DELETE" }, "Failed to delete the attachment"),
+    onSuccess: (_data, vars) => queryClient.invalidateQueries({ queryKey: ["security-vault-attachments", vars.itemId] }),
+  })
+}
+
+export function useImportVault() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (csv: string) =>
+      request<{ data: { imported: number } }>("/api/security/my-vault/import", { method: "POST", body: JSON.stringify({ csv }) }, "Import failed"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.vault }),
   })
 }

@@ -68,4 +68,24 @@ export function passwordFingerprint(password: string): string {
   return crypto.createHmac("sha256", vaultKey()).update(password).digest("hex")
 }
 
+/** Encrypt raw bytes (a file) to a base64 blob of (iv + authTag + ciphertext). */
+export function encryptBufferToBase64(buf: Buffer): string {
+  const iv = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv("aes-256-gcm", vaultKey(), iv)
+  const enc = Buffer.concat([cipher.update(buf), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return Buffer.concat([iv, tag, enc]).toString("base64")
+}
+
+/** Decrypt a base64 blob produced by encryptBufferToBase64 back to raw bytes. Throws on tampering. */
+export function decryptBufferFromBase64(b64: string): Buffer {
+  const blob = Buffer.from(b64, "base64")
+  const iv = blob.subarray(0, 12)
+  const tag = blob.subarray(12, 28)
+  const data = blob.subarray(28)
+  const decipher = crypto.createDecipheriv("aes-256-gcm", vaultKey(), iv)
+  decipher.setAuthTag(tag)
+  return Buffer.concat([decipher.update(data), decipher.final()])
+}
+
 export { isEncryptionKeyConfigured } from "@/lib/encryption"

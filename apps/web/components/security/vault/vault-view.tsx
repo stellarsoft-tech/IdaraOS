@@ -17,6 +17,7 @@ import {
   Star,
   StickyNote,
   Trash2,
+  Upload,
   UserRound,
   Vault,
 } from "lucide-react"
@@ -44,6 +45,7 @@ import {
   type VaultSharedItem,
 } from "@/lib/api/security-my-vault"
 import { VaultItemDialog } from "./vault-item-dialog"
+import { VaultImportDialog } from "./vault-import-dialog"
 
 const TYPE_ICON = { login: KeyRound, note: StickyNote, card: CreditCard, identity: UserRound } as const
 
@@ -71,6 +73,7 @@ export function VaultView() {
   const [search, setSearch] = useState("")
   const [folderFilter, setFolderFilter] = useState<string>("all")
   const [dialog, setDialog] = useState<{ open: boolean; itemId: string | null }>({ open: false, itemId: null })
+  const [importOpen, setImportOpen] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const update = useUpdateVaultItem()
@@ -206,9 +209,14 @@ export function VaultView() {
       description="Your personal password vault — store, generate and organise credentials. Secrets are encrypted at rest."
       action={
         canCreate ? (
-          <Button onClick={() => setDialog({ open: true, itemId: null })}>
-            <Plus className="mr-1.5 h-4 w-4" /> Add item
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="mr-1.5 h-4 w-4" /> Import
+            </Button>
+            <Button onClick={() => setDialog({ open: true, itemId: null })}>
+              <Plus className="mr-1.5 h-4 w-4" /> Add item
+            </Button>
+          </>
         ) : undefined
       }
     >
@@ -404,6 +412,8 @@ export function VaultView() {
         canDelete={canDelete}
         onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
       />
+
+      <VaultImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </PageShell>
   )
 }

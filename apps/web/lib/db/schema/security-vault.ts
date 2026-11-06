@@ -91,6 +91,8 @@ export const vaultItems = pgTable(
     // keyed HMAC of the password (reuse detection) and a 0-4 strength score, set at save time.
     passwordFingerprint: text("password_fingerprint"),
     passwordStrength: smallint("password_strength"),
+    // TOTP/2FA secret (base32 or an otpauth:// URI), encrypted at rest. Live codes are derived from it.
+    totpEncrypted: text("totp_encrypted"),
     // When the password last changed (for the max-age policy / audit); null for non-login items
     lastPasswordChangeAt: timestamp("last_password_change_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -260,6 +262,30 @@ export const vaultShares = pgTable(
 )
 
 // ============================================================================
+// ATTACHMENTS (Phase 4): encrypted files attached to an item
+// ============================================================================
+
+export const vaultAttachments = pgTable(
+  "security_vault_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => vaultItems.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes").notNull(),
+    // base64 of (iv + authTag + AES-256-GCM ciphertext) of the file bytes
+    dataEncrypted: text("data_encrypted").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_security_vault_attachments_item").on(table.itemId)]
+)
+
+// ============================================================================
 // INFERRED TYPES
 // ============================================================================
 
@@ -269,6 +295,8 @@ export type VaultGroup = typeof vaultGroups.$inferSelect
 export type VaultGroupMember = typeof vaultGroupMembers.$inferSelect
 export type VaultShare = typeof vaultShares.$inferSelect
 export type NewVaultShare = typeof vaultShares.$inferInsert
+export type VaultAttachment = typeof vaultAttachments.$inferSelect
+export type NewVaultAttachment = typeof vaultAttachments.$inferInsert
 
 export type VaultFolder = typeof vaultFolders.$inferSelect
 export type NewVaultFolder = typeof vaultFolders.$inferInsert

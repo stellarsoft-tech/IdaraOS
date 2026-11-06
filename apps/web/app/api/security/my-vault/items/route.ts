@@ -20,6 +20,7 @@ const itemSchema = z.object({
   folderId: z.string().uuid().optional().nullable(),
   password: z.string().max(1000).optional().nullable(),
   notes: z.string().max(20000).optional().nullable(),
+  totp: z.string().max(2000).optional().nullable(),
   extra: z.record(z.unknown()).optional().nullable(),
 })
 

@@ -12,6 +12,7 @@ import { db } from "@/lib/db"
 import { users, vaultFolders, vaultItems, vaultItemHistory, type VaultItemType } from "@/lib/db/schema"
 import { decryptOptional, decryptSecret, encryptOptional, encryptSecret } from "@/lib/vault/crypto-server"
 import { derivePasswordFields, enforceVaultPolicy } from "@/lib/vault/audit-server"
+import { generateTotp, type TotpCode } from "@/lib/vault/totp"
 import { getSharedItemAccess, resolveSharedAccess, type VaultAccessLevel } from "@/lib/security/vault-share-server"
 
 // ============================================================================
@@ -37,6 +38,7 @@ export interface VaultItemSummary {
   folderId: string | null
   hasPassword: boolean
   hasNotes: boolean
+  hasTotp: boolean
   lastPasswordChangeAt: string | null
   createdAt: string
   updatedAt: string
@@ -46,6 +48,7 @@ export interface VaultItemSummary {
 export interface VaultItemDetail extends VaultItemSummary {
   password: string | null
   notes: string | null
+  totp: string | null
   extra: Record<string, unknown> | null
   // The requester's access to this item: "owner" | "edit" | "view"
   access: VaultAccessLevel
@@ -66,6 +69,7 @@ export interface VaultItemInput {
   folderId?: string | null
   password?: string | null
   notes?: string | null
+  totp?: string | null
   extra?: Record<string, unknown> | null
 }
 
@@ -84,6 +88,7 @@ function toSummary(row: typeof vaultItems.$inferSelect): VaultItemSummary {
     folderId: row.folderId,
     hasPassword: !!row.passwordEncrypted,
     hasNotes: !!row.notesEncrypted,
+    hasTotp: !!row.totpEncrypted,
     lastPasswordChangeAt: row.lastPasswordChangeAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -177,8 +182,26 @@ export async function getVaultItem(orgId: string, userId: string, itemId: string
     access,
     password: decryptOptional(row.passwordEncrypted),
     notes: decryptOptional(row.notesEncrypted),
+    totp: decryptOptional(row.totpEncrypted),
     extra: parseExtra(row.extraEncrypted),
   }
+}
+
+/** The current TOTP code for an item (owner or any share). Returns null if no secret or no access. */
+export async function getItemTotp(orgId: string, userId: string, itemId: string): Promise<TotpCode | null> {
+  const [row] = await db
+    .select({ id: vaultItems.id, userId: vaultItems.userId, folderId: vaultItems.folderId, totpEncrypted: vaultItems.totpEncrypted })
+    .from(vaultItems)
+    .where(and(eq(vaultItems.id, itemId), eq(vaultItems.orgId, orgId)))
+    .limit(1)
+  if (!row || !row.totpEncrypted) return null
+  if (row.userId !== userId) {
+    const shared = await resolveSharedAccess(orgId, userId, { id: row.id, folderId: row.folderId })
+    if (!shared) return null
+  }
+  const secret = decryptOptional(row.totpEncrypted)
+  if (!secret) return null
+  return generateTotp(secret)
 }
 
 export interface VaultHistoryEntry {
@@ -241,6 +264,7 @@ export async function createVaultItem(orgId: string, userId: string, input: Vaul
       favorite: input.favorite ?? false,
       passwordEncrypted: password ? encryptSecret(password) : null,
       notesEncrypted: encryptOptional(input.notes),
+      totpEncrypted: encryptOptional(input.totp),
       extraEncrypted: encryptOptional(extraJson),
       passwordFingerprint: derived.passwordFingerprint,
       passwordStrength: derived.passwordStrength,
@@ -287,6 +311,7 @@ export async function updateVaultItem(
   if (input.url !== undefined) set.url = input.url?.trim() || null
   if (input.favorite !== undefined) set.favorite = input.favorite
   if (input.notes !== undefined) set.notesEncrypted = encryptOptional(input.notes)
+  if (input.totp !== undefined) set.totpEncrypted = encryptOptional(input.totp)
   if (input.extra !== undefined) {
     const extraJson = input.extra && Object.keys(input.extra).length > 0 ? JSON.stringify(input.extra) : null
     set.extraEncrypted = encryptOptional(extraJson)
@@ -330,6 +355,74 @@ export async function updateVaultItem(
   }
 
   return row ? toSummary(row) : null
+}
+
+export interface ImportItem {
+  folder?: string | null
+  title: string
+  username?: string | null
+  password?: string | null
+  url?: string | null
+  notes?: string | null
+  totp?: string | null
+}
+
+/**
+ * Bulk-import items (e.g. from a Keeper CSV). Creates folders by name as needed. Deliberately does NOT
+ * block on the password policy - imported weak/reused passwords are flagged by the Security Audit
+ * instead of rejected.
+ */
+export async function importVaultItems(orgId: string, userId: string, rows: ImportItem[]): Promise<{ imported: number }> {
+  if (rows.length === 0) return { imported: 0 }
+  const now = new Date()
+
+  const folderCache = new Map<string, string>()
+  const existing = await db
+    .select({ id: vaultFolders.id, name: vaultFolders.name })
+    .from(vaultFolders)
+    .where(and(eq(vaultFolders.orgId, orgId), eq(vaultFolders.userId, userId)))
+  for (const f of existing) folderCache.set(f.name.toLowerCase(), f.id)
+
+  const resolveFolder = async (name: string): Promise<string | null> => {
+    const key = name.trim().toLowerCase()
+    if (!key) return null
+    const hit = folderCache.get(key)
+    if (hit) return hit
+    const [created] = await db
+      .insert(vaultFolders)
+      .values({ orgId, userId, name: name.trim().slice(0, 100), createdAt: now, updatedAt: now })
+      .returning({ id: vaultFolders.id })
+    folderCache.set(key, created.id)
+    return created.id
+  }
+
+  let imported = 0
+  for (const r of rows) {
+    const title = (r.title ?? "").trim() || (r.url ?? "").trim() || (r.username ?? "").trim() || "Untitled"
+    const folderId = r.folder ? await resolveFolder(r.folder) : null
+    const password = r.password?.trim() || ""
+    const derived = derivePasswordFields(password || null)
+    await db.insert(vaultItems).values({
+      orgId,
+      userId,
+      folderId,
+      type: "login",
+      title: title.slice(0, 200),
+      username: r.username?.trim() || null,
+      url: r.url?.trim() || null,
+      favorite: false,
+      passwordEncrypted: password ? encryptSecret(password) : null,
+      notesEncrypted: encryptOptional(r.notes),
+      totpEncrypted: encryptOptional(r.totp),
+      passwordFingerprint: derived.passwordFingerprint,
+      passwordStrength: derived.passwordStrength,
+      lastPasswordChangeAt: password ? now : null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    imported++
+  }
+  return { imported }
 }
 
 export async function deleteVaultItem(orgId: string, userId: string, itemId: string): Promise<boolean> {
