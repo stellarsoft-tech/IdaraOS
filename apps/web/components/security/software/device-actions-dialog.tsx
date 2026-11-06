@@ -74,7 +74,7 @@ function HistoryRow({ job }: { job: DeviceActionJobEntry }) {
 }
 
 /** Escrowed BitLocker recovery keys for the device, with an audited per-volume reveal. */
-function BitlockerSection({ deviceId }: { deviceId: string }) {
+export function BitlockerSection({ deviceId }: { deviceId: string }) {
   const { data, isLoading } = useBitlockerKeys(deviceId)
   const reveal = useRevealBitlockerKey()
   const [revealed, setRevealed] = useState<Record<string, string>>({})

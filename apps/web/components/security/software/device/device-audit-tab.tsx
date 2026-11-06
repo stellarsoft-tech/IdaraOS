@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns"
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AuditFieldDiff } from "@/components/audit/AuditFieldDiff"
 import { useAuditLog, useAuditLogs } from "@/lib/api/audit"
 import { POLICY_TYPES } from "@/lib/security/device-policies"
 import type { AuditLogEntry } from "@/lib/audit"
@@ -25,6 +26,11 @@ function Row({ entry }: { entry: AuditLogEntry }) {
   const [open, setOpen] = useState(false)
   const { data: detail, isLoading } = useAuditLog(open ? entry.id : null)
   const output = detail?.metadata?.output as string | undefined
+  const metaEntries = detail?.metadata
+    ? Object.entries(detail.metadata).filter(([k, v]) => k !== "output" && v != null)
+    : []
+  const fmt = (v: unknown) => (typeof v === "object" && v !== null ? JSON.stringify(v) : String(v))
+  const changed = detail?.changedFields ?? []
 
   return (
     <div className="rounded-md border">
@@ -45,19 +51,40 @@ function Row({ entry }: { entry: AuditLogEntry }) {
         </span>
       </button>
       {open && (
-        <div className="border-t px-3 py-2 pl-8 text-xs">
+        <div className="space-y-2 border-t px-3 py-2 pl-8 text-xs">
           <div className="text-muted-foreground">
-            by {entry.actorName ?? entry.actorEmail}
-            {detail?.metadata?.exitCode !== undefined && <> · exit {String(detail.metadata.exitCode)}</>}
+            by {entry.actorName ?? entry.actorEmail} · {new Date(entry.timestamp).toLocaleString()}
           </div>
           {isLoading ? (
-            <div className="py-2"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : (
-            output && (
-              <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded border bg-muted/50 p-2 font-mono">
-                {output}
-              </pre>
-            )
+            <>
+              {metaEntries.length > 0 && (
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+                  {metaEntries.map(([k, v]) => (
+                    <div key={k} className="contents">
+                      <dt className="text-muted-foreground">{k}</dt>
+                      <dd className="break-all font-mono">{fmt(v)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {output && (
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded border bg-muted/50 p-2 font-mono">
+                  {output}
+                </pre>
+              )}
+              {changed.length > 0 && (
+                <AuditFieldDiff
+                  changedFields={changed}
+                  previousValues={detail?.previousValues ?? null}
+                  newValues={detail?.newValues ?? null}
+                />
+              )}
+              {!output && metaEntries.length === 0 && changed.length === 0 && (
+                <p className="text-muted-foreground">No additional details were recorded.</p>
+              )}
+            </>
           )}
         </div>
       )}
