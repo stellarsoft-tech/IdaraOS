@@ -74,7 +74,7 @@ function HistoryRow({ job }: { job: DeviceActionJobEntry }) {
 }
 
 /** Escrowed BitLocker recovery keys for the device, with an audited per-volume reveal. */
-export function BitlockerSection({ deviceId }: { deviceId: string }) {
+export function BitlockerSection({ deviceId, showEmpty = false }: { deviceId: string; showEmpty?: boolean }) {
   const { data, isLoading } = useBitlockerKeys(deviceId)
   const reveal = useRevealBitlockerKey()
   const [revealed, setRevealed] = useState<Record<string, string>>({})
@@ -108,7 +108,16 @@ export function BitlockerSection({ deviceId }: { deviceId: string }) {
     }
   }
 
-  if (isLoading || keys.length === 0) return null
+  if (isLoading) return null
+  if (keys.length === 0) {
+    if (!showEmpty) return null
+    return (
+      <div className="space-y-2">
+        <h3 className="text-sm font-semibold">BitLocker recovery keys</h3>
+        <p className="text-sm text-muted-foreground">No recovery keys escrowed for this device yet.</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-2">

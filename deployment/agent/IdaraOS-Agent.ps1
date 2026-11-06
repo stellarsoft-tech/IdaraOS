@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.9.0"
+$AgentVersion = "1.9.1"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -1099,7 +1099,8 @@ function Get-FilterListFile([string]$Category, [string]$Sha256, [string]$Authori
 # removes the block entirely. Only ever touches the lines between our own markers.
 function Set-HostsFilter([string[]]$Domains) {
     $lines = @()
-    if (Test-Path $HostsPath) { $lines = @(Get-Content -Path $HostsPath -Encoding UTF8) }
+    # Read via .NET (Get-Content can throw "Stream was not readable" on the hosts file)
+    if (Test-Path $HostsPath) { try { $lines = @([System.IO.File]::ReadAllLines($HostsPath)) } catch { $lines = @() } }
     $kept = New-Object System.Collections.Generic.List[string]
     $inRegion = $false
     foreach ($line in $lines) {
@@ -1116,7 +1117,15 @@ function Set-HostsFilter([string[]]$Domains) {
         }
         $kept.Add($WebFilterEnd)
     }
-    Set-Content -Path $HostsPath -Value $kept -Encoding ASCII -Force
+    # Write via .NET too (Set-Content can throw "Stream was not readable"); retry briefly in case
+    # another process (e.g. Defender scanning the hosts file) holds it open for a moment.
+    $enc = New-Object System.Text.ASCIIEncoding
+    $hostErr = $null
+    for ($i = 0; $i -lt 3; $i++) {
+        try { [System.IO.File]::WriteAllLines($HostsPath, $kept.ToArray(), $enc); $hostErr = $null; break }
+        catch { $hostErr = $_.Exception; Start-Sleep -Milliseconds 300 }
+    }
+    if ($hostErr) { throw $hostErr }
     try { ipconfig /flushdns | Out-Null } catch { }
 }
 

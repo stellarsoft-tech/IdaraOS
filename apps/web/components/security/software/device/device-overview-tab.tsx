@@ -204,7 +204,7 @@ export function DeviceOverviewTab({
             {internet && <InternetCard device={device} internet={internet} canEdit={canEdit} />}
             <LocationCard device={device} />
           </div>
-          <BitlockerSection deviceId={device.id} />
+          <BitlockerSection deviceId={device.id} showEmpty />
         </>
       )}
     </div>
