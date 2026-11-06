@@ -79,6 +79,8 @@ const checkInSchema = z.object({
     )
     .max(100)
     .optional(),
+  // Whether the agent currently has the internet quarantine (firewall) applied
+  quarantineApplied: z.boolean().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -161,9 +163,18 @@ export async function POST(request: NextRequest) {
       !!nonCompliantSince &&
       now.getTime() - nonCompliantSince.getTime() >= graceMs
     const quarantine = updatedDevice.quarantineManual || autoQuarantine
+    // quarantinedAt is set only once the AGENT confirms it blocked the internet (quarantineApplied), so
+    // the portal shows "applying" until then. Older agents don't report it → fall back to optimistic.
     let quarantinedAt: Date | null = updatedDevice.quarantinedAt
-    if (quarantine && !quarantinedAt) quarantinedAt = now
-    else if (!quarantine) quarantinedAt = null
+    if (!quarantine) {
+      quarantinedAt = null
+    } else if (body.quarantineApplied === true) {
+      quarantinedAt = quarantinedAt ?? now
+    } else if (body.quarantineApplied === false) {
+      quarantinedAt = null
+    } else {
+      quarantinedAt = quarantinedAt ?? now
+    }
     if (
       (nonCompliantSince?.getTime() ?? null) !== (updatedDevice.nonCompliantSince?.getTime() ?? null) ||
       (quarantinedAt?.getTime() ?? null) !== (updatedDevice.quarantinedAt?.getTime() ?? null)

@@ -47,6 +47,13 @@ export const RESTARTABLE_SERVICES: Record<string, string> = {
  * The actions the agent supports. Adding one means shipping a new agent version that
  * implements its key (see IdaraOS-Agent.ps1) - there is no runtime command input.
  */
+/**
+ * The remote-wipe / factory-reset action key. Deliberately NOT in DEVICE_ACTIONS - so it never renders
+ * in the normal Actions list and never validates through isValidDeviceAction. It has its own Owner-gated
+ * endpoint and danger-zone UI; the agent implements this key in Invoke-ActionJob.
+ */
+export const WIPE_ACTION_KEY = "reset-windows"
+
 export const DEVICE_ACTIONS: DeviceActionDef[] = [
   {
     key: "collect-diagnostics",

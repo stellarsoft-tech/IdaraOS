@@ -60,6 +60,8 @@ function InternetCard({
         </div>
         {internet.status === "quarantined" ? (
           <Badge variant="outline" className="border-red-400 text-red-600">Quarantined</Badge>
+        ) : internet.status === "applying" ? (
+          <Badge variant="outline" className="border-blue-400 text-blue-600">Applying…</Badge>
         ) : internet.status === "grace" ? (
           <Badge variant="outline" className="border-amber-400 text-amber-600">Grace period</Badge>
         ) : (
@@ -70,6 +72,8 @@ function InternetCard({
       <p className="mt-2 text-sm text-muted-foreground">
         {internet.status === "quarantined" ? (
           <>Only IdaraOS is reachable. {internet.manual ? "Locked by an admin." : "Auto-quarantined — stayed non-compliant past the grace period."} Clears automatically once the device is compliant.</>
+        ) : internet.status === "applying" ? (
+          <>Locked — the device blocks its internet (except IdaraOS) at its next check-in, usually within ~15 min. It shows <strong>Quarantined</strong> once the agent confirms.</>
         ) : internet.status === "grace" ? (
           <>Non-compliant. {internet.graceEndsAt ? `Will be quarantined ${when(internet.graceEndsAt)}` : `Will be quarantined after ${internet.graceDays} day(s)`} unless fixed{internet.quarantineEnabled ? "" : " (quarantine is currently disabled org-wide)"}.</>
         ) : (

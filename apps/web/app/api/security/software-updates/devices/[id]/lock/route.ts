@@ -17,8 +17,10 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     const now = new Date()
 
     const [updated] = await db
+      // quarantinedAt is set later, when the agent confirms it blocked the internet (the UI shows
+      // "applying" until then). Here we only flag the manual lock.
       .update(softwareUpdateDevices)
-      .set({ quarantineManual: true, quarantinedAt: now, updatedAt: now })
+      .set({ quarantineManual: true, updatedAt: now })
       .where(and(eq(softwareUpdateDevices.id, id), eq(softwareUpdateDevices.orgId, session.orgId)))
       .returning({ id: softwareUpdateDevices.id, hostname: softwareUpdateDevices.hostname })
     if (!updated) {

@@ -11,6 +11,8 @@ export interface User {
   email: string
   orgId: string
   avatar?: string | null
+  /** Legacy single role (Owner/Admin/...) - used for the few Owner-only actions */
+  role?: string | null
 }
 
 export interface UserPermissions {
@@ -141,6 +143,7 @@ export function RBACProvider({ children }: { children: React.ReactNode }) {
           email: data.email,
           orgId: data.orgId,
           avatar: data.avatar,
+          role: data.role,
         })
 
         // Fetch permissions after user is loaded

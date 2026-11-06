@@ -117,7 +117,7 @@ export interface DevicePolicyCompliance {
 }
 
 export interface DeviceInternetStatus {
-  status: "compliant" | "grace" | "quarantined"
+  status: "compliant" | "grace" | "applying" | "quarantined"
   manual: boolean
   quarantineEnabled: boolean
   graceDays: number
@@ -126,10 +126,19 @@ export interface DeviceInternetStatus {
   hasIp: boolean
 }
 
+export interface PendingWipe {
+  id: string
+  status: "pending" | "sent" | "succeeded" | "failed" | "cancelled"
+  queuedAt: string
+  dispatchAt: string
+  cancellable: boolean
+}
+
 export interface UpdaterDeviceDetail {
   data: UpdaterDevice
   compliance: DevicePolicyCompliance[]
   internet: DeviceInternetStatus
+  pendingWipe: PendingWipe | null
 }
 
 export interface DeviceLocation {
@@ -309,6 +318,29 @@ export function useUnlockDeviceInternet() {
   return useMutation({
     mutationFn: (id: string) =>
       request(`/api/security/software-updates/devices/${id}/unlock`, { method: "POST" }, "Failed to unlock the device"),
+    onSettled: (_data, _err, id) => queryClient.invalidateQueries({ queryKey: ["security-software-device", id] }),
+  })
+}
+
+export function useWipeDevice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, confirm }: { id: string; confirm: string }) =>
+      request(
+        `/api/security/software-updates/devices/${id}/wipe`,
+        { method: "POST", body: JSON.stringify({ confirm }) },
+        "Failed to queue the reset"
+      ),
+    onSettled: (_data, _err, vars) =>
+      queryClient.invalidateQueries({ queryKey: ["security-software-device", vars.id] }),
+  })
+}
+
+export function useCancelWipe() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      request(`/api/security/software-updates/devices/${id}/wipe`, { method: "DELETE" }, "Failed to cancel the reset"),
     onSettled: (_data, _err, id) => queryClient.invalidateQueries({ queryKey: ["security-software-device", id] }),
   })
 }

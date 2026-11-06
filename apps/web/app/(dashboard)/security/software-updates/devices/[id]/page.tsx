@@ -101,7 +101,13 @@ export default function DeviceDetailPage() {
               {tab === "policies" && <DevicePoliciesTab compliance={compliance} />}
               {tab === "web-filtering" && <DeviceWebFilteringTab device={device} compliance={compliance} />}
               {tab === "actions" && (
-                <DeviceActionsTab deviceId={id} hostname={device.hostname} isAgent={isAgent} canEdit={canEdit} />
+                <DeviceActionsTab
+                  deviceId={id}
+                  hostname={device.hostname}
+                  isAgent={isAgent}
+                  canEdit={canEdit}
+                  pendingWipe={data?.pendingWipe ?? null}
+                />
               )}
               {tab === "audit" && <DeviceAuditTab deviceId={id} />}
             </div>

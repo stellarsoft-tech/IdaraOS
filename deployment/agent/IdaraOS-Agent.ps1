@@ -36,7 +36,7 @@
 param([switch]$Pair)
 
 $ErrorActionPreference = "Stop"
-$AgentVersion = "1.9.1"
+$AgentVersion = "1.10.0"
 
 $BaseDir = Join-Path $env:ProgramData "IdaraOS\Agent"
 $ConfigPath = Join-Path $BaseDir "config.json"
@@ -684,6 +684,31 @@ function Clear-UpdateCache {
     return @{ exitCode = 0; message = "Cleared the Windows Update cache"; log = $sb.ToString() }
 }
 
+# Reset this PC - remove everything (Owner-triggered remote wipe). Reports "started" to the server
+# FIRST and only wipes if that was accepted, so a wipe always leaves a record and a stale/cancelled job
+# never triggers a reset. Uses the MDM RemoteWipe CSP (works as SYSTEM with no MDM enrollment); falls
+# back to systemreset.exe. IRREVERSIBLE.
+function Invoke-WindowsReset([string]$JobId, [string]$Authorization) {
+    try {
+        Invoke-IdaraOS -Path "/api/updater/v1/jobs/$JobId" -Body @{ exitCode = 0; message = "Reset started - wiping now" } -Authorization $Authorization | Out-Null
+    } catch {
+        return @{ exitCode = 1; message = "Couldn't confirm the reset with the server - aborted"; log = $null }
+    }
+    try {
+        $instance = Get-CimInstance -Namespace "root/cimv2/mdm/dmmap" -ClassName MDM_RemoteWipe -Filter "ParentID='./Vendor/MSFT/RemoteWipe' and InstanceID='RemoteWipe'" -ErrorAction Stop
+        Invoke-CimMethod -InputObject $instance -MethodName doWipeProtectedMethod -Arguments @{ param = "" } -ErrorAction Stop | Out-Null
+        return @{ exitCode = 0; message = "Remote wipe initiated (MDM_RemoteWipe)"; log = $null }
+    } catch {
+        $cimErr = $_.Exception.Message
+        try {
+            & "$env:SystemRoot\System32\systemreset.exe" --factoryreset --quiet
+            return @{ exitCode = 0; message = "Factory reset started via systemreset"; log = $null }
+        } catch {
+            return @{ exitCode = 1; message = ("Wipe failed: {0}" -f $cimErr); log = $null }
+        }
+    }
+}
+
 function Invoke-ActionJob($Job, [string]$Authorization) {
     $key = [string]$Job.actionKey
     $param = [string]$Job.param
@@ -702,6 +727,7 @@ function Invoke-ActionJob($Job, [string]$Authorization) {
             "check-local-admins"      { $result = Get-LocalAdmins }
             "restart-service"         { $result = Restart-AllowedService $param }
             "clear-update-cache"      { $result = Clear-UpdateCache }
+            "reset-windows"           { $result = Invoke-WindowsReset $Job.id $Authorization }
             default {
                 $result = @{ exitCode = 1; message = "This agent version doesn't support the '$key' action - update the IdaraOS Agent"; log = $null }
             }
@@ -1481,6 +1507,10 @@ try {
             if (@($blocked).Count -gt 0) { $body["blockedDomains"] = @($blocked) }
         } catch { }
     }
+
+    # Report whether the quarantine firewall is currently applied, so the portal can show "applying"
+    # until the agent confirms it blocked the internet, then "quarantined".
+    $body["quarantineApplied"] = [bool]$state.quarantine
 
     try {
         $response = Invoke-IdaraOS -Path "/api/updater/v1/check-in" -Body $body -Authorization $authorization

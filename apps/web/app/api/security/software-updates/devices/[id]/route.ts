@@ -13,6 +13,7 @@ import { getSoftwareUpdateSettings } from "@/lib/security/software-server"
 import { getReleasedAgent } from "@/lib/security/agent-release"
 import { isAgentVersionOlder } from "@/lib/security/device-policies"
 import { getDevicePolicyCompliance } from "@/lib/security/policy-server"
+import { getPendingWipe } from "@/lib/security/agent-server"
 
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -55,18 +56,27 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
     const compliance = await getDevicePolicyCompliance(device)
 
-    // Internet-access / quarantine status (derived from compliance + settings + device flags)
+    // Internet-access / quarantine status. 'applying' = the admin locked it (or the grace period
+    // elapsed) but the agent hasn't yet confirmed it blocked the internet; 'quarantined' = the agent
+    // confirmed (quarantinedAt is set only on the agent's report, not on the lock request).
     const nonCompliant = compliance.some((c) => c.status === "error" || c.status === "pending")
-    const quarantined = !!device.quarantinedAt || device.quarantineManual
-    let internetStatus: "compliant" | "grace" | "quarantined" = "compliant"
+    const graceMs = settings.quarantineGraceDays * 86_400_000
+    const autoQuarantine =
+      settings.quarantineEnabled &&
+      nonCompliant &&
+      !!device.nonCompliantSince &&
+      now.getTime() - device.nonCompliantSince.getTime() >= graceMs
+    const quarantineDesired = device.quarantineManual || autoQuarantine
+    const appliedConfirmed = !!device.quarantinedAt
+    let internetStatus: "compliant" | "grace" | "applying" | "quarantined" = "compliant"
     let graceEndsAt: string | null = null
-    if (quarantined) {
+    if (quarantineDesired && appliedConfirmed) {
       internetStatus = "quarantined"
+    } else if (quarantineDesired) {
+      internetStatus = "applying"
     } else if (nonCompliant && device.nonCompliantSince) {
       internetStatus = "grace"
-      graceEndsAt = new Date(
-        device.nonCompliantSince.getTime() + settings.quarantineGraceDays * 86_400_000
-      ).toISOString()
+      graceEndsAt = new Date(device.nonCompliantSince.getTime() + graceMs).toISOString()
     }
     const internet = {
       status: internetStatus,
@@ -78,7 +88,9 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       hasIp: !!device.lastPublicIp,
     }
 
-    return NextResponse.json({ data, compliance, internet })
+    const pendingWipe = isAgent ? await getPendingWipe(device) : null
+
+    return NextResponse.json({ data, compliance, internet, pendingWipe })
   } catch (error) {
     const apiError = handleApiError(error)
     if (apiError) return apiError

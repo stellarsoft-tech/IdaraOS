@@ -40,6 +40,7 @@ import { generateSecret, hashSecret } from "./software-updates-server"
 import { getElevationSettings } from "./elevation-server"
 import { failAgentInstall, markAgentInstallFailed, markInstalled } from "./software-server"
 import {
+  WIPE_ACTION_KEY,
   actionJobResult,
   deviceActionName,
   getDeviceAction,
@@ -48,6 +49,8 @@ import {
 } from "./device-actions"
 
 const AGENT_ACTOR = { id: null, email: "system", name: "IdaraOS Agent", ip: null, userAgent: null }
+// A reset-windows (wipe) job is held this long before it can dispatch, so an admin can still cancel it.
+const WIPE_DISPATCH_DELAY_MS = 2 * 60_000
 
 // ============================================================================
 // PAIRING
@@ -317,6 +320,14 @@ export async function dispatchJobs(device: SoftwareUpdateDevice, now: Date = new
       await failJob(job, "The device didn't report a result in time", now)
       continue
     }
+    // A destructive wipe is held briefly so an admin can still cancel it before the device picks it up
+    if (
+      job.status === "pending" &&
+      job.payload.actionKey === WIPE_ACTION_KEY &&
+      now.getTime() - job.createdAt.getTime() < WIPE_DISPATCH_DELAY_MS
+    ) {
+      continue
+    }
     // Conditional update so two overlapping check-ins don't both send it
     const [sent] = await db
       .update(agentJobs)
@@ -532,4 +543,83 @@ export async function listDeviceActionJobs(
     createdAt: job.createdAt,
     finishedAt: job.finishedAt,
   }))
+}
+
+// ============================================================================
+// REMOTE WIPE (Owner-only factory reset)
+// ============================================================================
+
+/** Queue a factory-reset ("remove everything") job for a device. One open wipe at a time. */
+export async function queueDeviceWipe(
+  device: SoftwareUpdateDevice
+): Promise<{ ok: true; jobId: string } | { ok: false; status: number; error: string }> {
+  const [open] = await db
+    .select({ id: agentJobs.id })
+    .from(agentJobs)
+    .where(and(
+      eq(agentJobs.deviceId, device.id),
+      eq(agentJobs.type, "action"),
+      or(eq(agentJobs.status, "pending"), eq(agentJobs.status, "sent")),
+      sql`${agentJobs.payload}->>'actionKey' = ${WIPE_ACTION_KEY}`
+    ))
+    .limit(1)
+  if (open) return { ok: false, status: 409, error: "A reset is already queued for this device" }
+
+  const [job] = await db
+    .insert(agentJobs)
+    .values({
+      orgId: device.orgId,
+      deviceId: device.id,
+      type: "action",
+      payload: { actionKey: WIPE_ACTION_KEY, name: "Reset Windows (remove everything)" },
+    })
+    .returning({ id: agentJobs.id })
+  return { ok: true, jobId: job.id }
+}
+
+/** Cancel a queued wipe, only while it's still pending (before the device picks it up). */
+export async function cancelDeviceWipe(device: SoftwareUpdateDevice, now: Date = new Date()): Promise<boolean> {
+  const cancelled = await db
+    .update(agentJobs)
+    .set({ status: "cancelled", finishedAt: now, updatedAt: now })
+    .where(and(
+      eq(agentJobs.deviceId, device.id),
+      eq(agentJobs.type, "action"),
+      eq(agentJobs.status, "pending"),
+      sql`${agentJobs.payload}->>'actionKey' = ${WIPE_ACTION_KEY}`
+    ))
+    .returning({ id: agentJobs.id })
+  return cancelled.length > 0
+}
+
+export interface PendingWipe {
+  id: string
+  status: AgentJob["status"]
+  queuedAt: string
+  /** When the cancel window closes and the wipe becomes dispatchable */
+  dispatchAt: string
+  cancellable: boolean
+}
+
+/** The open (pending/sent) wipe job for a device, for the portal, or null. */
+export async function getPendingWipe(device: SoftwareUpdateDevice): Promise<PendingWipe | null> {
+  const [job] = await db
+    .select()
+    .from(agentJobs)
+    .where(and(
+      eq(agentJobs.deviceId, device.id),
+      eq(agentJobs.type, "action"),
+      or(eq(agentJobs.status, "pending"), eq(agentJobs.status, "sent")),
+      sql`${agentJobs.payload}->>'actionKey' = ${WIPE_ACTION_KEY}`
+    ))
+    .orderBy(sql`${agentJobs.createdAt} DESC`)
+    .limit(1)
+  if (!job) return null
+  return {
+    id: job.id,
+    status: job.status,
+    queuedAt: job.createdAt.toISOString(),
+    dispatchAt: new Date(job.createdAt.getTime() + WIPE_DISPATCH_DELAY_MS).toISOString(),
+    cancellable: job.status === "pending",
+  }
 }
